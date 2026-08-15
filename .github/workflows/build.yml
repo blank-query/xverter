@@ -1,0 +1,82 @@
+name: release-binaries
+
+# Standalone, portable, one-file executables: double-click and the
+# program opens. Built on every release (and on demand).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: xverter.exe
+            binary: dist/xverter.exe
+            sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7zr.exe
+            sz_addbinary: "szbin/7zr.exe;." 
+          - os: ubuntu-22.04     # oldest runner glibc = widest compatibility
+            artifact: xverter-linux-x86_64
+            binary: dist/xverter
+            sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7z2602-linux-x64.tar.xz
+            sz_addbinary: "szbin/7zz:." 
+          - os: macos-latest
+            artifact: xverter-macos-arm64
+            binary: dist/xverter
+            sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7z2602-mac.tar.xz
+            sz_addbinary: "szbin/7zz:." 
+          - os: ubuntu-22.04-arm
+            artifact: xverter-linux-arm64
+            binary: dist/xverter
+            sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7z2602-linux-arm64.tar.xz
+            sz_addbinary: "szbin/7zz:." 
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[tui]" pyinstaller
+      - name: Fetch the 7-Zip engine (official, multithreaded)
+        shell: bash
+        env:
+          SZ_URL: ${{ matrix.sz_url }}
+        run: |
+          mkdir szbin && cd szbin
+          curl -sSfL -o pkg "$SZ_URL"
+          case "$SZ_URL" in
+            *.tar.xz) tar xJf pkg 7zz && rm pkg ;;
+            *7zr.exe) mv pkg 7zr.exe ;;
+          esac
+          ls -la
+      - name: Build one-file binary
+        run: >
+          pyinstaller --onefile --name xverter
+          --collect-all textual
+          --add-data "xverter/data:xverter/data"
+          --add-binary "${{ matrix.sz_addbinary }}"
+          --hidden-import xverter.tui
+          launcher.py
+      - name: Smoke test
+        shell: bash
+        run: |
+          ${{ matrix.binary }} --version
+          ${{ matrix.binary }} info xverter || true
+      - name: Rename artifact
+        if: runner.os != 'Windows'
+        run: mv ${{ matrix.binary }} dist/${{ matrix.artifact }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "dist/${{ matrix.artifact }}"

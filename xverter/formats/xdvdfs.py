@@ -1,0 +1,496 @@
+#!/usr/bin/env python3
+"""xiso_extract.py - Extract an XDVDFS (Xbox / Xbox 360 disc) image to a
+directory. Pure Python 3 stdlib.
+
+Handles:
+  * bare game partitions (magic at 0x10000) - e.g. god2iso.py output
+  * full XGD1/XGD2/XGD3 redump-style images (auto-detects the game
+    partition base offset)
+
+XDVDFS layout:
+  Volume descriptor at sector 32 (0x10000 from partition base):
+      20B  magic "MICROSOFT*XBOX*MEDIA"
+      u32  root directory table sector (LE)
+      u32  root directory table size  (LE)
+  Directory tables are binary trees of 4-byte-aligned entries:
+      u16 left child offset  (in dwords/4-byte units from table start; 0 or 0xFFFF = none)
+      u16 right child offset
+      u32 start sector (LE)
+      u32 file size    (LE)
+      u8  attributes   (0x10 = directory)
+      u8  name length
+      name (Windows-1252)
+  An empty directory is a table starting with 0xFFFF 0xFFFF.
+"""
+
+import argparse
+import os
+import struct
+import sys
+
+SECTOR = 0x800
+MAGIC = b"MICROSOFT*XBOX*MEDIA"
+# Known game-partition base offsets for full disc images.
+PARTITION_BASES = (0x0, 0x2080000, 0xFD90000, 0x18300000)  # bare, XGD3, XGD2, XGD1
+ATTR_DIR = 0x10
+CHUNK = 1 << 20
+
+
+class XdvdfsError(Exception):
+    pass
+
+
+import contextlib
+
+
+@contextlib.contextmanager
+def _as_file(src):
+    """Accept a path or a seekable file-like object (e.g. god.GodStream)."""
+    if hasattr(src, "read") and hasattr(src, "seek"):
+        yield src
+    else:
+        f = open(src, "rb")
+        try:
+            yield f
+        finally:
+            f.close()
+
+
+def die(msg):
+    raise XdvdfsError(msg)
+
+
+def find_base(f):
+    for base in PARTITION_BASES:
+        f.seek(base + 32 * SECTOR)
+        if f.read(len(MAGIC)) == MAGIC:
+            return base
+    die("XDVDFS magic not found at any known partition base")
+
+
+def read_table(f, base, sector, size):
+    if size == 0:
+        return b""
+    f.seek(base + sector * SECTOR)
+    table = f.read(size)
+    if len(table) != size:
+        die("short read of directory table at sector %d" % sector)
+    return table
+
+
+def walk_table(table):
+    """Return [(name, start_sector, size, attr), ...] via in-order traversal.
+
+    The root entry sits at byte offset 0; child pointers are dword offsets (4-byte units)
+    — 0 and 0xFFFF both mean "no child" (0 can never be a real child,
+    the root occupies it). An empty directory is a table starting FFFF FFFF.
+    """
+    entries = []
+    if len(table) < 14 or table[:4] == b"\xff\xff\xff\xff":
+        return entries
+    seen = set()
+
+    def visit(off):
+        if off in seen:
+            die("directory table cycle at offset %d" % off)
+        seen.add(off)
+        if off + 14 > len(table):
+            die("directory entry at offset %d overruns table" % off)
+        left, right = struct.unpack_from("<HH", table, off)
+        start, size = struct.unpack_from("<II", table, off + 4)
+        attr = table[off + 12]
+        nlen = table[off + 13]
+        name_raw = table[off + 14:off + 14 + nlen]
+        if len(name_raw) != nlen:
+            die("directory entry name at offset %d overruns table" % off)
+        if left not in (0, 0xFFFF):
+            visit(left * 4)
+        entries.append((name_raw.decode("cp1252", "replace"), start, size, attr))
+        if right not in (0, 0xFFFF):
+            visit(right * 4)
+
+    visit(0)
+    return entries
+
+
+def safe_name(name):
+    if not name or name in (".", "..") or "/" in name or "\\" in name or "\x00" in name:
+        die("refusing unsafe filename %r" % name)
+    return name
+
+
+def extract(iso_path, out_dir, quiet=False, manifest=None, progress=None):
+    """Extract to out_dir, streaming each file in 1MiB chunks (memory
+    stays O(chunk) regardless of file size). If manifest is a dict,
+    per-file SHA-1 hashes are computed inline during the same pass."""
+    import hashlib
+    files = dirs = 0
+    total = 0
+    with _as_file(iso_path) as f:
+        base = find_base(f)
+        f.seek(base + 32 * SECTOR + len(MAGIC))
+        root_sector, root_size = struct.unpack("<II", f.read(8))
+        if not quiet:
+            print("partition base 0x%X, root table: sector %d, %d bytes"
+                  % (base, root_sector, root_size))
+
+        grand = None
+        if progress:
+            grand = 0
+            tstack = [read_table(f, base, root_sector, root_size)]
+            while tstack:
+                for _n, st, sz, at in walk_table(tstack.pop()):
+                    if at & ATTR_DIR:
+                        tstack.append(read_table(f, base, st, sz))
+                    else:
+                        grand += sz
+        stack = [(read_table(f, base, root_sector, root_size), out_dir)]
+        os.makedirs(out_dir, exist_ok=True)
+        while stack:
+            table, path = stack.pop()
+            for name, start, size, attr in walk_table(table):
+                name = safe_name(name)
+                dest = os.path.join(path, name)
+                if attr & ATTR_DIR:
+                    os.makedirs(dest, exist_ok=True)
+                    dirs += 1
+                    stack.append((read_table(f, base, start, size), dest))
+                else:
+                    f.seek(base + start * SECTOR)
+                    remaining = size
+                    h = hashlib.sha1() if manifest is not None else None
+                    with open(dest, "wb") as o:
+                        while remaining > 0:
+                            chunk = f.read(min(CHUNK, remaining))
+                            if not chunk:
+                                die("unexpected EOF extracting %s "
+                                    "(missing %d of %d bytes) - truncated image?"
+                                    % (dest, remaining, size))
+                            o.write(chunk)
+                            if h is not None:
+                                h.update(chunk)
+                            remaining -= len(chunk)
+                            if progress:
+                                progress(total + (size - remaining), grand)
+                    if manifest is not None:
+                        manifest[os.path.relpath(dest, out_dir).replace(os.sep, "/")] = h.hexdigest()
+                    files += 1
+                    total += size
+                    if not quiet:
+                        print("  %s (%d bytes)" % (os.path.relpath(dest, out_dir), size))
+    print("extracted %d files, %d dirs, %d bytes total" % (files, dirs, total))
+    return files, total
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="xv-xiso",
+        description="Extract an XDVDFS (Xbox/Xbox 360) image to a directory. "
+                    "Auto-detects bare game partitions and full XGD1/2/3 images.")
+    ap.add_argument("iso", help="path to the image")
+    ap.add_argument("outdir", help="output directory (created if needed)")
+    ap.add_argument("-q", "--quiet", action="store_true",
+                    help="only print the final summary")
+    args = ap.parse_args()
+    extract(args.iso, args.outdir, quiet=args.quiet)
+
+
+def cli():
+    try:
+        return main()
+    except XdvdfsError as e:
+        print("ERROR: %s" % e, file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
+
+
+def hash_walk(iso_path, progress=None):
+    """Walk the full filesystem, SHA-1 hashing every file's content without
+    writing anything. Returns {relative_path: sha1hex}. Single read pass -
+    used to verify built ISOs against a source-tree manifest."""
+    import hashlib
+    result = {}
+    with _as_file(iso_path) as f:
+        base = find_base(f)
+        f.seek(base + 32 * SECTOR + len(MAGIC))
+        root_sector, root_size = struct.unpack("<II", f.read(8))
+        grand = done = 0
+        if progress:
+            tstack = [read_table(f, base, root_sector, root_size)]
+            while tstack:
+                for _n, st, sz, at in walk_table(tstack.pop()):
+                    if at & ATTR_DIR:
+                        tstack.append(read_table(f, base, st, sz))
+                    else:
+                        grand += sz
+        stack = [(read_table(f, base, root_sector, root_size), "")]
+        while stack:
+            table, prefix = stack.pop()
+            for name, start, size, attr in walk_table(table):
+                rel = prefix + name
+                if attr & ATTR_DIR:
+                    stack.append((read_table(f, base, start, size), rel + "/"))
+                    continue
+                h = hashlib.sha1()
+                f.seek(base + start * SECTOR)
+                remaining = size
+                while remaining > 0:
+                    chunk = f.read(min(CHUNK, remaining))
+                    if not chunk:
+                        die("unexpected EOF hashing %s (missing %d of %d bytes)"
+                            % (rel, remaining, size))
+                    h.update(chunk)
+                    remaining -= len(chunk)
+                    done += len(chunk)
+                    if progress:
+                        progress(done, grand)
+                result[rel] = h.hexdigest()
+    return result
+
+
+def hash_tree(dir_path):
+    """SHA-1 manifest of a directory tree: {relative_path: sha1hex}."""
+    import hashlib
+    result = {}
+    for root, _dirs, files in os.walk(dir_path):
+        for fn in files:
+            p = os.path.join(root, fn)
+            rel = os.path.relpath(p, dir_path).replace(os.sep, "/")
+            h = hashlib.sha1()
+            with open(p, "rb") as f:
+                while True:
+                    chunk = f.read(CHUNK)
+                    if not chunk:
+                        break
+                    h.update(chunk)
+            result[rel] = h.hexdigest()
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Writer: pack a directory tree into a bare XDVDFS image.
+#
+# Deterministic layout contract (v1) - the same input tree (paths + bytes)
+# produces a byte-identical image on every run and every machine:
+#   * directory entries sorted by their cp1252 name folded to ASCII uppercase
+#     (bytes 0x61-0x7A minus 0x20, all other bytes unchanged), compared as
+#     byte strings; a strict prefix sorts first.  This is the on-disc BST
+#     comparator used by Microsoft's mastering tools (verified against real
+#     images) and by extract-xiso/xdvdfs.  Names that collide after folding
+#     are rejected.
+#   * each table is a perfectly balanced BST over the sorted entries:
+#     the subtree root of slice [lo, hi) is index lo + (hi - lo) // 2,
+#     recursively.  Entries are stored in preorder (root at offset 0, then
+#     the whole left subtree, then the right).  "No child" is encoded as 0,
+#     as in Microsoft-mastered images.
+#   * entries are 4-byte aligned and never cross a 2048-byte sector
+#     boundary (skipped space and all other table padding is 0xFF); table
+#     sizes are rounded up to whole sectors.  An empty directory is a
+#     single 0xFF-filled sector.
+#   * sectors 0-31 are zero.  Sector 32 is the volume descriptor: magic,
+#     root sector u32 LE, root size u32 LE, filetime u64 = 0, zero padding,
+#     magic again at 0x7EC.  Partition base is 0 (bare image).
+#   * directory tables start at sector 33, allocated depth-first: a
+#     directory's table, then each entry in canonical order with
+#     subdirectories recursed immediately.  File data follows all tables,
+#     allocated by the same depth-first canonical walk; every file starts
+#     on a fresh sector and its last sector is zero-padded.  A zero-byte
+#     file is recorded as start sector 0, size 0.
+#   * attributes: 0x10 for directories, 0x20 for files.  The image ends
+#     exactly at the last allocated sector.
+
+ATTR_FILE = 0x20
+DESC_PAD = 0x800 - 2 * len(MAGIC) - 16
+
+
+def _fold(raw):
+    return bytes(c - 32 if 0x61 <= c <= 0x7A else c for c in raw)
+
+
+def _encode_name(name, where):
+    if not name or name in (".", "..") or "/" in name or "\\" in name \
+            or "\x00" in name:
+        die("invalid entry name %r in %s" % (name, where))
+    try:
+        raw = name.encode("cp1252")
+    except UnicodeEncodeError:
+        die("entry name %r in %s is not Windows-1252 encodable" % (name, where))
+    if len(raw) > 255:
+        die("entry name %r in %s exceeds 255 bytes" % (name, where))
+    return raw
+
+
+def _scan_dir(path):
+    """One level of the source tree as canonically sorted entry dicts."""
+    entries = []
+    for name in os.listdir(path):
+        raw = _encode_name(name, path)
+        p = os.path.join(path, name)
+        if os.path.isdir(p):
+            e = {"raw": raw, "dir": True, "node": _scan_dir(p)}
+        elif os.path.isfile(p):
+            size = os.path.getsize(p)
+            if size > 0xFFFFFFFF:
+                die("%s is %d bytes; XDVDFS file sizes are 32-bit" % (p, size))
+            e = {"raw": raw, "dir": False, "src": p, "size": size}
+        else:
+            die("unsupported entry (not a file or directory): %s" % p)
+        e["start"] = 0
+        entries.append(e)
+    entries.sort(key=lambda e: _fold(e["raw"]))
+    for i in range(1, len(entries)):
+        if _fold(entries[i]["raw"]) == _fold(entries[i - 1]["raw"]):
+            die("names collide under XDVDFS case folding in %s: %r vs %r"
+                % (path, entries[i - 1]["raw"], entries[i]["raw"]))
+    return {"entries": entries}
+
+
+def _entry_span(raw):
+    return (14 + len(raw) + 3) & ~3
+
+
+def _layout_table(node):
+    """Assign each entry its byte offset in the table (balanced-BST
+    preorder, entries never crossing a sector boundary) and store the
+    sector-aligned table size on the node."""
+    entries = node["entries"]
+    offs = [0] * len(entries)
+    pos = [0]
+
+    def place(lo, hi):
+        if lo >= hi:
+            return
+        mid = lo + (hi - lo) // 2
+        span = _entry_span(entries[mid]["raw"])
+        p = pos[0]
+        if p % SECTOR + span > SECTOR:
+            p = (p // SECTOR + 1) * SECTOR
+        if p // 4 > 0xFFFE:
+            die("directory table too large (child offset exceeds 16 bits)")
+        offs[mid] = p
+        pos[0] = p + span
+        place(lo, mid)
+        place(mid + 1, hi)
+
+    place(0, len(entries))
+    node["offs"] = offs
+    node["tsize"] = max(-(-pos[0] // SECTOR), 1) * SECTOR
+
+
+def _render_table(node):
+    entries = node["entries"]
+    offs = node["offs"]
+    buf = bytearray(b"\xff" * node["tsize"])
+
+    def emit(lo, hi):
+        if lo >= hi:
+            return 0
+        mid = lo + (hi - lo) // 2
+        left = emit(lo, mid)
+        right = emit(mid + 1, hi)
+        e = entries[mid]
+        raw = e["raw"]
+        if e["dir"]:
+            attr, size = ATTR_DIR, e["node"]["tsize"]
+        else:
+            attr, size = ATTR_FILE, e["size"]
+        struct.pack_into("<HHIIBB", buf, offs[mid], left, right,
+                         e["start"], size, attr, len(raw))
+        buf[offs[mid] + 14:offs[mid] + 14 + len(raw)] = raw
+        return offs[mid] // 4
+
+    emit(0, len(entries))
+    return bytes(buf)
+
+
+def pack(src_dir, out_iso, progress=None):
+    """Pack src_dir into a bare XDVDFS image at out_iso.  Deterministic:
+    see the layout contract above.  Streams file data in 1 MiB chunks.
+    Returns (file_count, total_data_bytes)."""
+    if not os.path.isdir(src_dir):
+        die("not a directory: %s" % src_dir)
+    root = _scan_dir(src_dir)
+
+    tables = []
+    file_runs = []
+    next_sector = [33]
+
+    def alloc(node):
+        _layout_table(node)
+        node["sector"] = next_sector[0]
+        next_sector[0] += node["tsize"] // SECTOR
+        tables.append(node)
+        for e in node["entries"]:
+            if e["dir"]:
+                alloc(e["node"])
+                e["start"] = e["node"]["sector"]
+
+    def alloc_files(node):
+        for e in node["entries"]:
+            if e["dir"]:
+                alloc_files(e["node"])
+            elif e["size"] > 0:
+                e["start"] = next_sector[0]
+                next_sector[0] += -(-e["size"] // SECTOR)
+                file_runs.append(e)
+
+    alloc(root)
+    alloc_files(root)
+
+    files = 0
+    total = 0
+    try:
+        with open(out_iso, "wb") as o:
+            o.write(b"\x00" * (32 * SECTOR))
+            o.write(MAGIC
+                    + struct.pack("<IIQ", root["sector"], root["tsize"], 0)
+                    + b"\x00" * DESC_PAD + MAGIC)
+            for node in tables:
+                if o.tell() != node["sector"] * SECTOR:
+                    die("internal error: table allocation drift")
+                o.write(_render_table(node))
+            grand_total = sum(e["size"] for e in file_runs)
+            for e in file_runs:
+                if o.tell() != e["start"] * SECTOR:
+                    die("internal error: file allocation drift")
+                copied = 0
+                with open(e["src"], "rb") as f:
+                    while copied < e["size"]:
+                        chunk = f.read(min(CHUNK, e["size"] - copied))
+                        if not chunk:
+                            break
+                        o.write(chunk)
+                        copied += len(chunk)
+                        if progress:
+                            progress(total + copied, grand_total)
+                if copied != e["size"]:
+                    die("%s changed size during pack (%d != %d)"
+                        % (e["src"], copied, e["size"]))
+                pad = -e["size"] % SECTOR
+                if pad:
+                    o.write(b"\x00" * pad)
+                files += 1
+                total += e["size"]
+            files += sum(1 for n in tables for e in n["entries"]
+                         if not e["dir"] and e["size"] == 0)
+    except BaseException:
+        try:
+            os.unlink(out_iso)
+        except OSError:
+            pass
+        raise
+    return files, total
+
+
+def list_root(iso_path):
+    """Return the root directory entry names of an XDVDFS image."""
+    with _as_file(iso_path) as f:
+        base = find_base(f)
+        f.seek(base + 32 * SECTOR + len(MAGIC))
+        import struct as _struct
+        root_sector, root_size = _struct.unpack("<II", f.read(8))
+        table = read_table(f, base, root_sector, root_size)
+    return [name for name, _, _, _ in walk_table(table)]

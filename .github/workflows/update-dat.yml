@@ -1,0 +1,38 @@
+name: Update bundled redump DAT
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # weekly, Monday 06:17 UTC - gentle on volunteer servers
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch latest DATs (redump.info primary, redump.org fallback)
+        run: |
+          set -e
+          for sys in xbox360 xbox; do
+            curl -fsSL "https://redump.info/datfile/$sys" -o dat.zip \
+              || curl -fsSL "http://redump.org/datfile/$sys/" -o dat.zip
+            rm -rf _dat && mkdir _dat
+            unzip -o dat.zip -d _dat
+            DAT=$(find _dat -name "*.dat" | head -1)
+            test -s "$DAT"
+            mv "$DAT" "xverter/data/$sys.dat"
+            rm -rf _dat dat.zip
+          done
+      - name: Commit if changed
+        run: |
+          git config user.name "redump-dat-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add xverter/data/*.dat
+          if git diff --cached --quiet; then
+            echo "DAT unchanged - nothing to do"
+          else
+            VER=$(grep -oPm1 "(?<=<version>)[^<]+" xverter/data/xbox360.dat || echo unknown)
+            git commit -m "chore: update bundled redump DAT ($VER)"
+            git push
+          fi

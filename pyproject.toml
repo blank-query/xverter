@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xverter"
+version = "1.0.2"
+description = "xVerter: Xbox and Xbox 360 game format converter - GoD, ISO, ZAR, STFS, extracted; any to any, verified at every step"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [{name = "blank-query"}]
+keywords = ["xbox", "xbox360", "iso", "god", "zar", "cci", "cso", "chd",
+            "xdvdfs", "stfs", "converter", "emulation", "redump"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+    "Topic :: System :: Archiving",
+]
+
+dependencies = [
+    "textual>=0.80",                          # the TUI (bare `xverter` opens it)
+    "lz4",                                    # CCI/CSO compression
+    "zstandard; python_version < '3.14'",     # zar (stdlib zstd on 3.14+)
+]
+
+[project.urls]
+Homepage = "https://github.com/blank-query/xverter"
+Releases = "https://github.com/blank-query/xverter/releases"
+
+[project.scripts]
+xverter = "xverter.cli:main"
+xv-god = "xverter.formats.god:cli"
+xv-xiso = "xverter.formats.xdvdfs:cli"
+xv-zar = "xverter.formats.zar_native:cli"
+xv-stfs = "xverter.formats.stfs:cli"
+xv-cci = "xverter.formats.cci:cli"
+xv-cso = "xverter.formats.cso:cli"
+
+[project.optional-dependencies]
+security = ["defusedxml"]
+
+[tool.setuptools]
+packages = ["xverter", "xverter.formats"]
+
+[tool.setuptools.package-data]
+xverter = ["data/*.dat", "bin/*"]
