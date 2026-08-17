@@ -12,8 +12,10 @@ LIVE/CON packages would be invalidly signed.
 import argparse
 import hashlib
 import os
+import queue
 import shutil
 import sys
+import threading
 import tempfile
 import zlib
 
@@ -29,7 +31,7 @@ from .formats import chd as chd_mod
 from .formats import archives as archives_mod
 from . import datcache
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 
 class CliError(Exception):
@@ -189,8 +191,30 @@ def _output_kind(out_path):
 
 
 def _stream_hashes(path, progress=None):
-    crc = 0
+    # CRC32 and SHA-1 each run on their own thread (both release the
+    # GIL), so wall time is max(read, crc, sha) instead of their sum
     sha = hashlib.sha1()
+    state = {"crc": 0}
+    lanes = [queue.Queue(maxsize=8), queue.Queue(maxsize=8)]
+
+    def worker(lane, update):
+        while True:
+            b = lane.get()
+            if b is None:
+                return
+            update(b)
+
+    def crc_update(b):
+        state["crc"] = zlib.crc32(b, state["crc"])
+
+    threads = [
+        threading.Thread(target=worker, args=(lanes[0], sha.update),
+                         daemon=True),
+        threading.Thread(target=worker, args=(lanes[1], crc_update),
+                         daemon=True),
+    ]
+    for t in threads:
+        t.start()
     total = os.path.getsize(path)
     done = 0
     with open(path, "rb") as f:
@@ -198,12 +222,16 @@ def _stream_hashes(path, progress=None):
             b = f.read(1 << 22)
             if not b:
                 break
-            crc = zlib.crc32(b, crc)
-            sha.update(b)
+            for lane in lanes:
+                lane.put(b)
             done += len(b)
             if progress:
                 progress(done, total)
-    return "%08x" % (crc & 0xFFFFFFFF), sha.hexdigest()
+    for lane in lanes:
+        lane.put(None)
+    for t in threads:
+        t.join()
+    return "%08x" % (state["crc"] & 0xFFFFFFFF), sha.hexdigest()
 
 
 def _dat_lookup(dat_path, size, crc, sha1):

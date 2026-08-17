@@ -58,9 +58,11 @@ module-level bool ``HAVE_ZSTD`` reports availability (constructing a
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import io
 import os
+import threading
 import struct
 from collections import OrderedDict, deque
 
@@ -78,17 +80,18 @@ except ImportError:  # pragma: no cover - depends on interpreter version
     try:
         import zstandard as _zstandard             # pip, < 3.14
 
-        _zstd_compressor = None
+        _zstd_tls = threading.local()
 
         def _zstd_decompress(raw):
             return _zstandard.ZstdDecompressor().decompress(
                 raw, max_output_size=64 * 1024)
 
         def _zstd_compress(raw):
-            global _zstd_compressor
-            if _zstd_compressor is None:
-                _zstd_compressor = _zstandard.ZstdCompressor(level=_ZSTD_LEVEL)
-            return _zstd_compressor.compress(raw)
+            comp = getattr(_zstd_tls, "c", None)
+            if comp is None:
+                comp = _zstd_tls.c = _zstandard.ZstdCompressor(
+                    level=_ZSTD_LEVEL)
+            return comp.compress(raw)
 
         HAVE_ZSTD = True
     except ImportError:
@@ -607,6 +610,23 @@ class _PathNode:
         self.name_off = 0
 
 
+_ZSTD_POOL = None
+
+
+def _zstd_pool():
+    global _ZSTD_POOL
+    if _ZSTD_POOL is None:
+        _ZSTD_POOL = concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(8, os.cpu_count() or 1),
+            thread_name_prefix="zarzstd")
+    return _ZSTD_POOL
+
+
+def _compress_or_store(block):
+    comp = _zstd_compress(block)
+    return block if len(comp) >= _BLOCK_SIZE else comp
+
+
 class ZarWriter:
     """Streaming writer for ZArchive (.zar) files.
 
@@ -637,6 +657,7 @@ class ZarWriter:
         self._out_offset = 0
         self._input_offset = 0
         self._sha = hashlib.sha256()
+        self._pending: deque = deque()
         self._finalized = False
         try:
             self._fh = open(self._path, "xb")
@@ -749,10 +770,19 @@ class ZarWriter:
         self._out_offset += len(data)
 
     def _store_block(self, block: bytes) -> None:
+        # Compression runs on a bounded thread pool; blocks are written
+        # strictly in submission order, so the archive stays byte-identical
+        # to the sequential writer (each 64 KiB block is an independent
+        # single-shot zstd compression - determinism does not depend on
+        # which thread ran it).
+        self._pending.append(
+            _zstd_pool().submit(_compress_or_store, block))
+        while len(self._pending) > 32:
+            self._flush_one()
+
+    def _flush_one(self) -> None:
+        comp = self._pending.popleft().result()
         base = self._out_offset
-        comp = _zstd_compress(block)
-        if len(comp) >= _BLOCK_SIZE:
-            comp = block  # store uncompressed (compression did not help)
         sub = self._block_count % _ENTRIES_PER_RECORD
         if sub == 0:
             # unused trailing entries stay 0 (reference value-initializes)
@@ -760,6 +790,10 @@ class ZarWriter:
         self._records[-1][1][sub] = len(comp) - 1
         self._write(comp)
         self._block_count += 1
+
+    def _drain_blocks(self) -> None:
+        while self._pending:
+            self._flush_one()
 
     def _append_raw(self, data) -> None:
         view = memoryview(data)
@@ -788,12 +822,14 @@ class ZarWriter:
             self._buffer += b"\x00" * (_BLOCK_SIZE - len(self._buffer))
             self._store_block(bytes(self._buffer))
             del self._buffer[:]
-        elif self._block_count == 0:
+        self._drain_blocks()
+        if self._block_count == 0:
             # Divergence from the reference writer, which emits an empty
             # offset-record section here - one that every reader (including
             # the reference one) then rejects. Emit a single zero block so
             # a data-less archive is still readable.
             self._store_block(b"\x00" * _BLOCK_SIZE)
+            self._drain_blocks()
         cdata_size = self._out_offset
         while self._out_offset % 8:
             self._write(b"\x00")

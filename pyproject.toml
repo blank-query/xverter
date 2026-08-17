@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xverter"
-version = "1.0.2"
+version = "1.0.3"
 description = "xVerter: Xbox and Xbox 360 game format converter - GoD, ISO, ZAR, STFS, extracted; any to any, verified at every step"
 readme = "README.md"
 license = {text = "MIT"}
