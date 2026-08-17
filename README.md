@@ -72,6 +72,8 @@ xVerter detects formats by magic bytes (never extensions), its wrappers are cont
 
 Every cursed edge passes through the same verification as the sane ones — several of them run in the 48-edge matrix on every `xverter test`. Cursed, but checked.
 
+And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA → `.zar`** reads like it belongs on the list above, but it's the cleanest way to run arcade titles in Xenia — the emulator reads the zar directly, one flat file per game instead of STFS's nested `Content/.../` tree or a GoD container's hash-named directories. Tested on real hardware-dumped games, played in Xenia. Yesterday's cursed conversion is tomorrow's workflow — which is exactly why the tool converts and you decide.
+
 ## The validation record — three generations of Halo, one hash each
 
 The release gate is a real-media test roster spanning every disc structure Microsoft pressed, all one franchise: full 48-edge matrices, every edge content-verified, on genuine Redump-authenticated dumps. Three numbers per game tell the whole story:
