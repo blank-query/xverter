@@ -113,6 +113,59 @@ def walk_table(table):
     return entries
 
 
+def allocation_extent(f, base):
+    """Last allocated byte inside the game partition, relative to base:
+    the volume-descriptor region, every directory table, every file
+    extent. The smallest size a complete image can have.
+
+    (builders._allocation_extent computes the same thing from a path,
+    and god._stream_allocation_extent from a mid-build stream.)"""
+    f.seek(base + 32 * SECTOR + len(MAGIC))
+    root_sector, root_size = struct.unpack("<II", f.read(8))
+    extent = 33 * SECTOR                       # volume-descriptor region
+    stack = [(root_sector, root_size)]
+    seen = set()
+    while stack:
+        sector, size = stack.pop()
+        if (sector, size) in seen:             # cycle guard: corrupt tables
+            continue
+        seen.add((sector, size))
+        extent = max(extent, sector * SECTOR + size)
+        for _name, start, sz, attr in walk_table(
+                read_table(f, base, sector, size)):
+            if attr & ATTR_DIR:
+                stack.append((start, sz))
+            else:
+                extent = max(extent, start * SECTOR + sz)
+    return extent
+
+
+def validate_image(iso_path):
+    """Refuse an image whose own directory tables describe more data than
+    the file actually contains.
+
+    A raw ISO carries no internal checksum, so nothing else catches a
+    truncated one: the block-level wrappers (CCI/CSO) are deliberately
+    content-agnostic and will compress whatever bytes exist, producing a
+    container that round-trips perfectly and is silently missing game
+    data. Every other input format carries its own integrity (GoD's hash
+    tree, zar's SHA-256, STFS's hash chain); the raw image is the hole.
+
+    Returns the allocation extent. Raises XdvdfsError if the image is
+    not XDVDFS or is short."""
+    size = os.path.getsize(iso_path)
+    with open(iso_path, "rb") as f:
+        base = find_base(f)
+        extent = allocation_extent(f, base)
+    need = base + extent
+    if need > size:
+        die("truncated image: its directory tables describe %d bytes "
+            "(partition base 0x%X plus %d of content) but the file holds "
+            "%d - %d bytes are missing"
+            % (need, base, extent, size, need - size))
+    return extent
+
+
 def safe_name(name):
     if not name or name in (".", "..") or "/" in name or "\\" in name or "\x00" in name:
         die("refusing unsafe filename %r" % name)

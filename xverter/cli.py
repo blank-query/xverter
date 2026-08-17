@@ -703,6 +703,15 @@ def cmd_convert(args):
             kind, path = detect_mod.detect(payload)
             print("archive payload: %s (%s)"
                   % (os.path.basename(path.rstrip(os.sep)), kind))
+        if kind == "iso":
+            # Validate before writing anything. A raw image carries no
+            # internal checksum, and the block wrappers are content-
+            # agnostic, so without this a truncated source converts
+            # "successfully" and is reported as verified.
+            try:
+                xdvdfs_mod.validate_image(path)
+            except xdvdfs_mod.XdvdfsError as e:
+                raise CliError("source image failed validation: %s" % e)
         if out_kind in ("zip", "7z"):
             # Boring on purpose: the archive wraps the input as-is.
             build = (archives_mod.build_zip if out_kind == "zip"
