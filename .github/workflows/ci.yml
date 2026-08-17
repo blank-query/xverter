@@ -21,6 +21,8 @@ on:
 
 jobs:
   matrix:
+    # A hung step must not burn the 6-hour default.
+    timeout-minutes: 15
     # 24.04, not 22.04: this job ships no artifacts, so it does not need
     # the oldest-glibc runner build.yml pins. It does need a chdman with
     # `createdvd`, which arrived in MAME 0.253 - 22.04 ships 0.241 and
@@ -36,7 +38,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install .
       - name: Install chdman (CHD edges; without it the matrix runs 44 of 48)
+        # CHD is xverter's one optional external tool and the matrix skips
+        # its edges cleanly when chdman is absent - so a slow or broken
+        # package mirror must degrade the run to 44 edges, never hang it.
+        # A 22:09 run sat here 15 minutes before being killed by hand.
+        timeout-minutes: 4
+        continue-on-error: true
         run: sudo apt-get update -qq && sudo apt-get install -y -qq mame-tools
+      - name: Report CHD availability
+        run: |
+          if command -v chdman >/dev/null; then
+            echo "chdman present - matrix will run all 48 edges"
+          else
+            echo "::warning::chdman unavailable; matrix runs 44 of 48 edges (CHD skipped)"
+          fi
       - name: Build synthetic disc images
         run: python tools/make_synthetic_discs.py synth
       - name: Conversion matrix - XGD1
