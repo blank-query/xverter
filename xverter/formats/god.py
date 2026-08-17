@@ -45,12 +45,15 @@ Pure stdlib. Streams subpart-at-a-time (~836 KiB).
 import argparse
 import hashlib
 import os
+import queue
 import shutil
 import struct
 import sys
+import threading
 import time
 
 BLOCK_SIZE = 0x1000
+WRITE_QUEUE_DEPTH = 4        # subparts in flight to the writer thread
 BLOCKS_PER_SUBPART = 0xCC          # 204
 SUBPARTS_PER_PART = 0xCB           # 203
 BLOCKS_PER_PART = 0xA1C4           # 41412 data blocks
@@ -687,31 +690,62 @@ def _build(f, out_dir, trim, game_title, progress):
         mht = bytearray()
         with open(os.path.join(data_dir, "Data%04d" % pi), "wb") as pf:
             pf.write(b"\x00" * BLOCK_SIZE)          # MHT placeholder
-            for _si in range(SUBPARTS_PER_PART):
-                if remaining <= 0:
-                    break
-                want = min(SUBPART_DATA_SIZE, remaining)
-                data = _read_full(f, want)
-                if len(data) != want:
-                    # only the sector-rounding tail may be missing from
-                    # the stream; zero-fill it, anything more is truncation
-                    if remaining - len(data) > pad:
-                        die("source image truncated: %d bytes missing "
-                            "before allocation extent"
-                            % (remaining - len(data) - pad))
-                    data += b"\x00" * (want - len(data))
-                subtable = bytearray(BLOCK_SIZE)
-                mv = memoryview(data)
-                n_blocks = (len(data) + BLOCK_SIZE - 1) // BLOCK_SIZE
-                for bi in range(n_blocks):
-                    subtable[bi * HASH_SIZE:(bi + 1) * HASH_SIZE] = \
-                        sha1(mv[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE])
-                pf.write(subtable)
-                pf.write(data)
-                mht += sha1(subtable)
-                remaining -= len(data)
-                if progress:
-                    progress(data_size - remaining, data_size)
+            # Hand the writes to a thread so the next subpart is read and
+            # hashed while this one drains to disk. Hashing is left on this
+            # thread on purpose: splitting the SHA-1 work across threads
+            # buys ~10% and costs 8x the timing jitter (GIL handoff), and
+            # regresses outright past two threads. Only the I/O is moved.
+            wq = queue.Queue(WRITE_QUEUE_DEPTH)
+            werr = []
+
+            def _drain(fh=pf, q=wq, err=werr):
+                while True:
+                    item = q.get()
+                    if item is None:
+                        return
+                    try:
+                        fh.write(item[0])
+                        fh.write(item[1])
+                    except BaseException as exc:     # surface on the main thread
+                        err.append(exc)
+                        return
+
+            wt = threading.Thread(target=_drain, daemon=True)
+            wt.start()
+            try:
+                for _si in range(SUBPARTS_PER_PART):
+                    if remaining <= 0:
+                        break
+                    if werr:
+                        break
+                    want = min(SUBPART_DATA_SIZE, remaining)
+                    data = _read_full(f, want)
+                    if len(data) != want:
+                        # only the sector-rounding tail may be missing from
+                        # the stream; zero-fill it, anything more is truncation
+                        if remaining - len(data) > pad:
+                            die("source image truncated: %d bytes missing "
+                                "before allocation extent"
+                                % (remaining - len(data) - pad))
+                        data += b"\x00" * (want - len(data))
+                    subtable = bytearray(BLOCK_SIZE)
+                    mv = memoryview(data)
+                    n_blocks = (len(data) + BLOCK_SIZE - 1) // BLOCK_SIZE
+                    for bi in range(n_blocks):
+                        subtable[bi * HASH_SIZE:(bi + 1) * HASH_SIZE] = \
+                            sha1(mv[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE])
+                    # neither buffer is touched again after queueing
+                    wq.put((subtable, data))
+                    mht += sha1(subtable)
+                    remaining -= len(data)
+                    if progress:
+                        progress(data_size - remaining, data_size)
+            finally:
+                wq.put(None)
+                wt.join()
+            if werr:
+                raise werr[0]
+            # every queued write has landed, so tell() is the true size
             part_sizes.append(pf.tell())
         mhts.append(mht)
 
