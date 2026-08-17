@@ -21,7 +21,11 @@ on:
 
 jobs:
   matrix:
-    runs-on: ubuntu-22.04
+    # 24.04, not 22.04: this job ships no artifacts, so it does not need
+    # the oldest-glibc runner build.yml pins. It does need a chdman with
+    # `createdvd`, which arrived in MAME 0.253 - 22.04 ships 0.241 and
+    # rejects the subcommand, failing all four CHD edges.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
