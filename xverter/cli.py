@@ -234,6 +234,53 @@ def _stream_hashes(path, progress=None):
     return "%08x" % (state["crc"] & 0xFFFFFFFF), sha.hexdigest()
 
 
+def _dat_has_size(dat_path, size):
+    """Cheap prefilter: does any entry in this DAT have exactly this size?
+
+    Redump images have canonical sizes - about 111 distinct values across
+    both DATs, 2627 of the 2690 OG-Xbox entries sharing one - so a
+    trimmed or modified image can be ruled out by size alone, without
+    hashing a single byte. That is what makes the identity check
+    affordable enough to run by default."""
+    try:
+        import defusedxml.ElementTree as ET
+    except ImportError:
+        import xml.etree.ElementTree as ET
+    want = str(size)
+    for rom in ET.parse(dat_path).getroot().iter("rom"):
+        if rom.get("size") == want:
+            return True
+    return False
+
+
+def _redump_check(path, progress=None):
+    """Identify an ISO against the redump DATs.
+
+    Returns (status, detail) where status is:
+      match     - the image is a known-good dump, byte for byte
+      altered   - its size is a canonical redump size but the content
+                  differs: a modified, patched or damaged redump
+      skipped   - no DAT entry has this size, so it cannot be a redump
+                  (a trimmed image, for instance). Nothing was hashed.
+    """
+    size = os.path.getsize(path)
+    sources = []
+    for system, label in (("xbox360", "Xbox 360"), ("xbox", "Original Xbox")):
+        for src in (datcache.cached(system)[0], datcache.bundled(system)):
+            if src:
+                sources.append((src, label))
+    plausible = [(s, l) for s, l in sources if _dat_has_size(s, size)]
+    if not plausible:
+        return ("skipped", "%d bytes matches no known dump size" % size)
+    crc, sha1 = _stream_hashes(path, progress=progress)
+    for src, label in plausible:
+        name = _dat_lookup(src, size, crc, sha1)
+        if name:
+            return ("match", "%s [%s]" % (name, label))
+    return ("altered", "size matches a redump image but the content does not "
+                       "(crc %s) - modified, patched or damaged" % crc)
+
+
 def _dat_lookup(dat_path, size, crc, sha1):
     # Prefer defusedxml (XXE/entity-expansion hardening) when available;
     # stdlib expat (Python >= 3.11 / libexpat >= 2.4) has built-in
@@ -712,6 +759,18 @@ def cmd_convert(args):
                 xdvdfs_mod.validate_image(path)
             except xdvdfs_mod.XdvdfsError as e:
                 raise CliError("source image failed validation: %s" % e)
+            if not args.no_verify:
+                # Identity, not just structure. Free unless the size is a
+                # canonical redump size, so trimmed images cost nothing.
+                status, detail = _redump_check(
+                    path, progress=prog.cb("identify"))
+                if status == "match":
+                    print("source : redump %s" % detail)
+                elif status == "altered":
+                    print("source : WARNING - %s" % detail)
+                else:
+                    print("source : not a redump image (%s); structure "
+                          "verified, contents unvouched" % detail)
         if out_kind in ("zip", "7z"):
             # Boring on purpose: the archive wraps the input as-is.
             build = (archives_mod.build_zip if out_kind == "zip"
