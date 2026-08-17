@@ -48,7 +48,7 @@ xverter convert <anything> -o out.zar      # or out.iso, out.god, outdir/
 | `chd`                  | ✅     | ✅ direct | ✅      | ✅      | ✅        | ✅        | —        | ❌      |
 | `stfs` (XBLA/DLC/TU)   | ✅     | ✅*       | ✅      | ✅*     | ✅*       | ✅*       | ✅*      | —      |
 
-**CCI** (Cerbios) and **CSO** (Project Stellar) are the compressed playable formats of the modded original-Xbox hardware scene — block-compressed ISO wrappers, LZ4 throughout. xVerter's writers are **byte-identical to the reference implementations** (Repackinator for CCI, MakeMHz's stellar-cso for CSO), so their output inherits the hardware validation those tools have earned; cross-reads with Repackinator pass in both directions. The wrappers are content-agnostic: yes, you can put an Xbox 360 game inside a CSO that only original-Xbox mod hardware could ever read. Exhibit two in the cursed-but-supported collection. Reading CCI/CSO needs nothing; writing them uses the `lz4` package, which installs with xverter automatically.
+**CCI** (Cerbios) and **CSO** (Project Stellar) are the compressed playable formats of the modded original-Xbox hardware scene — block-compressed ISO wrappers, LZ4 throughout. xVerter's writers are **byte-identical to the reference implementations** (Repackinator for CCI, MakeMHz's stellar-cso for CSO), so their output inherits the hardware validation those tools have earned; cross-reads with Repackinator pass in both directions. The wrappers are content-agnostic (the cursed corner below explores what that implies). Reading CCI/CSO needs nothing; writing them uses the `lz4` package, which installs with xverter automatically.
 
 **CHD** (MAME's Compressed Hunks of Data) is here as a deliberate bet on the near future. No released Xbox emulator reads it *yet* — xemu had working, community-tested CHD support in review ([PR #2921](https://github.com/xemu-project/xemu/pull/2921), libchdr-based, validated on redump and trimmed images alike) before the author deleted their fork and orphaned the patch. The demand threads go back years. xVerter delegates to `chdman` itself (MAME's reference tool, the same `createdvd` pipeline the PS1/PS2/Dreamcast world runs on), verifies every build by full round-trip against the source, and cross-checks the CHD header's internal SHA-1s — so the day an emulator merges support, your library is already there. Consider this a nudge, xemu.
 
@@ -56,11 +56,21 @@ xverter convert <anything> -o out.zar      # or out.iso, out.god, outdir/
 
 Everything routes through a common pivot (the extracted game directory), so every cell is two verified hops at most.
 
-\* Yes, you can turn an XBLA arcade title into a disc image or a Games-on-Demand container. You probably shouldn't. The tool converts; you decide.
+\* Yes, really — see the cursed corner below.
 
 **Original Xbox works too, at the same standard.** XDVDFS is the same filesystem on both consoles, so OG Xbox games flow through every edge of the matrix — including GoD output, which correctly produces Xbox Originals containers (content type `0x5000`, the 360's backward-compat install format). The full matrix has been validated on a real XGD1 redump (Halo: Combat Evolved) alongside the 360 runs. One expectation to set straight: **repacking an OG game as GoD/zar does not make it playable on a 360 emulator.** Real 360s play OG games through Microsoft's own built-in emulator (which supported only ~460 titles); Xenia/XenDroid don't implement that layer. GoD `0x5000` output is for real modded 360 hardware — for OG emulation, use xemu with plain xiso ISOs, which this tool happily produces.
 
 **Two deliberate exclusions, stated rather than hidden:** **FATX** (the filesystem inside console hard drives and Xemu's qcow2 HDD images — a storage medium, not a distribution format) and **STFS as *output*.** Rebuilt LIVE packages only matter to modded consoles filling a `Content` folder — emulators are happier with every other format here — and a writer held to this project's verification standard (hash-chain-validated structure, round-trip content equality, a real consumer booting the result) isn't built yet. Shipping it half-checked would be the one thing this tool never does. Note the signature honesty applies across the board: LIVE/PIRS signatures are Microsoft-private-key RSA, so *every* tool that writes these container families — including iso2god, whose GoD output the whole scene runs on — ships junk signature bytes that modded consoles and emulators simply don't check.
+
+## The cursed corner
+
+xVerter detects formats by magic bytes (never extensions), its wrappers are content-agnostic, and everything routes through the same pivot — so conversion edges exist wholesale, not by curated whitelist. Some of the resulting combinations are technically valid, fully verified, and deeply wrong. They are supported anyway. The tool converts; you decide.
+
+- **XBLA arcade title → disc image or GoD container** (the `*` in the matrix). A 50 MB downloadable arcade game dressed up as a full disc. It boots nowhere a plain STFS package wouldn't — it exists because the pivot architecture makes it free, and refusing it would mean writing code to say no.
+- **Xbox 360 game inside a CCI or CSO** — compressed wrappers that only modded *original* Xbox hardware (Cerbios, Project Stellar) will ever open, wrapped around a console generation that hardware cannot run. Round-trips bit-perfect.
+- **XBLA title → CHD** — a format no Xbox emulator reads yet, wrapping a container that never saw a disc. `chdman` builds it happily, xVerter verifies it, and nothing on Earth boots it.
+
+Every cursed edge passes through the same verification as the sane ones — several of them run in the 48-edge matrix on every `xverter test`. Cursed, but checked.
 
 ## The validation record — three generations of Halo, one hash each
 
