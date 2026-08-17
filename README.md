@@ -37,16 +37,16 @@ xverter convert <anything> -o out.zar      # or out.iso, out.god, outdir/
 
 ## The matrix
 
-| from \ to              | dir | `.iso`   | `.zar` | `.god` | `.cci`   | `.cso`   | `.chd`   |
-| ---------------------- |:---:|:--------:|:------:|:------:|:--------:|:--------:|:--------:|
-| **dir**                | —   | ✅        | ✅      | ✅      | ✅        | ✅        | ✅        |
-| **ISO**                | ✅   | —        | ✅      | ✅      | ✅ direct | ✅ direct | ✅ direct |
-| **ZAR**                | ✅   | ✅        | —      | ✅      | ✅        | ✅        | ✅        |
-| **GoD**                | ✅   | ✅ direct | ✅      | —      | ✅ direct | ✅ direct | ✅ direct |
-| **CCI**                | ✅   | ✅        | ✅      | ✅      | —        | ✅ direct | ✅ direct |
-| **CSO**                | ✅   | ✅        | ✅      | ✅      | ✅ direct | —        | ✅ direct |
-| **CHD**                | ✅   | ✅ direct | ✅      | ✅      | ✅        | ✅        | —        |
-| **STFS** (XBLA/DLC/TU) | ✅   | ✅*       | ✅      | ✅*     | ✅*       | ✅*       | ✅*       |
+| from \ to              | dir | `.iso`   | `.zar` | `.god` | `.cci`   | `.cso`   | `.chd`   | STFS |
+| ---------------------- |:---:|:--------:|:------:|:------:|:--------:|:--------:|:--------:|:----:|
+| **dir**                | —   | ✅        | ✅      | ✅      | ✅        | ✅        | ✅        | ❌    |
+| **ISO**                | ✅   | —        | ✅      | ✅      | ✅ direct | ✅ direct | ✅ direct | ❌    |
+| **ZAR**                | ✅   | ✅        | —      | ✅      | ✅        | ✅        | ✅        | ❌    |
+| **GoD**                | ✅   | ✅ direct | ✅      | —      | ✅ direct | ✅ direct | ✅ direct | ❌    |
+| **CCI**                | ✅   | ✅        | ✅      | ✅      | —        | ✅ direct | ✅ direct | ❌    |
+| **CSO**                | ✅   | ✅        | ✅      | ✅      | ✅ direct | —        | ✅ direct | ❌    |
+| **CHD**                | ✅   | ✅ direct | ✅      | ✅      | ✅        | ✅        | —        | ❌    |
+| **STFS** (XBLA/DLC/TU) | ✅   | ✅*       | ✅      | ✅*     | ✅*       | ✅*       | ✅*      | —    |
 
 **CCI** (Cerbios) and **CSO** (Project Stellar) are the compressed playable formats of the modded original-Xbox hardware scene — block-compressed ISO wrappers, LZ4 throughout. xVerter's writers are **byte-identical to the reference implementations** (Repackinator for CCI, MakeMHz's stellar-cso for CSO), so their output inherits the hardware validation those tools have earned; cross-reads with Repackinator pass in both directions. The wrappers are content-agnostic: yes, you can put an Xbox 360 game inside a CSO that only original-Xbox mod hardware could ever read. Exhibit two in the cursed-but-supported collection. Reading CCI/CSO needs nothing; writing them uses the `lz4` package, which installs with xverter automatically.
 
