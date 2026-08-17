@@ -23,21 +23,28 @@ jobs:
           - os: windows-latest
             artifact: xverter.exe
             binary: dist/xverter.exe
+            strip: ""              # python314.dll ships stripped already
             sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7zr.exe
             sz_addbinary: "szbin/7zr.exe;." 
           - os: ubuntu-22.04     # oldest runner glibc = widest compatibility
             artifact: xverter-linux-x86_64
             binary: dist/xverter
+            strip: "--strip"       # setup-python's Linux CPython carries full
+                                   # DWARF: libpython alone is 32.9 MB unstripped
+                                   # vs 6.1 MB stripped. Worth ~18 MB per binary.
             sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7z2602-linux-x64.tar.xz
             sz_addbinary: "szbin/7zz:." 
           - os: macos-latest
             artifact: xverter-macos-arm64
             binary: dist/xverter
+            strip: ""              # Python.framework already stripped; strip
+                                   # also perturbs arm64 code signatures
             sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7z2602-mac.tar.xz
             sz_addbinary: "szbin/7zz:." 
           - os: ubuntu-22.04-arm
             artifact: xverter-linux-arm64
             binary: dist/xverter
+            strip: "--strip"
             sz_url: https://github.com/ip7z/7zip/releases/download/26.02/7z2602-linux-arm64.tar.xz
             sz_addbinary: "szbin/7zz:." 
     runs-on: ${{ matrix.os }}
@@ -64,7 +71,7 @@ jobs:
           ls -la
       - name: Build one-file binary
         run: >
-          pyinstaller --onefile --name xverter
+          pyinstaller --onefile --name xverter ${{ matrix.strip }}
           --collect-all textual
           --add-data "xverter/data:xverter/data"
           --add-binary "${{ matrix.sz_addbinary }}"
