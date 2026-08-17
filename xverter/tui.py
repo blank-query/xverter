@@ -222,6 +222,7 @@ class XVerterApp(App):
         self._busy = set()
         self.ram_scratch = False
         self.split_4gib = False
+        self.verify = True          # verification is the point; opt out, never in
         self.batch = set()
         self._identify_cache = {}
 
@@ -258,6 +259,10 @@ class XVerterApp(App):
                                     yield Button("Test", id="run-test",
                                                  variant="warning")
                                     yield Button("Rescan", id="do-rescan")
+                                with Horizontal(classes="optrow"):
+                                    yield Label("Verify (identify source,\n"
+                                                "re-read every output)")
+                                    yield Switch(value=True, id="opt-verify")
                                 with Horizontal(classes="optrow"):
                                     yield Label("RAM scratch (~2.2x game\n"
                                                 "size must be available)")
@@ -433,7 +438,15 @@ class XVerterApp(App):
             self._install_dep(tool)
 
     def on_switch_changed(self, event):
-        if event.switch.id == "opt-ram":
+        if event.switch.id == "opt-verify":
+            self.verify = event.value
+            if event.value:
+                self._log("verification ON - sources identified against "
+                          "redump, every output re-read and checked")
+            else:
+                self._log("verification OFF - outputs are written but NOT "
+                          "checked, and sources are not identified")
+        elif event.switch.id == "opt-ram":
             self.ram_scratch = event.value
             if event.value:
                 self._log("RAM scratch ON - pivot files go to a tmpfs "
@@ -492,14 +505,17 @@ class XVerterApp(App):
             return
         self._busy.add(path)
         argv = ["convert", path, "-o", out]
+        if not self.verify:
+            argv += ["--no-verify"]
         if self.ram_scratch:
             argv += ["--scratch", "ram"]
         if self.split_4gib:
             argv += ["--split"]
-        self._log("convert %s -> %s ...%s%s"
+        self._log("convert %s -> %s ...%s%s%s"
                   % (base, os.path.basename(out.rstrip(os.sep)),
                      " [ram scratch]" if self.ram_scratch else "",
-                     " [4GiB split]" if self.split_4gib else ""))
+                     " [4GiB split]" if self.split_4gib else "",
+                     "" if self.verify else " [UNVERIFIED]"))
         self._run_job(path, argv, "convert %s" % base)
 
     def do_verify(self):
@@ -819,6 +835,8 @@ class XVerterApp(App):
                         self._log, "SKIP %s: output exists" % name)
                     continue
                 argv = ["convert", path, "-o", out]
+                if not self.verify:
+                    argv += ["--no-verify"]
                 if self.ram_scratch:
                     argv += ["--scratch", "ram"]
                 if self.split_4gib:
