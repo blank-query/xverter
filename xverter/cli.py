@@ -682,20 +682,41 @@ def cmd_test(args):
                                          dir=os.path.dirname(
                                              os.path.abspath(args.input))
                                          or None)
+    keep = False
     try:
         rc = matrix.main([args.input, w])
         report = os.path.join(w, "matrix_report.html")
-        if auto and os.path.isfile(report):
-            stem = os.path.splitext(os.path.basename(args.input))[0]
-            dest = os.path.join(
-                os.path.dirname(os.path.abspath(args.input)),
-                stem + "_matrix_report.html")
-            shutil.move(report, dest)
-            print("report saved: %s" % dest)
+        if auto:
+            if not os.path.isfile(report):
+                # Promised and not delivered: say so rather than fall through.
+                print("WARNING: the matrix finished but wrote no report "
+                      "(expected %s)" % report, file=sys.stderr)
+            else:
+                stem = os.path.splitext(os.path.basename(args.input))[0]
+                dest = os.path.join(
+                    os.path.dirname(os.path.abspath(args.input)),
+                    stem + "_matrix_report.html")
+                try:
+                    shutil.move(report, dest)
+                    print("report saved: %s" % dest)
+                except OSError as e:
+                    # Losing the report to the cleanup below would be worse
+                    # than leaving the scratch dir behind. Keep both.
+                    keep = True
+                    print("WARNING: could not move the report to %s (%s)\n"
+                          "         it is still at %s - the scratch "
+                          "directory has been left in place for it"
+                          % (dest, e, report), file=sys.stderr)
         return rc
     finally:
-        if auto:
-            shutil.rmtree(w, ignore_errors=True)
+        if auto and not keep and os.path.isdir(w):
+            try:
+                shutil.rmtree(w)
+            except OSError as e:
+                left = sum(len(fs) for _r, _d, fs in os.walk(w))
+                print("WARNING: could not remove the scratch directory "
+                      "(%s)\n         %d file(s) left in %s - remove it "
+                      "yourself" % (e, left, w), file=sys.stderr)
 
 
 def cmd_tui(args):
