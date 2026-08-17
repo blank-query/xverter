@@ -259,6 +259,22 @@ CHD is MAME's format and `chdman` is its living definition — delegating there 
 
 The scene has seen what happens when a project rewrites a writer casually — XGDTool's ZAR output accumulated corruption reports ([#1](https://github.com/wiredopposite/XGDTool/issues/1), [#2](https://github.com/wiredopposite/XGDTool/issues/2)). That's why every xVerter writer ships only after differential validation against the tool it replaces, and why every output is still re-read and verified by xVerter's own readers before success is reported — ours included. Never trust a writer. Especially your own.
 
+### Android (Termux)
+
+The standalone Linux binaries won't run on Android — Android uses Bionic libc, not glibc — but the pip route works in [Termux](https://termux.dev):
+
+```
+pkg update
+pkg install python clang 7zip
+pip install xverter
+termux-setup-storage        # one-time: lets xverter see shared storage
+xverter ~/storage/shared    # TUI on your phone's files
+```
+
+Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clang during install. `.7z` support comes from the `7zip` package (the engine bundled in the platform wheels is glibc-only, so the PATH fallback picks up Termux's `7zz` instead). CHD stays optional as everywhere — Termux has no `chdman` package, so CHD edges are simply skipped, exactly as on any machine without it. The TUI is touch-friendly: taps arrive as mouse clicks.
+
+Same honesty as the macOS binary: this *should* work — every piece is pure Python plus packages Termux compiles routinely — but it hasn't been tested on a real device yet. A report either way earns the same changelog credit.
+
 ### Scratch space (and doing it all in RAM)
 
 Conversions that pivot through an intermediate (e.g. `zar → god`) write temporary files to the system temp dir. Disk scratch is the default and the right choice for most machines. If you have the memory, `--scratch ram` keeps every intermediate byte off your SSD:
