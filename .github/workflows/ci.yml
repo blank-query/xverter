@@ -1,0 +1,61 @@
+name: ci
+
+# Runs on every push and pull request - the cheap gate that keeps nightly
+# honest between full-library validation runs.
+#
+# Real games cannot live here: copyrighted, and 7-9 GB each. Instead
+# tools/make_synthetic_discs.py builds a tiny image for each disc
+# generation at its real partition base (XGD1 0x18300000, XGD2 0xFD90000,
+# XGD3 0x2080000), each carrying a valid executable, and the full
+# conversion matrix runs against all three. ~6 seconds for the lot.
+#
+# What this does NOT cover, and why the full validation run still gates
+# master: real retail images, multi-GB data paths, and STFS (which cannot
+# be synthesised - there is no STFS writer).
+
+on:
+  push:
+    branches: [nightly, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install xverter
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Install chdman (CHD edges; without it the matrix runs 44 of 48)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mame-tools
+      - name: Build synthetic disc images
+        run: python tools/make_synthetic_discs.py synth
+      - name: Conversion matrix - XGD1
+        working-directory: synth
+        run: xverter test xgd1.iso
+      - name: Conversion matrix - XGD2
+        working-directory: synth
+        run: xverter test xgd2.iso
+      - name: Conversion matrix - XGD3
+        working-directory: synth
+        run: xverter test xgd3.iso
+      - name: TUI renders headless
+        run: |
+          mkdir -p tui-check && cd tui-check
+          TEXTUAL_SCREENSHOT=1 TEXTUAL_SCREENSHOT_FILENAME=tui.svg \
+            TEXTUAL_SCREENSHOT_LOCATION=. xverter tui
+          test -s tui.svg
+      - name: Upload matrix reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-reports
+          path: |
+            synth/*_matrix_report.html
+            tui-check/tui.svg
+          if-no-files-found: warn
