@@ -48,4 +48,4 @@ security = ["defusedxml"]
 packages = ["xverter", "xverter.formats"]
 
 [tool.setuptools.package-data]
-xverter = ["data/*.dat", "bin/*"]
+xverter = ["data/*.dat", "data/*.txt", "bin/*"]
