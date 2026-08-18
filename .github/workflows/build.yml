@@ -57,11 +57,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          # Free-threaded. We choose the interpreter for the standalone
+          # binaries, and this is the one measurement says to choose:
+          # 2 KB LZ4-HC blocks and 4 KiB SHA-1 blocks only parallelise
+          # without a GIL, and the code sizes its pools from
+          # Py_GIL_DISABLED. Frozen binary, real conversion of a 7.8 GB
+          # redump including verification: 24-25s built on 3.14,
+          # 17s built on 3.14t, byte-identical output either way.
+          python-version: "3.14t"
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ".[tui]" pyinstaller
+          # `.[tui]` was a no-op: textual is a hard dependency and the
+          # only extra is `security`, so pip warned and moved on, and
+          # every shipped binary fell back to stdlib XML for DAT
+          # parsing. Ask for the extra that exists.
+          python -m pip install ".[security]" pyinstaller
       - name: Fetch the 7-Zip engine (official, multithreaded)
         shell: bash
         env:
@@ -87,6 +98,12 @@ jobs:
         run: |
           ${{ matrix.binary }} --version
           ${{ matrix.binary }} info xverter || true
+          # A --version check does not prove a frozen build works, and
+          # this one also has to prove the interpreter is the one we
+          # asked for - a silent fall back to a GIL build would cost
+          # ~1.45x and nothing would fail.
+          ${{ matrix.binary }} --version | grep -q free-threaded \
+            || { echo "BUILT AGAINST A GIL INTERPRETER - refusing"; exit 1; }
       - name: Rename artifact
         if: runner.os != 'Windows'
         run: mv ${{ matrix.binary }} dist/${{ matrix.artifact }}

@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import queue
 import shutil
 import sys
@@ -1044,6 +1045,21 @@ def cmd_convert(args):
         shutil.rmtree(w, ignore_errors=True)
 
 
+def _version_string():
+    """Version, plus the interpreter it is running on.
+
+    The interpreter is part of the answer, not trivia: pool sizes are
+    chosen from Py_GIL_DISABLED, and a free-threaded build converts
+    substantially faster. For the standalone binaries it also proves the
+    build picked up the interpreter it was supposed to - that is a
+    silent 1.45x otherwise."""
+    import sysconfig
+    kind = "free-threaded" if sysconfig.get_config_var("Py_GIL_DISABLED") \
+        else "gil"
+    return "%%(prog)s %s (CPython %s, %s)" % (
+        __version__, platform.python_version(), kind)
+
+
 def main(argv=None):
     # Double-click / bare launch = the program: no arguments opens the
     # TUI on the current directory. Subcommands remain for the CLI.
@@ -1057,7 +1073,7 @@ def main(argv=None):
                                              "verified at every step. Run "
                                              "with no arguments to open "
                                              "the TUI.")
-    ap.add_argument("--version", action="version", version="%(prog)s " + __version__)
+    ap.add_argument("--version", action="version", version=_version_string())
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("info", help="identify a file/directory and show details")
