@@ -124,12 +124,16 @@ def compress_batch_iter(blocks, chunk=BATCH_CHUNK):
         return
     parts = [blocks[i:i + chunk] for i in range(0, len(blocks), chunk)]
 
-    # compress_block is bound out of the loop: at millions of 2 KB
-    # blocks its Python call frame cost 2.2s of a 21s image build.
-    _c = _raw_compress()
+    # The lz4 entry point is called directly from the comprehension:
+    # every wrapper in between is another Python frame per block, and at
+    # ~3.6M blocks per image there is no room for a spare one.
+    if not HAVE_LZ4 or _lz4block is None:
+        raise Lz4Missing(INSTALL_HINT)
+    _compress = _lz4block.compress
 
     def run(part):
-        return [_c(b) for b in part]
+        return [_compress(b, mode="high_compression", compression=HC_LEVEL,
+                          store_size=False) for b in part]
 
     for res in _pool().map(run, parts):
         yield res

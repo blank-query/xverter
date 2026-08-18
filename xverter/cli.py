@@ -448,8 +448,23 @@ def _verify_wrapper(out_kind, out_path, in_kind, in_path, w,
                 progress(done, size)
         return h.hexdigest()
 
-    with _wrapper_reader(out_kind, out_path) as got_f:
-        got = stream_sha1(got_f)
+    # The output decode and the source re-read are independent, and both
+    # are hash-bound, so they run at the same time instead of one after
+    # the other. Nothing is skipped: the source is still read a second
+    # time, which is what catches a transient read error that would
+    # otherwise be compressed faithfully and then verified as correct.
+    got_box = []
+    got_err = []
+
+    def _hash_output():
+        try:
+            with _wrapper_reader(out_kind, out_path) as got_f:
+                got_box.append(stream_sha1(got_f))
+        except BaseException as exc:                  # noqa: BLE001
+            got_err.append(exc)
+
+    got_t = threading.Thread(target=_hash_output, daemon=True)
+    got_t.start()
     if in_kind == "iso":
         with open(in_path, "rb") as f:
             from .formats.cci import xbox_image_offset
@@ -476,6 +491,10 @@ def _verify_wrapper(out_kind, out_path, in_kind, in_path, w,
         iso = os.path.join(w, "pivot_out.iso")
         with open(iso, "rb") as f:
             want = stream_sha1(f)
+    got_t.join()
+    if got_err:
+        raise got_err[0]
+    got = got_box[0]
     if got != want:
         os.unlink(out_path)
         raise CliError("built %s failed round-trip: decoded sha1 %s != source %s"
