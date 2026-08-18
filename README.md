@@ -285,6 +285,8 @@ xverter ~/storage/shared    # TUI on your phone's files
 
 Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clang during install. `.7z` support comes from the `7zip` package (the engine bundled in the platform wheels is glibc-only, so the PATH fallback picks up Termux's `7zz` instead). CHD stays optional as everywhere — Termux has no `chdman` package, so CHD edges are simply skipped, exactly as on any machine without it. The TUI is touch-friendly: taps arrive as mouse clicks.
 
+![xVerter running in Termux on a Galaxy Z Fold 4](docs/termux-zfold4.jpg)
+
 **Tested on a real device.** Galaxy Z Fold 4, Termux, library on shared storage — the full TUI renders on the inner display, and `Battlefield: Bad Company (USA) (En,Fr)` converted from a 4.5 GB `.zar` back to a 4.9 GB `.iso` in **26.9 s**, manifest verified. A phone with a folding keyboard is a complete xVerter workstation.
 
 ### Scratch space (and doing it all in RAM)
