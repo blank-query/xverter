@@ -31,6 +31,7 @@ CRC-checked).
 import hashlib
 import os
 import sys
+import contextlib
 import zipfile
 
 MAGIC_ZIP = b"PK\x03\x04"
@@ -298,6 +299,53 @@ def _sha1(path):
     return h.hexdigest()
 
 
+#: ISA-L's deflate level for ZIP output. Measured against zlib level 6
+#: on both extremes of compressibility, same 7.8 GB image:
+#:
+#:   zero/video region   204 MB/s -> 4384 MB/s   26.34% vs 26.34%
+#:   game data            76 MB/s -> 2121 MB/s   96.91% vs 96.89%
+#:
+#: 21-28x faster for the same bytes-out, which is not a trade so much as
+#: zlib spending its time hunting matches that are not there. Level 3 is
+#: both slower and slightly worse than 2, so 2 it is.
+_ISAL_LEVEL = 2
+
+#: 7-Zip compression level for .7z output - see build_7z.
+_SEVENZ_LEVEL = 1
+
+
+@contextlib.contextmanager
+def _isal_deflate():
+    """Have zipfile deflate with ISA-L for the duration, if it is here.
+
+    zipfile has no public hook for choosing a compressor, so this swaps
+    the private one and puts it back. Both the attribute and the import
+    are checked: without either, the block is a no-op and stdlib zlib
+    does the work as before. The output is ordinary deflate - stdlib
+    inflates it, and every entry is re-read and hashed by the verify
+    pass below regardless."""
+    try:
+        from isal import isal_zlib
+    except ImportError:
+        yield False
+        return
+    orig = getattr(zipfile, "_get_compressor", None)
+    if orig is None:                    # stdlib moved it: leave well alone
+        yield False
+        return
+
+    def _patched(compress_type, compresslevel=None):
+        if compress_type == zipfile.ZIP_DEFLATED:
+            return isal_zlib.compressobj(_ISAL_LEVEL, isal_zlib.DEFLATED, -15)
+        return orig(compress_type, compresslevel)
+
+    zipfile._get_compressor = _patched
+    try:
+        yield True
+    finally:
+        zipfile._get_compressor = orig
+
+
 def build_zip(src, out_path, verify=True, progress=None):
     """Archive a file or directory tree as .zip. Canonical output:
     sorted entries, fixed timestamps - same input, same bytes. verify
@@ -309,8 +357,9 @@ def build_zip(src, out_path, verify=True, progress=None):
     _grand = sum(os.path.getsize(p) for p, _a in sources) or 1
     _done = [0]
     try:
-        with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED,
-                             allowZip64=True) as z:
+        with _isal_deflate(), \
+                zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED,
+                                allowZip64=True) as z:
             for path, arc in sources:
                 info = zipfile.ZipInfo(arc, date_time=_ZIP_EPOCH)
                 info.compress_type = zipfile.ZIP_DEFLATED
@@ -356,7 +405,13 @@ def build_7z(src, out_path, verify=True, progress=None):
     _grand = sum(os.path.getsize(p) for p, _a in sources) or 1
     try:
         src_abs = os.path.abspath(src)
-        _run_7z([exe, "a", "-t7z", "-y", "-bsp1",
+        # -mx1 rather than the engine default of -mx5. Game images are
+        # already compressed, so the higher levels spend a long time
+        # finding matches that are not there. Measured on a 7.8 GB
+        # redump: -mx1 20s/87.99%, -mx5 69s/87.86%, -mx9 82s/87.78% -
+        # 3.45x the speed for 0.13% more bytes, which is 9 MB on a
+        # 6.87 GB archive. Raise this constant if size matters more.
+        _run_7z([exe, "a", "-t7z", "-y", "-bsp1", "-mx" + str(_SEVENZ_LEVEL),
                  os.path.abspath(out_path),
                  os.path.basename(src_abs)],
                 progress=progress, total=_grand,

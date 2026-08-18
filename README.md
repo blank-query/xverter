@@ -290,6 +290,34 @@ Three ways, pick one:
 2. **`pip install xverter`** / `pipx install xverter` — the `xverter` command plus the standalone tools (`xv-god`, `xv-zar`, ...).
 3. **From a clone**: `pip install .`
 
+### Free-threaded Python is meaningfully faster
+
+The standalone binaries already ship on **free-threaded CPython 3.14t**, so binary users get
+this for nothing. If you install with pip, the interpreter is yours to choose, and it is worth
+choosing: xVerter's compression, hashing and extraction pools size themselves from
+`Py_GIL_DISABLED` at import, so a free-threaded interpreter is picked up automatically with no
+flag to set.
+
+| Same work, same machine | 3.14 | 3.14t |
+| ----------------------- | ----:| -----:|
+| CCI compression, 7.8 GB image | 15.8s | **8.1s** |
+| GoD hash-tree build | 3.3s | **2.1s** |
+| Full 44-edge matrix, Halo CE | 217s | **161s** |
+
+The reason is specific: xVerter hashes 4 KiB blocks and LZ4-compresses 2 KB ones, and at that
+size the GIL hand-off between threads costs more than the work does — with a GIL, *more*
+threads are measurably slower, which is why the pools stay small there. Without one the same
+code parallelises properly.
+
+```bash
+uv python install 3.14t          # or your distro's free-threading package
+uv venv --python 3.14t && uv pip install xverter
+```
+
+Output is byte-identical either way — this is a scheduling difference, not a different
+result, and every format's bytes were checked on both interpreters before this was written.
+Plain 3.14 (or 3.9+) remains fully supported and is what you get by default.
+
 **xVerter has no required external tools.** Every reader and every writer is its own code — ISO, GoD, ZAR, CCI, CSO, STFS, ZIP: native, pure Python, nothing to hunt down. `pip install` brings the three Python packages it runs on (`textual` for the TUI, `lz4` for CCI/CSO compression, and `zstandard` only on Python < 3.14, where zstd isn't in the stdlib yet — the marker handles it, you don't). `.7z` support comes with the engine included everywhere: the standalone binaries and the platform wheels PyPI serves both carry the official 7-Zip engine inside; only a from-source install (plain sdist) falls back to a system 7-Zip with a clear hint. One binary exists in the picture at all, and it's opt-in: install it only if you want CHD.
 
 | Binary   | Needed for    | Source                                                                                                      |

@@ -26,6 +26,7 @@ dependencies = [
     "textual>=0.80",                          # the TUI (bare `xverter` opens it)
     "lz4",                                    # CCI/CSO compression
     "zstandard; python_version < '3.14'",     # zar (stdlib zstd on 3.14+)
+    "isal",                                   # ZIP deflate: 20-28x zlib, same size
 ]
 
 [project.urls]
