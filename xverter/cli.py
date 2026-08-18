@@ -147,10 +147,12 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
         # no temporary ISO is written
         with god_mod.GodStream(path) as stream:
             xdvdfs_mod.extract(stream, out, quiet=True, manifest=manifest,
-                               progress=progress)
+                               progress=progress,
+                               opener=lambda: god_mod.GodStream(path))
     elif kind == "iso":
         xdvdfs_mod.extract(path, out, quiet=True, manifest=manifest,
-                           progress=progress)
+                           progress=progress,
+                           opener=lambda: open(path, "rb"))
     elif kind == "zar":
         zar_mod.unpack(path, out, manifest=manifest, progress=progress)
     elif kind == "stfs":
@@ -159,11 +161,13 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
     elif kind == "cci":
         with cci_mod.CciReader(path) as stream:
             xdvdfs_mod.extract(stream, out, quiet=True, manifest=manifest,
-                               progress=progress)
+                               progress=progress,
+                               opener=lambda: cci_mod.CciReader(path))
     elif kind == "cso":
         with cso_mod.CsoReader(path) as stream:
             xdvdfs_mod.extract(stream, out, quiet=True, manifest=manifest,
-                               progress=progress)
+                               progress=progress,
+                               opener=lambda: cso_mod.CsoReader(path))
     else:
         raise CliError("cannot read input kind %r" % kind)
     return out
