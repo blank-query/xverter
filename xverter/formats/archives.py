@@ -336,6 +336,16 @@ def _isal_zip():
     `decompress(data, max_length)` in bounded chunks. zlib keeps the
     read path.
 
+    Nor is the bundled 7-Zip engine, which was measured for the same
+    job and lost - decode only, no writing, two reps each:
+
+      zlib-made zip    7-Zip 7.6s    zipfile 6.7s
+      ISA-L-made zip   7-Zip 13.2s   zipfile 10.5s
+
+    stdlib is already the fastest reader available here. Note both
+    readers slow by the same factor on the ISA-L archive, so the read
+    cost above is a property of the stream, not of Python.
+
     zipfile has no public hook for choosing a codec, so the private ones
     are swapped and put back. Every attribute and the import are
     checked: without any of them the block is a no-op and stdlib zlib
