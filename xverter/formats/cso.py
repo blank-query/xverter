@@ -52,7 +52,9 @@ writing requires python-lz4 (installed with xverter; pyz users: pip install lz4)
 """
 
 import os
+import queue
 import struct
+import threading
 import sys
 
 from . import lz4compat
@@ -328,6 +330,14 @@ class _PartWriter:
         self.f.close()
 
 
+def _stream_comps(raws):
+    """Flatten compress_batch_iter into a per-block iterator, so each
+    block is written as its run lands rather than after the window."""
+    for run in lz4compat.compress_batch_iter(raws):
+        for c in run:
+            yield c
+
+
 def build_cso(src, out_path, split=True, split_offset=SPLIT_OFFSET,
               image_offset=None, progress=None):
     """Compress an ISO stream (path or seekable file-like) to CSO
@@ -383,14 +393,39 @@ def build_cso(src, out_path, split=True, split_offset=SPLIT_OFFSET,
         # preserving, byte-identical to sequential), write in order.
         window = 16384                                 # 32 MiB of blocks
         i = 0
+        # Reader thread holds the next window, so the source read
+        # overlaps compression of the current one.
+        rq = queue.Queue(2)
+        rerr = []
+
+        def _fill():
+            left = nblocks
+            try:
+                while left > 0:
+                    k = min(window, left)
+                    b = stream.read(k * BLOCK_SIZE)
+                    if len(b) < k * BLOCK_SIZE:
+                        b = b + b"\x00" * (k * BLOCK_SIZE - len(b))
+                    rq.put((k, b))
+                    left -= k
+            except BaseException as exc:                # noqa: BLE001
+                rerr.append(exc)
+            finally:
+                rq.put(None)
+
+        rt = threading.Thread(target=_fill, daemon=True)
+        rt.start()
         while i < nblocks:
-            n = min(window, nblocks - i)
-            buf = stream.read(n * BLOCK_SIZE)
-            if len(buf) < n * BLOCK_SIZE:
-                buf = buf + b"\x00" * (n * BLOCK_SIZE - len(buf))
-            raws = [buf[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
+            item = rq.get()
+            if item is None:
+                break
+            if rerr:
+                raise rerr[0]
+            n, buf = item
+            mv = memoryview(buf)
+            raws = [mv[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
                     for j in range(n)]
-            for raw, comp in zip(raws, lz4compat.compress_batch(raws)):
+            for raw, comp in zip(raws, _stream_comps(raws)):
                 p = parts[-1]
                 if split and p.pos > split_offset:
                     p = _PartWriter("%s.%d%s" % (base, len(parts) + 1, ext))
@@ -409,6 +444,9 @@ def build_cso(src, out_path, split=True, split_offset=SPLIT_OFFSET,
                 i += 1
             if progress:
                 progress(i, nblocks)
+        rt.join()
+        if rerr:
+            raise rerr[0]
         index[-1] = parts[-1].pos >> INDEX_ALIGNMENT
         parts[0].rewrite_index(index)
         for p in parts:

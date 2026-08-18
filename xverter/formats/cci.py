@@ -43,7 +43,9 @@ writing requires python-lz4 (installed with xverter; pyz users: pip install lz4)
 """
 
 import os
+import queue
 import struct
+import threading
 import sys
 
 from . import lz4compat
@@ -53,6 +55,7 @@ MAGIC = b"CCIM"
 HEADER = struct.Struct("<4sLQQLBBH")
 HEADER_SIZE = 32
 BLOCK_SIZE = 2048
+_WRITE_BUF = 1 << 22          # 4 MiB of blocks per write() call
 VERSION = 1
 INDEX_ALIGNMENT = 2
 SPLIT_OFFSET = 0xFF000000  # start a new slice once tell() exceeds this
@@ -281,25 +284,44 @@ class _SliceWriter:
         self.f = open(path, "wb")
         self.f.write(b"\x00" * HEADER_SIZE)   # placeholder header
         self.records = []                     # (record_size, compressed)
+        # Position is tracked here rather than asked of the file: at
+        # millions of blocks, one tell() per block cost 2.5s of a 21s
+        # image build, purely to test the split threshold.
+        self.pos = HEADER_SIZE
+        self._buf = bytearray()
 
     def tell(self):
-        return self.f.tell()
+        return self.pos
 
     def add_block(self, comp, raw):
-        """Write one 2048-byte sector, choosing compressed or raw storage.
-        comp may be None (lz4 output unavailable/oversized -> store raw)."""
+        """Queue one 2048-byte sector, compressed or raw. Bytes land in
+        a buffer and reach the file in large writes; the file's contents
+        and the index are unchanged."""
+        buf = self._buf
         if comp is not None and len(comp) < COMPRESS_THRESHOLD:
             pad = (-(len(comp) + 1)) % 4
-            self.f.write(bytes((pad,)))
-            self.f.write(comp)
+            buf.append(pad)
+            buf += comp
             if pad:
-                self.f.write(b"\x00" * pad)
-            self.records.append((1 + len(comp) + pad, True))
+                buf += b"\x00" * pad
+            n = 1 + len(comp) + pad
+            self.records.append((n, True))
         else:
-            self.f.write(raw)
-            self.records.append((BLOCK_SIZE, False))
+            buf += raw
+            n = BLOCK_SIZE
+            self.records.append((n, False))
+        self.pos += n
+        if len(buf) >= _WRITE_BUF:
+            self.f.write(buf)
+            del buf[:]
+
+    def flush_buf(self):
+        if self._buf:
+            self.f.write(self._buf)
+            del self._buf[:]
 
     def finalize(self):
+        self.flush_buf()
         index_offset = self.f.tell()
         pos = HEADER_SIZE
         out = bytearray()
@@ -361,25 +383,61 @@ def build_cci(src, out_path, split=True, split_offset=SPLIT_OFFSET,
         # in order so the split/layout logic is untouched.
         window = 16384                                 # 32 MiB of blocks
         done = 0
+        # A reader thread keeps the next window in hand so the source
+        # read overlaps the compression of the current one: the loop
+        # then costs max(read, compress) per window instead of the sum.
+        rq = queue.Queue(2)
+        rerr = []
+
+        def _fill():
+            left = nblocks
+            try:
+                while left > 0:
+                    k = min(window, left)
+                    b = stream.read(k * BLOCK_SIZE)
+                    if len(b) < k * BLOCK_SIZE:
+                        b = b + b"\x00" * (k * BLOCK_SIZE - len(b))
+                    rq.put((k, b))
+                    left -= k
+            except BaseException as exc:                # noqa: BLE001
+                rerr.append(exc)
+            finally:
+                rq.put(None)
+
+        rt = threading.Thread(target=_fill, daemon=True)
+        rt.start()
         while done < nblocks:
-            n = min(window, nblocks - done)
-            buf = stream.read(n * BLOCK_SIZE)
-            if len(buf) < n * BLOCK_SIZE:
-                buf = buf + b"\x00" * (n * BLOCK_SIZE - len(buf))
-            raws = [buf[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
+            item = rq.get()
+            if item is None:
+                break
+            if rerr:
+                raise rerr[0]
+            n, buf = item
+            # memoryview: slicing a 32 MiB window into 16384 blocks used
+            # to copy the whole window again, per window.
+            mv = memoryview(buf)
+            raws = [mv[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
                     for j in range(n)]
-            comps = lz4compat.compress_batch(raws)
-            for raw, comp in zip(raws, comps):
-                if split and slices[-1].tell() > split_offset:
-                    slices[-1].finalize()
-                    done_paths.append(slices[-1].path)
-                    slices.append(_SliceWriter("%s.%d%s"
-                                               % (base, len(slices) + 1,
-                                                  ext)))
-                slices[-1].add_block(comp, raw)
+            # Write each run as it comes back rather than waiting for the
+            # window: read, compress and write all overlap.
+            at = 0
+            for comps in lz4compat.compress_batch_iter(raws):
+                for comp in comps:
+                    raw = raws[at]
+                    at += 1
+                    if split and slices[-1].tell() > split_offset:
+                        slices[-1].finalize()
+                        done_paths.append(slices[-1].path)
+                        slices.append(_SliceWriter("%s.%d%s"
+                                                   % (base, len(slices) + 1,
+                                                      ext)))
+                    slices[-1].add_block(comp, raw)
             done += n
             if progress:
                 progress(done, nblocks)
+        rt.join()
+        if rerr:
+            raise rerr[0]
         slices[-1].finalize()
         done_paths.append(slices[-1].path)
         if progress:
