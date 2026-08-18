@@ -32,7 +32,10 @@ from .formats import chd as chd_mod
 from .formats import archives as archives_mod
 from . import datcache
 
-__version__ = "1.0.3"
+# One source of truth: the package defines it, everything else asks.
+# These drifted apart once (1.0.0 here against 1.0.3 in pyproject) with
+# nothing to catch it, because each place held its own copy.
+from . import __version__
 
 
 class CliError(Exception):
