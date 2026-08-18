@@ -222,7 +222,7 @@ class XVerterApp(App):
         self._busy = set()
         self.ram_scratch = False
         self.split_4gib = False
-        self.leroy = False          # checks are the point; opt out, never in
+        self.leeroy = False          # checks are the point; opt out, never in
         self.batch = set()
         self._identify_cache = {}
 
@@ -260,9 +260,9 @@ class XVerterApp(App):
                                                  variant="warning")
                                     yield Button("Rescan", id="do-rescan")
                                 with Horizontal(classes="optrow"):
-                                    yield Label("Leroy Jenkins mode\n"
+                                    yield Label("Leeroy Jenkins mode\n"
                                                 "(skip every check)")
-                                    yield Switch(value=False, id="opt-leroy")
+                                    yield Switch(value=False, id="opt-leeroy")
                                 with Horizontal(classes="optrow"):
                                     yield Label("RAM scratch (~2.2x game\n"
                                                 "size must be available)")
@@ -438,10 +438,10 @@ class XVerterApp(App):
             self._install_dep(tool)
 
     def on_switch_changed(self, event):
-        if event.switch.id == "opt-leroy":
-            self.leroy = event.value
+        if event.switch.id == "opt-leeroy":
+            self.leeroy = event.value
             if event.value:
-                self._log("!!! LEROY JENKINS MODE ON !!!")
+                self._log("!!! LEEROY JENKINS MODE ON !!!")
                 self._log("    structure is NOT validated, output is NOT "
                           "verified, sources are NOT authenticated.")
                 self._log("    Anything written from here carries no "
@@ -509,8 +509,8 @@ class XVerterApp(App):
             return
         self._busy.add(path)
         argv = ["convert", path, "-o", out]
-        if self.leroy:
-            argv += ["--leroy-jenkins"]
+        if self.leeroy:
+            argv += ["--leeroy-jenkins"]
         if self.ram_scratch:
             argv += ["--scratch", "ram"]
         if self.split_4gib:
@@ -519,7 +519,7 @@ class XVerterApp(App):
                   % (base, os.path.basename(out.rstrip(os.sep)),
                      " [ram scratch]" if self.ram_scratch else "",
                      " [4GiB split]" if self.split_4gib else "",
-                     " [LEROY JENKINS - NO GUARANTEES]" if self.leroy else ""))
+                     " [LEEROY JENKINS - NO GUARANTEES]" if self.leeroy else ""))
         self._run_job(path, argv, "convert %s" % base)
 
     def do_verify(self):
@@ -839,8 +839,8 @@ class XVerterApp(App):
                         self._log, "SKIP %s: output exists" % name)
                     continue
                 argv = ["convert", path, "-o", out]
-                if self.leroy:
-                    argv += ["--leroy-jenkins"]
+                if self.leeroy:
+                    argv += ["--leeroy-jenkins"]
                 if self.ram_scratch:
                     argv += ["--scratch", "ram"]
                 if self.split_4gib:

@@ -467,9 +467,10 @@ def cmd_info(args):
                 if hit:
                     break
             if hit:
-                print("redump : %s [%s]" % hit)
+                print("redump : authenticated - %s [%s]" % hit)
             else:
-                print("redump : no match (not a pristine redump image)")
+                print("redump : not authenticated "
+                      "(no DAT entry matches this image)")
         else:
             print("redump : identity is only defined for redump ISOs "
                   "(this is a %s container)" % kind)
@@ -566,29 +567,30 @@ def cmd_verify(args):
             try:
                 xdvdfs_mod.extract(path, os.path.join(w, "x"), quiet=True,
                                    progress=prog.cb("deep-read"))
-                print("deep verify: full extraction OK")
+                print("verified: full extraction OK - every file read and hashed")
             finally:
                 shutil.rmtree(w, ignore_errors=True)
         else:
             names = xdvdfs_mod.list_root(path)
-            print("structural verify: %d root entries OK (use --deep for full read)"
+            print("valid: %d root entries (use --deep to read every file)"
                   % len(names))
         with open(path, "rb") as _f:
             _base = xdvdfs_mod.find_base(_f)
         if _base == 0:
             # Bare partitions cannot match redump by definition - redump
             # catalogs full discs. Not applicable is not a failure.
-            print("redump: bare game partition - authentication not "
-                  "applicable (redump catalogs full disc images only)")
+            print("authentication not applicable: bare game partition "
+                  "(redump catalogs full disc images only)")
         elif args.dat or not args.no_lookup:
             crc, sha1 = _stream_hashes(path, progress=prog.cb("hash"))
             size = os.path.getsize(path)
             if args.dat:
                 name = _dat_lookup(args.dat, size, crc, sha1)
                 if name:
-                    print("DAT match: %s (crc=%s sha1=%s)" % (name, crc, sha1))
+                    print("authenticated: %s (crc=%s sha1=%s)" % (name, crc, sha1))
                 else:
-                    print("DAT: NO MATCH (size=%d crc=%s sha1=%s)" % (size, crc, sha1))
+                    print("NOT authenticated: no DAT entry matches "
+                          "(size=%d crc=%s sha1=%s)" % (size, crc, sha1))
                     return 1
             else:
                 hit = None
@@ -606,7 +608,7 @@ def cmd_verify(args):
                         hit = _dat_lookup(spath, size, crc, sha1)
                         if hit:
                             # a match is a match - age is irrelevant on a hit
-                            print("redump match (%s): %s" % (label, hit))
+                            print("authenticated (%s): %s" % (label, hit))
                             break
                     if hit:
                         break
@@ -616,16 +618,17 @@ def cmd_verify(args):
                 if not hit:
                     matches = _redump_online(sha1)
                     if matches is None:
-                        print("redump: no cached DAT and site unreachable - "
-                              "crc=%s sha1=%s (try `xverter dat update`)"
-                              % (crc, sha1))
+                        print("authentication unavailable: no cached DAT "
+                              "and redump.org unreachable - crc=%s sha1=%s "
+                              "(try `xverter dat update`)" % (crc, sha1))
                     elif matches:
                         for m in matches:
-                            print("redump match (online): %s" % m)
+                            print("authenticated (online): %s" % m)
                         print("hint: `xverter dat update` caches the database "
                               "for offline + bulk use")
                     else:
-                        print("redump: NO MATCH for sha1=%s (crc=%s)" % (sha1, crc))
+                        print("NOT authenticated: no redump entry matches "
+                              "(sha1=%s crc=%s)" % (sha1, crc))
                         return 1
     elif kind == "zar":
         n = None
@@ -831,7 +834,7 @@ def cmd_convert(args):
                   progress=prog.cb(out_kind + "-write"))
             print("wrote %s (%s)"
                   % (args.output,
-                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified" if out_kind == "zip"
                      else "CRC verified"))
             return 0
@@ -852,7 +855,7 @@ def cmd_convert(args):
             if out_kind == "iso":
                 print("wrote %s (%s)"
                       % (args.output,
-                         "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                         "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                          else "verified against chd internal sha1"))
                 return 0
             kind, path = "iso", chd_iso
@@ -867,7 +870,7 @@ def cmd_convert(args):
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
             print("wrote GoD container (header: %s) (%s)"
-                  % (hdr, "NO GUARANTEES - --leroy-jenkins"
+                  % (hdr, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash tree verified"))
             return 0
         if out_kind == "chd":
@@ -901,7 +904,7 @@ def cmd_convert(args):
                                    progress=prog.cb("verify"))
             print("wrote %s (%s)"
                   % (args.output,
-                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
             return 0
         if out_kind in ("cci", "cso"):
@@ -938,7 +941,7 @@ def cmd_convert(args):
                                 progress=prog.cb("verify"))
             print("wrote %s (%s)"
                   % (", ".join(written),
-                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
             return 0
         manifest = {}
@@ -953,7 +956,7 @@ def cmd_convert(args):
                                    verify_progress=prog.cb("verify"))
             print("wrote %s (manifest %s)"
                   % (args.output,
-                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
             return 0
         if out_kind == "god":
@@ -966,7 +969,7 @@ def cmd_convert(args):
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
             print("wrote GoD container (header: %s) (%s)"
-                  % (hdr, "NO GUARANTEES - --leroy-jenkins"
+                  % (hdr, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash tree verified"))
             return 0
         if out_kind == "gamedir":
@@ -974,14 +977,21 @@ def cmd_convert(args):
             for entry in os.listdir(gamedir):
                 shutil.move(os.path.join(gamedir, entry),
                             os.path.join(args.output, entry))
-            print("wrote %s/" % args.output.rstrip("/"))
+            # A folder is not a container: there is no output-side
+            # structure to re-read, so the only claim on offer is that
+            # every file was hashed on the way out of the source.
+            print("wrote %s/ (%s)"
+                  % (args.output.rstrip("/"),
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
+                     else "extracted and hashed - a folder carries no "
+                          "container to re-verify"))
         elif out_kind == "zar":
             zar_mod.pack(gamedir, args.output,
                          roundtrip_verify=not args.no_verify,
                          manifest=manifest, progress=prog.cb("zar-write"),
                          verify_progress=prog.cb("verify"))
             print("wrote %s (%s)"
-                  % (args.output, "NO GUARANTEES - --leroy-jenkins"
+                  % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
         return 0
     finally:
@@ -1054,7 +1064,7 @@ def main(argv=None):
                    help="output path: .iso, .zar, or a directory")
     # dest stays no_verify: 18 read sites, and the internal name is
     # invisible. The flag name is the part that has to be unmissable.
-    p.add_argument("--leroy-jenkins", dest="no_verify", action="store_true",
+    p.add_argument("--leeroy-jenkins", dest="no_verify", action="store_true",
                    help="skip every check - structure validation, content "
                         "verification and redump authentication. Outputs "
                         "carry no guarantees whatsoever")

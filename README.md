@@ -141,12 +141,23 @@ Redump is not a download — it is twenty-plus years of volunteers buying region
 
 If you build on xverter, please carry these credits forward — most of this knowledge was won by hobbyists two decades ago and survives only because people keep attributing it.
 
-## What "verified" means
+## What "valid", "verified" and "authenticated" mean
+
+xverter never merges these three into one word, because they are three different claims and only one of them is about the disc being real:
+
+| Word | The claim | How it is established |
+|------|-----------|----------------------|
+| **valid** | the image's own structures cohere — the filesystem parses, every extent resolves, the hash tree is internally consistent | reading it with our own reader |
+| **verified** | what came out matches what went in, byte for byte | re-reading every output and comparing against the source manifest / internal hashes |
+| **authenticated** | this is the genuine retail disc, bit for bit | CRC-32 + SHA-1 against redump's DATs |
+
+A file can be valid and not authenticated (a trimmed rip is a perfectly well-formed image of something redump never catalogued). It can be authenticated and still convert into an unverified output if you tell the tool to skip checking. The words are chosen so the output never overstates what was actually proven.
 
 - **GoD reading** walks the container's complete SHA-1 hash tree — header self-hash, the header-sealed master table, the backwards master-table chain across part files, every sub-table, every 4 KB data block. A typical game is ~900,000 verified blocks. No other GoD tool checks any of this (we audited them). It caught a silently truncated container in the wild that booted fine and would have crashed mid-game.
 - **ISO reading** resolves every file extent against the actual image and fails naming the exact file and missing byte count on truncation.
 - **Every built output is re-read by the corresponding reader** before success — as cheaply as each format allows: built GoD containers get the full hash-tree walk (single pass; the format carries its own hashes), built ISOs are stream-hashed in place against a source manifest (nothing written, nothing re-extracted), and packed zars are stream-hashed in place by the native reader against the source manifest (the archive's embedded SHA-256 is checked by `verify`). Input verification costs nothing extra: it happens inline during reading.
-- **`--no-verify` exists for when you've earned it**: once the tool has a track record on your library, skipping output verification roughly halves conversion I/O. The default stays paranoid, because that's the point.
+- **`--leeroy-jenkins` turns all of it off**: structure is not validated, output is not verified, sources are not authenticated. It roughly halves conversion I/O and it is named after [the man who charged in alone](https://knowyourmeme.com/memes/leeroy-jenkins) so that nobody types it by accident or mistakes it for a routine optimization. Anything written under it carries no guarantees whatsoever. The default stays paranoid, because that's the point.
+
 ### What `xverter verify` checks, format by format
 
 `verify` runs the strongest integrity check each format can support — always the format's *own* internal math, never just "does it open":
@@ -186,7 +197,7 @@ xverter dat     update|status              # manage the bundled/cached redump da
 | Flag | Effect |
 |------|--------|
 | `-o PATH` | output — extension picks the format: `.iso` `.zar` `.god` `.cci` `.cso` `.chd` `.zip` `.7z`, or a trailing `/` for an extracted folder |
-| `--no-verify` | skip output round-trip verification (halves I/O once the tool has earned your trust) |
+| `--leeroy-jenkins` | skip **every** check — no structure validation, no output verification, no redump authentication. Halves I/O; outputs carry no guarantees |
 | `--split` | split `.cci`/`.cso` at 4GiB for console FATX storage (default: one file) |
 | `--scratch ram` | keep pivot files in a tmpfs — Linux, needs ~2.2× game size *available* |
 | `--workdir DIR` | put pivot files somewhere specific (overrides `--scratch`) |
