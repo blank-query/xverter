@@ -11,6 +11,7 @@ LIVE/CON packages would be invalidly signed.
 
 import argparse
 import hashlib
+import json
 import os
 import queue
 import shutil
@@ -273,6 +274,54 @@ def _executable_check(path):
     return None
 
 
+def _identity_path():
+    return os.path.join(datcache.cache_dir(), "identity.json")
+
+
+def _identity_key(path, st):
+    """Identity of the bytes, not the name: device, inode, size and
+    nanosecond mtime. Any edit moves at least one of them."""
+    return "%d:%d:%d:%d" % (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def _identity_cache_get(path, st):
+    """Hashes previously computed for exactly these bytes, or None.
+
+    Converting one game to several formats re-reads the same source each
+    time, and hashing 7 GB is 3 seconds of pure repetition - a full
+    conversion-matrix run paid it a dozen times over. The file is a
+    convenience only: a miss just means hashing again."""
+    try:
+        with open(_identity_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        ent = data[_identity_key(path, st)]
+        return ent["crc"], ent["sha1"]
+    except Exception:                                 # noqa: BLE001
+        return None
+
+
+def _identity_cache_put(path, st, crc, sha1):
+    try:
+        try:
+            with open(_identity_path(), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:                             # noqa: BLE001
+            data = {}
+        data[_identity_key(path, st)] = {
+            "crc": crc, "sha1": sha1, "name": os.path.basename(path)}
+        if len(data) > 256:                # keep it small; order is insertion
+            for k in list(data)[:len(data) - 256]:
+                del data[k]
+        tmp = _identity_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, _identity_path())
+    except Exception:                                 # noqa: BLE001
+        pass                               # a cache that cannot write is fine
+
+
 def _redump_check(path, progress=None):
     """Identify an ISO against the redump DATs.
 
@@ -283,7 +332,8 @@ def _redump_check(path, progress=None):
       skipped   - no DAT entry has this size, so it cannot be a redump
                   (a trimmed image, for instance). Nothing was hashed.
     """
-    size = os.path.getsize(path)
+    st = os.stat(path)
+    size = st.st_size
     sources = []
     for system, label in (("xbox360", "Xbox 360"), ("xbox", "Original Xbox")):
         for src in (datcache.cached(system)[0], datcache.bundled(system)):
@@ -292,7 +342,12 @@ def _redump_check(path, progress=None):
     plausible = [(s, l) for s, l in sources if _dat_has_size(s, size)]
     if not plausible:
         return ("skipped", "%d bytes matches no known dump size" % size)
-    crc, sha1 = _stream_hashes(path, progress=progress)
+    hashes = _identity_cache_get(path, st)
+    if hashes is None:
+        crc, sha1 = _stream_hashes(path, progress=progress)
+        _identity_cache_put(path, st, crc, sha1)
+    else:
+        crc, sha1 = hashes
     for src, label in plausible:
         name = _dat_lookup(src, size, crc, sha1)
         if name:
@@ -687,7 +742,10 @@ def cmd_test(args):
                                          or None)
     keep = False
     try:
-        rc = matrix.main([args.input, w])
+        margv = [args.input, w]
+        if getattr(args, "no_verify", False):
+            margv.append("--leeroy-jenkins")
+        rc = matrix.main(margv)
         report = os.path.join(w, "matrix_report.html")
         if auto:
             if not os.path.isfile(report):
@@ -1031,6 +1089,11 @@ def main(argv=None):
                    help="scratch dir for the run (default: auto temp dir "
                         "next to the input, cleaned up after; needs ~4-5x "
                         "the game's size free)")
+    p.add_argument("--leeroy-jenkins", dest="no_verify", action="store_true",
+                   help="run every conversion with xverter's own checks "
+                        "off. The matrix still content-compares every edge, "
+                        "so breakage is still caught - this measures what "
+                        "the checks cost, it does not bless the output")
     p.set_defaults(fn=cmd_test)
 
     p = sub.add_parser("tui", help="interactive terminal UI (also: bare `xverter` with no arguments)")

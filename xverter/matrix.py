@@ -65,6 +65,13 @@ def sha1_file(path):
     return h.hexdigest()
 
 
+#: When True every convert in the matrix runs with the checks off. The
+#: matrix still compares content itself, so a corrupted edge is still
+#: caught - what goes away is xverter's own internal verification, which
+#: is the point: it measures what those checks cost.
+LEEROY = False
+
+
 def run(edge, argv):
     t0 = time.monotonic()
     env = dict(os.environ)
@@ -73,6 +80,8 @@ def run(edge, argv):
     env["PYTHONUNBUFFERED"] = "1"
     if argv[0] in ("convert", "verify"):
         argv = argv + ["--progress"]
+    if LEEROY and argv[0] == "convert":
+        argv = argv + ["--leeroy-jenkins"]
     frozen = getattr(sys, "frozen", False)
     cmd = ([sys.executable] if frozen
            else [sys.executable, "-m", "xverter"]) + argv
@@ -375,7 +384,12 @@ def god_header_in(tree):
 
 
 def main(argv=None):
+    global LEEROY
     argv = sys.argv[1:] if argv is None else argv
+    argv = list(argv)
+    if "--leeroy-jenkins" in argv:
+        argv.remove("--leeroy-jenkins")
+        LEEROY = True
     if len(argv) != 2:
         raise SystemExit(__doc__)
     src, w = argv
@@ -383,6 +397,11 @@ def main(argv=None):
     t_start = time.monotonic()
     kind, _ = detect_mod.detect(src)
     print("matrix check: input kind=%s\n" % kind)
+    if LEEROY:
+        print("!!! LEEROY JENKINS MODE: every convert runs with xverter's "
+              "own checks OFF !!!\n    edges are still content-compared by "
+              "the matrix itself, but nothing here proves the tool "
+              "verifies its own output.\n")
 
     d = lambda *p: os.path.join(w, *p)
 
