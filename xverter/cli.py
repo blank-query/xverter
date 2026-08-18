@@ -318,25 +318,6 @@ def _dat_lookup(dat_path, size, crc, sha1):
     return None
 
 
-def _redump_online(sha1):
-    """Reverse-lookup a hash on redump.org. Returns list of matched titles,
-    [] for no match, or None if the site is unreachable."""
-    import re
-    import urllib.request
-    url = "http://redump.org/discs/quicksearch/%s/" % sha1
-    try:
-        with urllib.request.urlopen(url, timeout=10) as r:
-            html = r.read().decode("utf-8", "replace")
-    except Exception:
-        return None
-    # direct hit redirects to a disc page; row listings link /disc/N/
-    m = re.findall(r'<a href="/disc/\d+/">([^<]+)</a>', html)
-    if m:
-        return sorted(set(m))
-    t = re.search(r"<h1>([^<]+)</h1>", html)
-    return [t.group(1)] if t and "quick search" not in t.group(1).lower() else []
-
-
 def _wrapper_reader(kind, path):
     return (cci_mod.CciReader if kind == "cci" else cso_mod.CsoReader)(path)
 
@@ -612,24 +593,23 @@ def cmd_verify(args):
                             break
                     if hit:
                         break
-                if not hit and oldest is not None and oldest > datcache.MAX_AGE_DAYS:
-                    print("note: cached DAT is %d days old - a newly-dumped "
-                          "variant may exist (`xverter dat update`)" % oldest)
                 if not hit:
-                    matches = _redump_online(sha1)
-                    if matches is None:
-                        print("authentication unavailable: no cached DAT "
-                              "and redump.org unreachable - crc=%s sha1=%s "
-                              "(try `xverter dat update`)" % (crc, sha1))
-                    elif matches:
-                        for m in matches:
-                            print("authenticated (online): %s" % m)
-                        print("hint: `xverter dat update` caches the database "
-                              "for offline + bulk use")
-                    else:
-                        print("NOT authenticated: no redump entry matches "
-                              "(sha1=%s crc=%s)" % (sha1, crc))
-                        return 1
+                    # The DATs ship with the tool and `xverter dat
+                    # update` refreshes them on demand, so a local miss
+                    # is the whole verdict: nothing is asked of the
+                    # network behind the user's back.
+                    print("NOT authenticated: no DAT entry matches "
+                          "(sha1=%s crc=%s)" % (sha1, crc))
+                    print("       either the image is modified, or this "
+                          "dump is potentially unknown to the community "
+                          "- if the disc is genuine and unmodified, "
+                          "please upload it to redump: "
+                          "https://forum.redump.info")
+                    if oldest is not None and oldest > datcache.MAX_AGE_DAYS:
+                        print("       (your cached DAT is %d days old - "
+                              "`xverter dat update` first if you have not "
+                              "lately)" % oldest)
+                    return 1
     elif kind == "zar":
         n = None
         try:
@@ -754,7 +734,12 @@ def cmd_tui(args):
 
 def cmd_dat(args):
     if args.action == "update":
-        path, version = datcache.update(args.system)
+        have = datcache.active_version(args.system)
+        path, version, installed = datcache.update(args.system)
+        if not installed:
+            print("%s DAT already current: redump has %s, you have %s - "
+                  "nothing written" % (args.system, version, have))
+            return 0
         print("cached %s DAT version %s -> %s" % (args.system, version, path))
         return 0
     for system in sorted(datcache.SYSTEMS):
@@ -1033,7 +1018,8 @@ def main(argv=None):
     p.add_argument("--progress", action="store_true",
                    help="emit machine-readable PROGRESS lines on stderr")
     p.add_argument("--no-lookup", action="store_true",
-                   help="skip the default online redump hash lookup")
+                   help="skip redump authentication entirely, including "
+                        "the whole-image hashing it needs")
     p.set_defaults(fn=cmd_verify)
 
     p = sub.add_parser("test", help="validate xverter against one of your "

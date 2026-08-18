@@ -58,7 +58,7 @@ Everything routes through a common pivot (the extracted game directory), so ever
 
 \* Yes, really — see the cursed corner below.
 
-**Original Xbox works too, at the same standard.** XDVDFS is the same filesystem on both consoles, so OG Xbox games flow through every edge of the matrix — including GoD output, which correctly produces Xbox Originals containers (content type `0x5000`, the 360's backward-compat install format). The full matrix has been validated on a real XGD1 redump (Halo: Combat Evolved) alongside the 360 runs. One expectation to set straight: **repacking an OG game as GoD/zar does not make it playable on a 360 emulator.** Real 360s play OG games through Microsoft's own built-in emulator (which supported only ~460 titles); Xenia/XenDroid don't implement that layer. GoD `0x5000` output is for real modded 360 hardware — for OG emulation, use xemu with plain xiso ISOs, which this tool happily produces.
+**Original Xbox works too, at the same standard.** XDVDFS is the same filesystem on both consoles, so OG Xbox games flow through every edge of the matrix — including GoD output, which correctly produces Xbox Originals containers (content type `0x5000`, the 360's backward-compat install format). The full matrix is tested on a real XGD1 redump (Halo: Combat Evolved) alongside the 360 runs. One expectation to set straight: **repacking an OG game as GoD/zar does not make it playable on a 360 emulator.** Real 360s play OG games through Microsoft's own built-in emulator (which supported only ~460 titles); Xenia/XenDroid don't implement that layer. GoD `0x5000` output is for real modded 360 hardware — for OG emulation, use xemu with plain xiso ISOs, which this tool happily produces.
 
 **Two deliberate exclusions, stated rather than hidden:** **FATX** (the filesystem inside console hard drives and Xemu's qcow2 HDD images — a storage medium, not a distribution format) and **STFS as *output*.** Rebuilt LIVE packages only matter to modded consoles filling a `Content` folder — emulators are happier with every other format here — and a writer held to this project's verification standard (hash-chain-validated structure, round-trip content equality, a real consumer booting the result) isn't built yet. Shipping it half-checked would be the one thing this tool never does. Note the signature honesty applies across the board: LIVE/PIRS signatures are Microsoft-private-key RSA, so *every* tool that writes these container families — including iso2god, whose GoD output the whole scene runs on — ships junk signature bytes that modded consoles and emulators simply don't check.
 
@@ -74,9 +74,9 @@ Every cursed edge passes through the same verification as the sane ones — seve
 
 And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA → `.zar`** reads like it belongs on the list above, but it's the cleanest way to run arcade titles in Xenia — the emulator reads the zar directly, one flat file per game instead of STFS's nested `Content/.../` tree or a GoD container's hash-named directories. ZAR is also routinely the smallest thing in the matrix: it archives the game's *files* rather than the disc image (redump padding never gets stored at all) and compresses with zstd — measured on the Halo CE redump, the zar is **46% of the source ISO** while CCI, CSO, and CHD all land near 88%. On games whose assets ship pre-compressed the formats converge; where there's slack, zar takes it. Tested on real hardware-dumped games, played in Xenia. Yesterday's cursed conversion is tomorrow's workflow — which is exactly why the tool converts and you decide.
 
-## The validation record — three generations of Halo, one hash each
+## The test record — three generations of Halo, one hash each
 
-The release gate is a real-media test roster spanning every disc structure Microsoft pressed, all one franchise: full 48-edge matrices, every edge content-verified, on genuine Redump-authenticated dumps. Three numbers per game tell the whole story:
+The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 48-edge matrix, every edge content-checked. Three numbers per game tell the whole story:
 
 - **Source SHA-1** — the whole input file; matches Redump's canonical dump.
 - **Content digest** — a canonical SHA-1 over every file's path + hash inside the game. This is the *format-invariant* fingerprint: identical across all seven formats, immune to compressor versions and container layout. It even survived xVerter's own writers being replaced wholesale — the digest below for Anniversary is byte-for-byte the one measured back when output ran through delegated third-party tools.
@@ -89,7 +89,7 @@ The release gate is a real-media test roster spanning every disc structure Micro
 | Halo: CE Anniversary  | XGD3 (full redump) | `2994534528e086c574e2223f2bc5c175075b9c89` | `bd84d86bfa51c755629fd99864ef46ec47533ede` (448 files) | `99e3c0e330e6ebd05f78ace21a69ec42f37093b0` |
 | Halo: Spartan Assault | XBLA (LIVE/STFS)   | `159ec0269bb3a6f10ba3a6d819e554b341ff0163` | `653f5d1ccd8e7c14a8c02ffcda59197f259c4680` (906 files) | `97869f3322450a7235328ab213a30b0591809482` |
 
-One franchise, every disc structure Microsoft ever pressed, plus the download-era container — 48/48 edges each. Every number above is reproducible on your own copy — `xverter test "Your Game.iso"` on the command line, or the TUI's **Test** button (select a game, one click, edges stream under the dual progress bars). Either way produces the same self-contained HTML report; the ones each release publishes are generated by exactly that harness.
+One franchise, every format Microsoft pressed — XGD1/2/3 — plus the download-era STFS container: 48/48 edges each. Every number above is reproducible on your own copy — `xverter test "Your Game.iso"` on the command line, or the TUI's **Test** button (select a game, one click, edges stream under the dual progress bars). Either way produces the same self-contained HTML report; the ones each release publishes are generated by exactly that harness.
 
 ## Benchmarks
 
@@ -178,7 +178,25 @@ A file can be valid and not authenticated (a trimmed rip is a perfectly well-for
 - **Full disc image, no match** → *fails*: the image is modified, truncated, or an unknown dump — exactly what authentication exists to catch.
 - **Bare game partition** (a trimmed rip — most emulator-scene downloads) → authentication is reported *not applicable*, and that is **not a failure**: redump catalogs full discs, so a bare partition can never match by definition. Structure is still fully checked.
 
-`xverter dat update` fetches a fresher database to your cache; `--dat <file>` uses your own; `--no-lookup` skips authentication. Resolution order: `--dat` → user cache → bundled → single online lookup.
+`xverter dat update` fetches a fresher database to your cache; `--dat <file>` uses your own; `--no-lookup` skips authentication entirely (and the whole-image hashing it needs). Resolution order: `--dat` → user cache → bundled. There is no fallback lookup over the network — see below.
+
+## xverter does not touch the network unless you press a button
+
+Converting, verifying and authenticating are **fully offline operations**. The tool ships with redump's DATs, so authentication is answered locally, every time. Nothing phones home on startup, no telemetry, no update nag, no "just checking" hash lookup behind your back.
+
+Exactly three things reach the internet, and all three are a button or a command you typed:
+
+| Action | What it fetches |
+|--------|-----------------|
+| **Database Update** (Setup tab) or `xverter dat update` | redump's current DAT export |
+| **xVerter Update** (Setup tab) | the newest release from GitHub |
+| **Install** next to a missing external tool (Setup tab) | that tool's release binary |
+
+Both update buttons take **two presses**: the first checks and tells you what it found, the second downloads. Neither one downloads anything on the first press.
+
+The database button exists for a specific reason: a new xVerter release ships a fresh database, but that only helps while releases keep coming. If this project ever stops being maintained — or I get hit by a bus — **Database Update keeps the tool useful indefinitely**, because redump's database is the part that actually goes stale, and it stays refreshable straight from the source without a new build.
+
+The xVerter update is deliberately hands-off: it downloads the new binary next to the current one and then tells you to quit, delete the old binary, and launch the new one. A program that overwrites itself while running is a program you cannot trust to tell you what it did. (A pip install is told to run `pip install -U xverter` instead — pip owns that install, not us.)
 
 ## CLI reference
 
@@ -203,7 +221,7 @@ xverter dat     update|status              # manage the bundled/cached redump da
 | `--workdir DIR` | put pivot files somewhere specific (overrides `--scratch`) |
 | `--progress` | machine-readable `PROGRESS` lines on stderr (a tty gets human percentages automatically) |
 
-`verify` options: `--deep` (read every byte, not just structure), `--dat FILE` (your own Logiqx DAT), `--no-lookup` (skip redump authentication), `--progress`. `test` takes `--workdir DIR` for its scratch (default: temp dir next to the game, cleaned up after). `dat update` refreshes the cached redump database (`--system xbox360|xbox`); `dat status` shows what's bundled and cached.
+`verify` options: `--deep` (read every byte, not just structure), `--dat FILE` (your own Logiqx DAT), `--no-lookup` (skip redump authentication, and the whole-image hashing it needs), `--progress`. `test` takes `--workdir DIR` for its scratch (default: temp dir next to the game, cleaned up after). `dat update` refreshes the cached redump database (`--system xbox360|xbox`); `dat status` shows what's bundled and cached.
 
 ## Progress you can actually see
 
@@ -230,9 +248,9 @@ All standalone tools carry an `xv-` prefix so they never collide with (or shadow
 
 Each is also importable (`from xverter.formats import god, xdvdfs, zar_native, stfs`) with a library API — the CLI entry points are thin wrappers over the same functions the suite uses.
 
-## Validate this tool yourself
+## Test this tool yourself
 
-Don't take the README's word for any of it — the validation harness ships *inside* the program. `xverter test` runs one game of yours through **every edge of the conversion matrix**, checking two things at every hop: the pipeline's own built-in verification, and byte-level content equality against a baseline manifest of the original. Any format in:
+Don't take the README's word for any of it — the test harness ships *inside* the program. `xverter test` runs one game of yours through **every edge of the conversion matrix**, checking two things at every hop: the pipeline's own built-in verification, and byte-level content equality against a baseline manifest of the original. Any format in:
 
 ```
 xverter test "Some Game.zar"
@@ -247,7 +265,7 @@ MATRIX: ALL PASS
 
 (That's 48 with `chdman` installed; without it the four CHD edges skip cleanly and a full pass is 44.)
 
-Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release validation runs on real XGD1, XGD2, and XGD3 redumps — and it narrates itself: per-edge results stream live with within-edge progress (`chdman` is the one optional binary, needed only for the CHD edges, which are skipped cleanly without it). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
+Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release test-suite runs on real XGD1, XGD2, XGD3 and STFS dumps — and it narrates itself: per-edge results stream live with within-edge progress (`chdman` is the one optional binary, needed only for the CHD edges, which are skipped cleanly without it). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
 
 ## TUI
 
@@ -260,7 +278,7 @@ A terminal UI over the same verified machinery, fully mouse-driven — no hotkey
 - **Convert** — browse the library like a file manager: single click selects (details appear, magic-detected — including the native disc structure XGD1/2/3-or-bare, the console, and for ISOs the game's *true redump name* looked up by hash against the bundled databases, regardless of filename), double click enters a folder, the `..` row goes back up. Click the button for the output you want (ISO, ZAR, GoD, CCI, CSO, CHD, 7z, ZIP, or extracted folder), flip the RAM-scratch / 4GiB-split switches as needed, and watch the stage-labeled progress bar and log. **Batch mode**: press spacebar to mark any number of games (a ● appears), then click one format button — they process alphabetically under two bars, overall batch progress plus the current game's stage, with per-game results in the log. Mixed input formats in one batch are fine (each member is detected independently); members that aren't recognizable games, are already in the target format, or already have their output are *skipped*, never failed, and the final summary counts OK / skipped / failed honestly. The header shows the running version, the log's first line stamps it plus (for standalone binaries) the build date, and on launch xverter quietly checks GitHub for a newer release — if one exists you get one log line with the link, and nothing ever nags beyond that.
 - **Setup** — checks the one optional binary (`chdman`) with an install hint, and on Linux offers one-click **Install**/**Remove** of an app-menu launcher entry.
 
-The **Test** button runs the full validation matrix against the selected game right on the Convert tab — edges stream into the log under the same two bars batch mode uses, report saved next to the game.
+The **Test** button runs the full test suite against the selected game right on the Convert tab — edges stream into the log under the same two bars batch mode uses, report saved next to the game.
 
 Everything runs as background workers invoking the exact CLI code paths, so the TUI carries the same verification guarantees as the command line. Launching `xverter` with no arguments opens the TUI on the current directory.
 
@@ -326,7 +344,7 @@ GoD needs no such setting — the format is natively multi-part (its `Data####` 
 - **GoD layout**: 4 KB blocks; each `DataNNNN` part = `[master hash table]` + up to 203 × `[sub-table][≤204 data blocks]`; the master-table chain runs *backwards* (part N carries the hash of part N+1's table) and the CON/LIVE header seals part 0's table at `0x37D`. Part count at `0x3A0` is the format's one little-endian field (iso2god-rs marks it `// sic!`).
 - **The GoD `blocks_allocated` quirk in the wild**: trimmed containers in existing GoD libraries routinely undercount `blocks_allocated` in the header — the trim shrinks the part *count* while parts fill to capacity. The surplus tail is benign, hash-covered padding, so xverter's reader warns rather than fails; xverter's own writer counts exactly.
 - **The embedded GoD stream is a bare game partition** (`MICROSOFT*XBOX*MEDIA` at `0x10000`), which is also exactly what xverter's ISO writer builds — XGD2 and XGD3 games both reduce to it.
-- **Full redump images** carry the game partition at an offset: XGD1 `0x18300000`, XGD2 `0xFD90000`, XGD3 `0x2080000` (constants cross-confirmed in iso2god-rs, extract-xiso, and abgx360). Detection probes all of them. Validation status: **every disc generation verified against real, DAT-authenticated media with the native writers** — see the validation record above.
+- **Full redump images** carry the game partition at an offset: XGD1 `0x18300000`, XGD2 `0xFD90000`, XGD3 `0x2080000` (constants cross-confirmed in iso2god-rs, extract-xiso, and abgx360). Detection probes all of them. Test status: **every disc generation exercised against real, DAT-authenticated media with the native writers** — see the test record above.
 - **ZArchive is a footer format** — the magic `16 9F 52 D6` lives in the file's final bytes; the file *starts* with zstd frames. Extension-based "detection" would be guessing; footer probing isn't.
 - **The ZArchive reference reader (the one inside Xenia) misparses name components of 128+ bytes** — an archive containing one is written "successfully" and then breaks in every consumer. xverter's writer refuses such names up front, naming the offending path, instead of producing a landmine.
 - **STFS entries** live in a 64-byte-record file table; SHA-1 hash tables interleave with the data blocks (one per 170, higher levels above), and the volume descriptor seals the chain's root — which is why xverter can verify every allocated block against the package's own math. XBLA titles are `000D0000` content, DLC `00000002`, title updates `000B0000` — all the same container.
