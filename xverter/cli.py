@@ -253,6 +253,26 @@ def _dat_has_size(dat_path, size):
     return False
 
 
+def _executable_check(path):
+    """Does the image's default.xex / default.xbe actually parse?
+
+    Structure and content are separate claims. An image can be perfectly
+    valid XDVDFS - tables coherent, extent within the file, every byte
+    readable - while the one file that makes it a game is destroyed. GoD
+    conversion already refuses such an image because it must read the
+    title id out of it; the block wrappers never look, and would
+    otherwise write it out and call the result verified.
+
+    Returns None if the executable parses, else a reason."""
+    try:
+        with open(path, "rb") as f:
+            base = xdvdfs_mod.find_base(f)
+            god_mod._title_info(f, base, god_mod._xdvdfs())
+    except Exception as e:                             # noqa: BLE001
+        return str(e)
+    return None
+
+
 def _redump_check(path, progress=None):
     """Identify an ISO against the redump DATs.
 
@@ -779,19 +799,30 @@ def cmd_convert(args):
             try:
                 xdvdfs_mod.validate_image(path)
             except xdvdfs_mod.XdvdfsError as e:
-                raise CliError("source image failed validation: %s" % e)
+                raise CliError("source is INVALID: %s" % e)
             if not args.no_verify:
-                # Identity, not just structure. Free unless the size is a
-                # canonical redump size, so trimmed images cost nothing.
+                # Three separate claims, never merged into one word:
+                #   valid         - the image's own structures cohere
+                #   verified      - what came out matches what went in
+                #   authenticated - it is the genuine retail disc
+                exe = _executable_check(path)
+                if exe is None:
+                    print("source : valid")
+                else:
+                    print("source : valid, but the executable is "
+                          "unparseable (%s)\n"
+                          "         this image will not boot - converting "
+                          "it anyway, as asked" % exe)
+                # Authentication is free unless the size is a canonical
+                # redump size, so trimmed images cost nothing.
                 status, detail = _redump_check(
                     path, progress=prog.cb("identify"))
                 if status == "match":
-                    print("source : redump %s" % detail)
+                    print("source : authenticated - redump: %s" % detail)
                 elif status == "altered":
-                    print("source : WARNING - %s" % detail)
+                    print("source : NOT authenticated - %s" % detail)
                 else:
-                    print("source : not a redump image (%s); structure "
-                          "verified, contents unvouched" % detail)
+                    print("source : not authenticated - %s" % detail)
         if out_kind in ("zip", "7z"):
             # Boring on purpose: the archive wraps the input as-is.
             build = (archives_mod.build_zip if out_kind == "zip"
