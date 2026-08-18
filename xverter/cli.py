@@ -800,7 +800,7 @@ def cmd_convert(args):
                   progress=prog.cb(out_kind + "-write"))
             print("wrote %s (%s)"
                   % (args.output,
-                     "unverified: --no-verify" if args.no_verify
+                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
                      else "round-trip verified" if out_kind == "zip"
                      else "CRC verified"))
             return 0
@@ -821,7 +821,7 @@ def cmd_convert(args):
             if out_kind == "iso":
                 print("wrote %s (%s)"
                       % (args.output,
-                         "unverified: --no-verify" if args.no_verify
+                         "NO GUARANTEES - --leroy-jenkins" if args.no_verify
                          else "verified against chd internal sha1"))
                 return 0
             kind, path = "iso", chd_iso
@@ -835,7 +835,9 @@ def cmd_convert(args):
                                          verify=not args.no_verify,
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
-            print("wrote GoD container (header: %s)" % hdr)
+            print("wrote GoD container (header: %s) (%s)"
+                  % (hdr, "NO GUARANTEES - --leroy-jenkins"
+                     if args.no_verify else "hash tree verified"))
             return 0
         if out_kind == "chd":
             if kind == "iso":
@@ -866,9 +868,10 @@ def cmd_convert(args):
             if not args.no_verify:
                 _verify_chd_output(args.output, src_iso,
                                    progress=prog.cb("verify"))
-            print("wrote %s (round-trip %s)"
+            print("wrote %s (%s)"
                   % (args.output,
-                     "skipped: --no-verify" if args.no_verify else "verified"))
+                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                     else "round-trip verified"))
             return 0
         if out_kind in ("cci", "cso"):
             build = cci_mod.build_cci if out_kind == "cci" else cso_mod.build_cso
@@ -902,9 +905,10 @@ def cmd_convert(args):
             if not args.no_verify:
                 _verify_wrapper(out_kind, written[0], kind, path, w,
                                 progress=prog.cb("verify"))
-            print("wrote %s (round-trip %s)"
+            print("wrote %s (%s)"
                   % (", ".join(written),
-                     "skipped: --no-verify" if args.no_verify else "verified"))
+                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                     else "round-trip verified"))
             return 0
         manifest = {}
         gamedir = _to_gamedir(kind, path, w, manifest=manifest,
@@ -918,7 +922,8 @@ def cmd_convert(args):
                                    verify_progress=prog.cb("verify"))
             print("wrote %s (manifest %s)"
                   % (args.output,
-                     "unverified: --no-verify" if args.no_verify else "verified"))
+                     "NO GUARANTEES - --leroy-jenkins" if args.no_verify
+                     else "round-trip verified"))
             return 0
         if out_kind == "god":
             iso = os.path.join(w, "pivot_out.iso")
@@ -929,7 +934,9 @@ def cmd_convert(args):
                                          verify=not args.no_verify,
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
-            print("wrote GoD container (header: %s)" % hdr)
+            print("wrote GoD container (header: %s) (%s)"
+                  % (hdr, "NO GUARANTEES - --leroy-jenkins"
+                     if args.no_verify else "hash tree verified"))
             return 0
         if out_kind == "gamedir":
             os.makedirs(args.output, exist_ok=True)
@@ -942,8 +949,9 @@ def cmd_convert(args):
                          roundtrip_verify=not args.no_verify,
                          manifest=manifest, progress=prog.cb("zar-write"),
                          verify_progress=prog.cb("verify"))
-            print("wrote %s (round-trip %s)"
-                  % (args.output, "skipped" if args.no_verify else "verified"))
+            print("wrote %s (%s)"
+                  % (args.output, "NO GUARANTEES - --leroy-jenkins"
+                     if args.no_verify else "verified"))
         return 0
     finally:
         shutil.rmtree(w, ignore_errors=True)
@@ -1013,8 +1021,12 @@ def main(argv=None):
     p.add_argument("input")
     p.add_argument("-o", "--output", required=True,
                    help="output path: .iso, .zar, or a directory")
-    p.add_argument("--no-verify", action="store_true",
-                   help="skip round-trip verification of outputs")
+    # dest stays no_verify: 18 read sites, and the internal name is
+    # invisible. The flag name is the part that has to be unmissable.
+    p.add_argument("--leroy-jenkins", dest="no_verify", action="store_true",
+                   help="skip every check - structure validation, content "
+                        "verification and redump authentication. Outputs "
+                        "carry no guarantees whatsoever")
     p.add_argument("--workdir", metavar="DIR",
                    help="scratch directory for intermediate pivot files "
                         "(default: system temp dir / $TMPDIR; overrides "

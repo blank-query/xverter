@@ -222,7 +222,7 @@ class XVerterApp(App):
         self._busy = set()
         self.ram_scratch = False
         self.split_4gib = False
-        self.verify = True          # verification is the point; opt out, never in
+        self.leroy = False          # checks are the point; opt out, never in
         self.batch = set()
         self._identify_cache = {}
 
@@ -260,9 +260,9 @@ class XVerterApp(App):
                                                  variant="warning")
                                     yield Button("Rescan", id="do-rescan")
                                 with Horizontal(classes="optrow"):
-                                    yield Label("Verify (identify source,\n"
-                                                "re-read every output)")
-                                    yield Switch(value=True, id="opt-verify")
+                                    yield Label("Leroy Jenkins mode\n"
+                                                "(skip every check)")
+                                    yield Switch(value=False, id="opt-leroy")
                                 with Horizontal(classes="optrow"):
                                     yield Label("RAM scratch (~2.2x game\n"
                                                 "size must be available)")
@@ -438,14 +438,18 @@ class XVerterApp(App):
             self._install_dep(tool)
 
     def on_switch_changed(self, event):
-        if event.switch.id == "opt-verify":
-            self.verify = event.value
+        if event.switch.id == "opt-leroy":
+            self.leroy = event.value
             if event.value:
-                self._log("verification ON - sources identified against "
-                          "redump, every output re-read and checked")
+                self._log("!!! LEROY JENKINS MODE ON !!!")
+                self._log("    structure is NOT validated, output is NOT "
+                          "verified, sources are NOT authenticated.")
+                self._log("    Anything written from here carries no "
+                          "guarantees at all. At least you have chicken.")
             else:
-                self._log("verification OFF - outputs are written but NOT "
-                          "checked, and sources are not identified")
+                self._log("checks back ON - structure validated, every "
+                          "output re-read and verified, sources "
+                          "authenticated against redump")
         elif event.switch.id == "opt-ram":
             self.ram_scratch = event.value
             if event.value:
@@ -505,8 +509,8 @@ class XVerterApp(App):
             return
         self._busy.add(path)
         argv = ["convert", path, "-o", out]
-        if not self.verify:
-            argv += ["--no-verify"]
+        if self.leroy:
+            argv += ["--leroy-jenkins"]
         if self.ram_scratch:
             argv += ["--scratch", "ram"]
         if self.split_4gib:
@@ -515,7 +519,7 @@ class XVerterApp(App):
                   % (base, os.path.basename(out.rstrip(os.sep)),
                      " [ram scratch]" if self.ram_scratch else "",
                      " [4GiB split]" if self.split_4gib else "",
-                     "" if self.verify else " [UNVERIFIED]"))
+                     " [LEROY JENKINS - NO GUARANTEES]" if self.leroy else ""))
         self._run_job(path, argv, "convert %s" % base)
 
     def do_verify(self):
@@ -835,8 +839,8 @@ class XVerterApp(App):
                         self._log, "SKIP %s: output exists" % name)
                     continue
                 argv = ["convert", path, "-o", out]
-                if not self.verify:
-                    argv += ["--no-verify"]
+                if self.leroy:
+                    argv += ["--leroy-jenkins"]
                 if self.ram_scratch:
                     argv += ["--scratch", "ram"]
                 if self.split_4gib:
