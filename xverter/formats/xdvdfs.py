@@ -34,6 +34,8 @@ MAGIC = b"MICROSOFT*XBOX*MEDIA"
 PARTITION_BASES = (0x0, 0x2080000, 0xFD90000, 0x18300000)  # bare, XGD3, XGD2, XGD1
 ATTR_DIR = 0x10
 CHUNK = 1 << 20
+SENDFILE_CHUNK = 1 << 24
+_SENDFILE = hasattr(os, "sendfile") and sys.platform != "win32"
 
 
 class XdvdfsError(Exception):
@@ -511,14 +513,35 @@ def pack(src_dir, out_iso, progress=None):
                     die("internal error: file allocation drift")
                 copied = 0
                 with open(e["src"], "rb") as f:
-                    while copied < e["size"]:
-                        chunk = f.read(min(CHUNK, e["size"] - copied))
-                        if not chunk:
-                            break
-                        o.write(chunk)
-                        copied += len(chunk)
-                        if progress:
-                            progress(total + copied, grand_total)
+                    # os.sendfile moves the bytes inside the kernel: no
+                    # read into Python, no write back out. Falls back to
+                    # the portable chunk loop anywhere it is unavailable
+                    # or refuses the descriptors.
+                    if _SENDFILE:
+                        o.flush()
+                        ofd, ifd = o.fileno(), f.fileno()
+                        try:
+                            while copied < e["size"]:
+                                n = os.sendfile(ofd, ifd, None,
+                                                min(SENDFILE_CHUNK,
+                                                    e["size"] - copied))
+                                if not n:
+                                    break
+                                copied += n
+                                if progress:
+                                    progress(total + copied, grand_total)
+                        except OSError:
+                            # unsupported pairing: rewind and stream it
+                            f.seek(copied)
+                    if copied < e["size"]:
+                        while copied < e["size"]:
+                            chunk = f.read(min(CHUNK, e["size"] - copied))
+                            if not chunk:
+                                break
+                            o.write(chunk)
+                            copied += len(chunk)
+                            if progress:
+                                progress(total + copied, grand_total)
                 if copied != e["size"]:
                     die("%s changed size during pack (%d != %d)"
                         % (e["src"], copied, e["size"]))
