@@ -143,6 +143,56 @@ def check_dir(edge, path, baseline):
     return ok
 
 
+def check_partition(edge, got_path, src_path):
+    """A decompressed image must be the source's game partition, byte
+    for byte.
+
+    This is a stronger claim than the content check next to it and the
+    reason both exist: two images can hold identical files and still be
+    different images. CCI and CSO are lossless compressors of an image,
+    not archives of its contents, so the only correct output is the
+    bytes that went in - the whole file when the source was a bare game
+    partition, and the partition alone when it was a full redump image,
+    because the video partition is not in the container to return."""
+    from .formats.cci import xbox_image_offset
+    t0 = time.monotonic()
+    with open(src_path, "rb") as f:
+        off = xbox_image_offset(f)
+    ok = True
+    detail = ""
+    want = os.path.getsize(src_path) - off
+    got = os.path.getsize(got_path)
+    if want != got:
+        ok = False
+        detail = " (%d bytes, expected %d)" % (got, want)
+    else:
+        with open(src_path, "rb") as a, open(got_path, "rb") as b:
+            a.seek(off)
+            at = 0
+            while True:
+                x = a.read(1 << 22)
+                y = b.read(1 << 22)
+                if x != y:
+                    ok = False
+                    detail = " (first difference near byte %d)" % at
+                    break
+                if not x:
+                    break
+                at += len(x)
+    dt = time.monotonic() - t0
+    RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
+                    "seconds": round(dt, 1), "partition_offset": off,
+                    "bytes": got})
+    print("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt), flush=True)
+    # A second copy of the game is not worth keeping once compared.
+    try:
+        os.unlink(got_path)
+    except OSError:
+        pass
+    return ok
+
+
 def _first_line(argv):
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=10)
@@ -448,6 +498,28 @@ def main(argv=None):
     run("iso->cso", ["convert", d("a.iso"), "-o", d("a.cso")])
     run("cso->dir", ["convert", d("a.cso"), "-o", d("from_cso") + "/"])
     check_dir("  content(cso)", d("from_cso"), baseline)
+    # Back to an image: the one direction where the content check is not
+    # enough, because decompressing has to return the pressed bytes and
+    # not merely an image holding the same files.
+    #
+    # These start from the original input rather than a.iso, and that is
+    # the whole point. a.iso is an image xverter packed itself, so
+    # rebuilding it produces the same bytes again and a rebuild is
+    # indistinguishable from a decompression. Only a real pressed image
+    # can tell the two apart - which is exactly why this direction went
+    # unchecked while it was wrong.
+    if kind == "iso":
+        run("iso(src)->cci", ["convert", src, "-o", d("s.cci")])
+        run("cci(src)->iso", ["convert", d("s.cci"), "-o", d("back_cci.iso")])
+        check_partition("  bytes(cci-iso)", d("back_cci.iso"), src)
+        run("iso(src)->cso", ["convert", src, "-o", d("s.cso")])
+        run("cso(src)->iso", ["convert", d("s.cso"), "-o", d("back_cso.iso")])
+        check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
+        for spent in ("s.cci", "s.cso"):
+            try:
+                os.unlink(d(spent))
+            except OSError:
+                pass
     run("god->cci", ["convert", hdr, "-o", d("g.cci")])
     run("cci->cso", ["convert", d("a.cci"), "-o", d("x.cso")])
     run("cso(x)->dir", ["convert", d("x.cso"), "-o", d("from_xcso") + "/"])
