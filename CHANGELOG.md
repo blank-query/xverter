@@ -72,6 +72,60 @@ source a second time is exactly what catches a bad cable or bad RAM corrupting t
 which would otherwise be compressed faithfully and then certified correct. So the second read
 stayed. Only the waiting went.
 
+### A conversion that quietly wasn't one
+
+Turning a CCI or CSO back into an ISO was not decompressing it. It was extracting the files
+and building a **brand new image** out of them, which is the right thing to do for an archive
+and the wrong thing to do for a compressed image. The padding went. The pressed layout went.
+What came out held all the same files and was not the same disc — on the smallest test image,
+266,053,632 bytes in and 174,080 bytes out.
+
+The nasty part is what that does downstream. You can take a verified, authenticated redump,
+compress it, decompress it, and be handed something that no longer matches the dump it came
+from and never will again. And it reported success the whole way, because the check it was
+passing was "did the files survive" — which was true, and was not the question.
+
+It now decompresses, which is what the format means. Out comes exactly what the container
+holds: the original file byte for byte when it was made from a bare game partition, and the
+game partition when it was made from a full redump image, because the video partition was
+never in there to give back.
+
+**The test suite never caught this because it never tried.** Every path it exercised ended in
+a directory comparison, and files compare equal across images that are not equal. It now
+compares bytes on that edge, and — the part that actually mattered — it starts from the
+original image rather than from the one xVerter packed itself. Rebuilding our own image
+reproduces our own image, so a rebuild and a decompression look identical from there; only a
+real pressed disc can tell them apart. Aimed at the old code the new check fails on all three
+profiles and says what was lost. That is the test worth having.
+
+### Cutting out the middleman
+
+Converting anything to anything went through a scratch copy of the whole game on disk. Unpack
+3.4 GB, read 3.4 GB straight back, delete it. The archive and image writers now take a list of
+files and a way to open each one, so the source feeds them directly.
+
+| | before | after | |
+| --- | ---: | ---: | ---: |
+| anything → zar | 6.34s | 4.96s | **1.28x** |
+| zar → ISO | 5.37s | 4.90s | 1.10x |
+
+The gap between those two rows is the interesting part. Streaming into the ISO writer means
+giving up `copy_file_range` — a decompressing stream has no file descriptor to hand the
+kernel — and on a copy-on-write filesystem the reflink it surrenders nearly cancels the round
+trip it saves. Packing an archive compresses every byte, so it could never have shared blocks
+with the source in the first place: nothing to trade away, and the whole round trip is profit.
+
+Correctness rests on one argument, checked rather than asserted: an archive's order and an
+image's layout are functions of the names and sizes alone, so where the bytes arrive from
+cannot change the output. Packed from a directory and packed from the source, byte-identical,
+manifests identical, on the real 7.8 GB image and four times running.
+
+And a small free one: the check that asks whether a file size matches any known dump was
+parsing 1.4 MB of XML to answer it, once per process, in every one of the fifty processes a
+matrix run spawns. It is now cached against the database's own size and timestamp, so an
+update still invalidates it — 0.024s to 0.0001s, 255x, for a question that was never
+interesting enough to earn a millisecond.
+
 ### Things that were embarrassingly slow
 
 **ZIP output took longer than anything else in the tool** — a hundred seconds for a 7.8 GB
