@@ -676,17 +676,58 @@ def _canonical_codes(lengths, maxbits):
 #: four slots. zlib is the only one every CHD consumer has understood
 #: for the life of the format; zstd is faster and smaller but needs a
 #: reader from 2024 or later, so it is opt-in rather than default.
-DEFAULT_COMPRESSORS = (b"lzma", b"zlib")
+DEFAULT_COMPRESSORS = (b"lzma", b"zlib", b"flac")
 DVD_HUNKBYTES = 4096
 DVD_UNITBYTES = 2048
+
+
+def _pcm_likely(raw):
+    """Cheap probe: does this hunk plausibly hold 16-bit PCM audio?
+
+    Audio waveforms are smooth - consecutive samples are close - while
+    compressed assets and code are not, and smoothness is what FLAC's
+    predictors monetise. Sampling 128 stereo pairs and comparing the
+    step size against the amplitude answers it in microseconds.
+
+    The first version of this gate asked the wrong question ("did LZ
+    do badly?"). On a real disc most hunks are pre-compressed assets,
+    which LZ also does badly on, so nearly every hunk paid a
+    multi-millisecond FLAC attempt for a measured 42 KB of benefit and
+    the writer did not finish inside ten minutes. FLAC should be tried
+    where audio is plausible, not wherever LZ struggled. chdman
+    auditions FLAC on everything - at C speed, that costs it little;
+    the honest Python equivalent is this probe. CD-type content, when
+    the PS1/PS2 work arrives, is wall-to-wall PCM and passes it
+    everywhere it matters.
+    """
+    n = len(raw)
+    if n < 512 or n % 4:
+        return False
+    step = max(4, (n // 128) & ~3)
+    prev_l = int.from_bytes(raw[0:2], "little", signed=True)
+    amp = diff = 0
+    for i in range(step, n - 1, step):
+        cur = int.from_bytes(raw[i:i + 2], "little", signed=True)
+        amp += cur if cur >= 0 else -cur
+        d = cur - prev_l
+        diff += d if d >= 0 else -d
+        prev_l = cur
+    # Silence is audio too, and constant hunks encode brilliantly.
+    if amp == 0:
+        return not any(raw)
+    return diff * 2 < amp
 
 
 def _compress_hunk(raw, tags, hunkbytes, level):
     """Best of the configured codecs for one hunk, or None to store it
     raw. Returns (type_index, payload)."""
     best = None
+    flac_index = None
     for index, tag in enumerate(tags):
         try:
+            if tag == b"flac":
+                flac_index = index
+                continue
             if tag == b"zlib":
                 # CHD stores raw deflate, without zlib's 2-byte header
                 # and 4-byte trailer.
@@ -712,6 +753,12 @@ def _compress_hunk(raw, tags, hunkbytes, level):
             continue
         if best is None or len(comp) < len(best[1]):
             best = (index, comp)
+    if flac_index is not None and _pcm_likely(raw):
+        from . import chd_flac
+        limit = (len(best[1]) if best is not None else hunkbytes) - 1
+        comp = chd_flac.encode_hunk(raw, limit)
+        if comp is not None:
+            best = (flac_index, comp)
     if best is None or len(best[1]) >= hunkbytes:
         return None
     return best
