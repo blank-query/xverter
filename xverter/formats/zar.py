@@ -12,7 +12,9 @@ Detection: ZArchive is a footer-based format - the magic 0x169f52d6 sits
 in the final bytes; the file *starts* with zstd frame data.
 """
 
+import concurrent.futures
 import hashlib
+import threading
 import os
 import shutil
 import subprocess
@@ -50,6 +52,12 @@ def is_zar(path):
         return False
 
 
+#: Files unpacked at once, each on its own reader. Two, for the
+#: same reason as the xdvdfs extractor: past that the limit is
+#: storage rather than CPU.
+UNPACK_WORKERS = 2
+
+
 def unpack(zar_path, out_dir, manifest=None, progress=None):
     """Extract a zar. Uses the native reader when zstd support is present
     (allowing inline manifest capture); falls back to the reference binary."""
@@ -59,21 +67,61 @@ def unpack(zar_path, out_dir, manifest=None, progress=None):
                 os.makedirs(out_dir, exist_ok=True)
                 _flist = zr.files()
                 _grand = sum(sz for _r, sz in _flist) or 1
-                _done = 0
-                for rel, _size in _flist:
+                _done = [0]
+                for rel, _size in _flist:      # directories first, once
                     dest = os.path.join(out_dir, rel.replace("/", os.sep))
-                    os.makedirs(os.path.dirname(dest) or out_dir, exist_ok=True)
+                    os.makedirs(os.path.dirname(dest) or out_dir,
+                                exist_ok=True)
+
+                # Files are independent, so a couple come out at a time,
+                # each on its own reader - the same scheduling change the
+                # xdvdfs extractor got, and for the same reason: one file
+                # at a time leaves the machine idle. Same bytes, same
+                # manifest; only the order of work changes.
+                lock = threading.Lock()
+                local = threading.local()
+                opened = []
+
+                def _reader():
+                    r = getattr(local, "r", None)
+                    if r is None:
+                        r = local.r = zar_native.ZarReader(zar_path)
+                        with lock:
+                            opened.append(r)
+                    return r
+
+                def _one(job):
+                    rel, _size = job
+                    dest = os.path.join(out_dir, rel.replace("/", os.sep))
                     h = hashlib.sha1() if manifest is not None else None
                     with open(dest, "wb") as o:
-                        for chunk in zr.read_iter(rel):
+                        for chunk in _reader().read_iter(rel):
                             o.write(chunk)
                             if h is not None:
                                 h.update(chunk)
                             if progress:
-                                _done += len(chunk)
-                                progress(_done, _grand)
-                    if manifest is not None:
-                        manifest[rel] = h.hexdigest()
+                                with lock:
+                                    _done[0] += len(chunk)
+                                    progress(_done[0], _grand)
+                    return rel, (h.hexdigest() if h is not None else None)
+
+                try:
+                    if UNPACK_WORKERS > 1 and len(_flist) > 1:
+                        with concurrent.futures.ThreadPoolExecutor(
+                                max_workers=UNPACK_WORKERS,
+                                thread_name_prefix="zar") as ex:
+                            results = list(ex.map(_one, _flist))
+                    else:
+                        results = [_one(j) for j in _flist]
+                finally:
+                    for r in opened:
+                        try:
+                            r.close()
+                        except Exception:             # noqa: BLE001
+                            pass
+                if manifest is not None:
+                    for rel, digest in results:
+                        manifest[rel] = digest
             if not any(os.scandir(out_dir)):
                 raise ZarError("zar contained no files")
             return
