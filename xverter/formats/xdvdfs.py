@@ -155,13 +155,28 @@ def validate_image(iso_path):
     truncated one: the block-level wrappers (CCI/CSO) are deliberately
     content-agnostic and will compress whatever bytes exist, producing a
     container that round-trips perfectly and is silently missing game
-    data. Every other input format carries its own integrity (GoD's hash
-    tree, zar's SHA-256, STFS's hash chain); the raw image is the hole.
+    data - which is why this runs over CCI and CSO sources too, and not
+    only over raw images. They carry no integrity of their own at all.
+
+    GoD, zar and STFS do carry their own (hash tree, SHA-256, hash
+    chain), but those prove the storage is intact, not that the image
+    inside it coheres: a container built faithfully from a truncated
+    dump passes its own checks. So this runs over every source that is
+    an image, and the self-checking formats simply pass it quickly.
+
+    Takes a path or an open seekable image, so a source that is an
+    image without being a file - a compressed container, a GoD - can be
+    checked without being written out first.
 
     Returns the allocation extent. Raises XdvdfsError if the image is
     not XDVDFS or is short."""
-    size = os.path.getsize(iso_path)
-    with open(iso_path, "rb") as f:
+    with _as_file(iso_path) as f:
+        size = getattr(f, "size", None)
+        if size is None:
+            pos = f.tell()
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(pos)
         base = find_base(f)
         extent = allocation_extent(f, base)
     need = base + extent

@@ -31,6 +31,8 @@ from .formats import cci as cci_mod
 from .formats import cso as cso_mod
 from .formats import chd as chd_mod
 from .formats import archives as archives_mod
+from .formats import lz4compat as lz4compat_mod
+from .formats import zar_native as zar_native_mod
 from . import datcache
 
 # One source of truth: the package defines it, everything else asks.
@@ -185,6 +187,31 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
     else:
         raise CliError("cannot read input kind %r" % kind)
     return out
+
+
+def _output_siblings(out_path):
+    """Every path a writer might have created for this output: the one
+    it was given, plus the Name.N.ext slices the split writers emit.
+
+    Cleanup that only knows the name it was handed is how a run once
+    left twenty gigabytes of orphaned CCI slices on a tmpfs and took
+    three test runs down with it. Ask for the family, not the name."""
+    base, ext = os.path.splitext(out_path)
+    found = [out_path]
+    directory = os.path.dirname(out_path) or "."
+    stem = os.path.basename(base)
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return found
+    for name in names:
+        body, e = os.path.splitext(name)
+        if e.lower() != ext.lower():
+            continue
+        root, dot, num = body.rpartition(".")
+        if dot and root == stem and num.isdigit():
+            found.append(os.path.join(directory, name))
+    return found
 
 
 def _pivot_iso(kind, path, w, prog, verify):
@@ -1072,6 +1099,12 @@ def cmd_convert(args):
     prog = _Progress("lines" if getattr(args, "progress", False)
                      else "tty" if sys.stderr.isatty() else None)
     w = _tempdir(scratch_base)
+    # Anything bearing the output's name that already exists is the
+    # user's and is never touched; anything that appears while we work
+    # is ours, and a run that fails does not get to leave it behind
+    # looking like a finished conversion.
+    preexisting = {p for p in _output_siblings(args.output)
+                   if os.path.exists(p)}
     try:
         if kind in ("zip", "7z"):
             # Transparent input layer: extract, find the game inside,
@@ -1087,13 +1120,23 @@ def cmd_convert(args):
         # so start from a disabled one rather than a name that exists on
         # some branches and not others.
         ident = _IdentityAhead(path, False)
-        if kind == "iso":
-            # Validate before writing anything. A raw image carries no
-            # internal checksum, and the block wrappers are content-
-            # agnostic, so without this a truncated source converts
-            # "successfully" and is reported as verified.
+        img_open = _image_opener(kind, path)
+        if img_open is not None:
+            # Validate before writing anything, for every source that is
+            # an image - not just raw ones.
+            #
+            # A CCI or CSO built from a truncated dump decodes perfectly
+            # and round-trips perfectly, because those wrappers are
+            # content-agnostic and compress whatever bytes exist. That
+            # made them the formats best able to hide the exact damage
+            # this check was written to catch, and they were the ones
+            # not being checked: such a container converted onward, or
+            # decompressed back to an image, came out stamped
+            # "round-trip verified" while missing game data. Verified
+            # and valid are different words for a reason.
             try:
-                xdvdfs_mod.validate_image(path)
+                with img_open() as _img:
+                    xdvdfs_mod.validate_image(_img)
             except xdvdfs_mod.XdvdfsError as e:
                 raise CliError("source is INVALID: %s" % e)
             if not args.no_verify:
@@ -1101,7 +1144,7 @@ def cmd_convert(args):
                 #   valid         - the image's own structures cohere
                 #   verified      - what came out matches what went in
                 #   authenticated - it is the genuine retail disc
-                exe = _executable_check(path)
+                exe = _executable_check(path) if kind == "iso" else None
                 if exe is None:
                     print("source : valid")
                 else:
@@ -1109,10 +1152,13 @@ def cmd_convert(args):
                           "unparseable (%s)\n"
                           "         this image will not boot - converting "
                           "it anyway, as asked" % exe)
+        if kind == "iso":
             # Authentication is free unless the size is a canonical
             # redump size, so trimmed images cost nothing. It gates
             # nothing either, so it runs while the conversion does and
-            # reports when the conversion has something to say.
+            # reports when the conversion has something to say. Only a
+            # raw image can match a redump entry - an optimized
+            # container has already dropped bytes the entry covers.
             ident = _IdentityAhead(path, not args.no_verify,
                                    progress=prog.cb("identify"))
         if out_kind in ("zip", "7z"):
@@ -1411,6 +1457,18 @@ def cmd_convert(args):
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
         return 0
+    except BaseException:
+        for stray in _output_siblings(args.output):
+            if stray in preexisting:
+                continue
+            try:
+                if os.path.isdir(stray):
+                    shutil.rmtree(stray, ignore_errors=True)
+                else:
+                    os.unlink(stray)
+            except OSError:
+                pass
+        raise
     finally:
         shutil.rmtree(w, ignore_errors=True)
 
@@ -1563,7 +1621,16 @@ def main(argv=None):
         return args.fn(args)
     except (CliError, detect_mod.DetectError, god_mod.GodError,
             xdvdfs_mod.XdvdfsError, zar_mod.ZarError, stfs_mod.StfsError,
-            builders_mod.BuildError, datcache.DatCacheError) as e:
+            builders_mod.BuildError, datcache.DatCacheError,
+            # A damaged wrapper is an ordinary bad input, not a crash.
+            # These were missing, so a truncated CCI or a corrupt LZ4
+            # block ended the run with a stack trace instead of a
+            # sentence - the one input class most likely to be damaged
+            # in the wild was also the only one that looked like our
+            # bug rather than their file.
+            cci_mod.CciError, cso_mod.CsoError, chd_mod.ChdError,
+            archives_mod.ArchiveError, zar_native_mod.ZarNativeError,
+            lz4compat_mod.Lz4Error, lz4compat_mod.Lz4Missing) as e:
         print("ERROR: %s" % e, file=sys.stderr)
         return 1
 
