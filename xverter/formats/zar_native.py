@@ -999,6 +999,82 @@ def pack(src_dir, zar_path, progress=None) -> int:
     return count
 
 
+def pack_entries(entries, zar_path, progress=None) -> int:
+    """Pack files that are not on disk into a new .zar file.
+
+    `entries` is an iterable of (relpath, size, opener), opener being a
+    zero-argument callable returning a readable stream over that file.
+    Lets a source image feed the archive writer directly instead of
+    being unpacked to a scratch directory first.
+
+    Byte-identical to pack() over the same tree written out to disk: the
+    archive's canonical order is a function of the names alone, and the
+    block layout of the names, so where the bytes came from cannot
+    change the output. The tests check that equivalence directly.
+    """
+    root = {}
+    grand = 0
+    for rel, size, opener in entries:
+        if "\\" in rel:
+            raise ZarNativeError(
+                "cannot pack %r: ZArchive treats '\\' as a path separator"
+                % rel)
+        parts = [p for p in rel.split("/") if p]
+        if not parts:
+            raise ZarNativeError("empty entry name")
+        node = root
+        walked = []
+        for part in parts[:-1]:
+            walked.append(part)
+            nxt = node.setdefault(part, {})
+            if not isinstance(nxt, dict):
+                raise ZarNativeError("%s is both a file and a directory"
+                                     % "/".join(walked))
+            node = nxt
+        if parts[-1] in node:
+            raise ZarNativeError("duplicate entry: %s" % rel)
+        node[parts[-1]] = (size, opener)
+        grand += size
+    state = [0]
+    with ZarWriter(zar_path) as zw:
+        count = _pack_nodes(zw, root, "", progress=progress,
+                            grand=grand, state=state)
+        zw.finalize()
+    return count
+
+
+def _pack_nodes(zw: ZarWriter, node: dict, arc_prefix: str,
+                progress=None, grand=0, state=None) -> int:
+    """The same walk _pack_tree does, over an in-memory tree rather than
+    a directory - identical ordering rule, so identical output."""
+    def sort_key(name):
+        raw = name.encode("utf-8", "surrogateescape")
+        return (_fold_bytes(raw), raw)
+
+    count = 0
+    for name in sorted(node, key=sort_key):
+        arc = arc_prefix + "/" + name if arc_prefix else name
+        child = node[name]
+        if isinstance(child, dict):
+            zw.make_dir(arc)
+            count += _pack_nodes(zw, child, arc, progress=progress,
+                                 grand=grand, state=state)
+            continue
+        _size, opener = child
+        zw.start_file(arc)
+        with opener() as f:
+            while True:
+                chunk = f.read(_PACK_CHUNK)
+                if not chunk:
+                    break
+                zw.append(chunk)
+                if progress and state is not None:
+                    state[0] += len(chunk)
+                    progress(state[0], grand)
+        count += 1
+    return count
+
+
 def _pack_tree(zw: ZarWriter, dir_path: str, arc_prefix: str,
                progress=None, grand=0, state=None) -> int:
     def sort_key(entry):

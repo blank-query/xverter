@@ -134,6 +134,20 @@ def _ram_scratch_dir(input_size):
     return base
 
 
+def _image_opener(kind, path):
+    """A factory for readers over `path` as a raw XDVDFS image, or None
+    for inputs that are not one (a zar, an STFS package, a folder)."""
+    if kind == "iso":
+        return lambda: open(path, "rb")
+    if kind == "god":
+        return lambda: god_mod.GodStream(path)
+    if kind == "cci":
+        return lambda: cci_mod.CciReader(path)
+    if kind == "cso":
+        return lambda: cso_mod.CsoReader(path)
+    return None
+
+
 def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
     """Read any supported input into an extracted game directory (the pivot).
     If manifest is a dict, per-file SHA-1s are captured inline where the
@@ -1218,6 +1232,32 @@ def cmd_convert(args):
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "manifest verified"))
+            return 0
+        stream_op = (_image_opener(kind, path)
+                     if out_kind == "zar" and zar_mod.can_stream() else None)
+        if stream_op is not None:
+            # The image feeds the archive writer directly. Unlike the
+            # ISO case there is nothing given up by not having the files
+            # on disk - packing a zar compresses every byte, so it could
+            # never have shared them with the source anyway.
+            man = {}
+            opener, closer = xdvdfs_mod.shared_opener(stream_op)
+            try:
+                with opener() as probe:
+                    entries = xdvdfs_mod.file_entries(probe, opener=opener,
+                                                      manifest=man)
+                zar_mod.pack_entries(entries, args.output,
+                                     roundtrip_verify=not args.no_verify,
+                                     manifest=man,
+                                     progress=prog.cb("zar-write"),
+                                     verify_progress=prog.cb("verify"))
+            finally:
+                closer()
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output, "NO GUARANTEES - --leeroy-jenkins"
+                     if args.no_verify else "verified"))
             return 0
         manifest = {}
         gamedir = _to_gamedir(kind, path, w, manifest=manifest,

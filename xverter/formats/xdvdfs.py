@@ -338,6 +338,150 @@ def extract(iso_path, out_dir, quiet=False, manifest=None, progress=None,
     return files, total
 
 
+class _Window:
+    """Read-only view of one file inside an image, hashing as it goes.
+
+    Owns the reader it is given and closes it. The manifest entry is
+    only written if the file was read to its end: a partially consumed
+    window records nothing, so a caller that skips bytes fails
+    verification loudly instead of certifying a short read."""
+
+    def __init__(self, f, offset, size, rel=None, manifest=None):
+        import hashlib
+        self._f = f
+        self._left = size
+        self._rel = rel
+        self._manifest = manifest
+        self._h = hashlib.sha1() if manifest is not None else None
+        if size:
+            f.seek(offset)
+
+    def read(self, n=-1):
+        if self._left <= 0:
+            return b""
+        if n is None or n < 0:
+            n = self._left
+        data = self._f.read(min(n, self._left))
+        if not data:
+            die("unexpected EOF reading %s (missing %d bytes) - "
+                "truncated image?" % (self._rel, self._left))
+        self._left -= len(data)
+        if self._h is not None:
+            self._h.update(data)
+        return data
+
+    def close(self):
+        try:
+            self._f.close()
+        finally:
+            if self._h is not None and self._left == 0:
+                self._manifest[self._rel] = self._h.hexdigest()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+class _NoClose:
+    """A reader whose close() does nothing, so it can outlive a window."""
+
+    def __init__(self, f):
+        self._f = f
+
+    def read(self, n=-1):
+        return self._f.read(n)
+
+    def seek(self, *a):
+        return self._f.seek(*a)
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
+
+
+def shared_opener(opener):
+    """Turn an opener into one that hands out views of a single reader,
+    plus the closer for it.
+
+    Opening a fresh reader per file is right when files are fetched
+    concurrently and wasteful when they are not: a GoD or compressed
+    reader re-reads its index every time it is constructed, which on a
+    many-file image costs more than the reads themselves. A consumer
+    that takes one file at a time, in order, to its end - which the
+    archive writers do - can safely share one reader between them,
+    because the windows never overlap. Do not use it for anything
+    concurrent."""
+    box = []
+
+    def go():
+        if not box:
+            box.append(opener())
+        return _NoClose(box[0])
+
+    def close():
+        if box:
+            try:
+                box[0].close()
+            finally:
+                del box[:]
+
+    return go, close
+
+
+def file_entries(iso_path, opener=None, manifest=None):
+    """List an image's files as (relpath, size, open) without extracting
+    it - `open` being a zero-argument callable returning a stream over
+    just that file's bytes.
+
+    This is the same walk `extract` does, stopping short of writing
+    anything: the tables are read once up front, then each file is
+    fetched on demand from its own reader. `opener` supplies those
+    readers for sources that are not plain files (a GoD container, a
+    compressed image); with none, the path is opened directly. Given a
+    manifest dict, each stream fills in its own SHA-1 as it is consumed,
+    so a caller that streams every file ends up with exactly the
+    manifest a full extraction would have produced.
+    """
+    if opener is None:
+        if not isinstance(iso_path, (str, bytes, os.PathLike)):
+            raise XdvdfsError("file_entries needs an opener for a "
+                              "non-path source")
+        _p = iso_path
+
+        def opener():
+            return open(_p, "rb")
+
+    found = []
+    with _as_file(iso_path) as f:
+        base = find_base(f)
+        f.seek(base + 32 * SECTOR + len(MAGIC))
+        root_sector, root_size = struct.unpack("<II", f.read(8))
+        stack = [(read_table(f, base, root_sector, root_size), "")]
+        while stack:
+            table, prefix = stack.pop()
+            for name, start, size, attr in walk_table(table):
+                name = safe_name(name)
+                rel = prefix + "/" + name if prefix else name
+                if attr & ATTR_DIR:
+                    stack.append((read_table(f, base, start, size), rel))
+                else:
+                    found.append((rel, size, base + start * SECTOR))
+
+    def make(rel, size, off):
+        def go():
+            return _Window(opener(), off, size, rel, manifest)
+        return go
+
+    return [(rel, size, make(rel, size, off)) for rel, size, off in found]
+
+
 def main():
     ap = argparse.ArgumentParser(
         prog="xv-xiso",

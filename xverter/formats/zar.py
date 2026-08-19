@@ -225,6 +225,63 @@ def verify_native(zar_path, progress=None):
         return len(zr.files())
 
 
+def can_stream():
+    """True when a source image can be packed straight into a zar.
+
+    The reference binary only takes a directory, so the streamed route
+    exists only where the native writer does."""
+    return bool(_NATIVE)
+
+
+def pack_entries(entries, zar_path, roundtrip_verify=True, manifest=None,
+                 progress=None, verify_progress=None):
+    """Pack (relpath, size, opener) entries into a zar without staging
+    them on disk. See zar_native.pack_entries for why the result is
+    byte-identical to packing the same files out of a directory.
+
+    `manifest` is filled in by the entry streams as they are consumed,
+    so it is only complete once packing has finished - which is why the
+    verification pass reads it afterwards rather than being handed it.
+    """
+    if not _NATIVE:
+        raise ZarError("streamed pack needs the native writer")
+    if os.path.exists(zar_path):
+        raise ZarError("output already exists: %s" % zar_path)
+    entries = list(entries)
+    # Same refusal as pack(): a 128+ byte name component packs cleanly
+    # and then misparses in the reference reader, so catch it up front.
+    for rel, _size, _opener in entries:
+        for name in rel.split("/"):
+            if len(name.encode("utf-8", "surrogateescape")) >= 128:
+                raise ZarError(
+                    "cannot pack: name %r (in %s) is %d bytes; the "
+                    "ZArchive format's reference reader breaks at 128+ "
+                    "characters - rename it first"
+                    % (name, rel,
+                       len(name.encode("utf-8", "surrogateescape"))))
+    try:
+        zar_native.pack_entries(entries, zar_path, progress=progress)
+    except zar_native.ZarNativeError as e:
+        raise ZarError("native zar pack failed: %s" % e)
+    if not roundtrip_verify:
+        return
+    if entries and not manifest:
+        # Nothing on disk to fall back to: without hashes captured on
+        # the way in there is no independent record of what went in, and
+        # a verification that compares the archive against itself is
+        # worse than none. An archive with no files in it is the one
+        # case with genuinely nothing to check.
+        raise ZarError("streamed pack cannot be verified without a manifest")
+    got = hash_walk(zar_path, progress=verify_progress)
+    if got != manifest:
+        raise ZarError(
+            "packed zar manifest mismatch: missing=%s extra=%s diff=%s"
+            % (sorted(set(manifest) - set(got))[:3],
+               sorted(set(got) - set(manifest))[:3],
+               sorted(k for k in set(got) & set(manifest)
+                      if got[k] != manifest[k])[:3]))
+
+
 def pack(src_dir, zar_path, roundtrip_verify=True, manifest=None,
          progress=None, verify_progress=None):
     if os.path.exists(zar_path):
