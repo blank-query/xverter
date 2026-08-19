@@ -1061,27 +1061,41 @@ def cmd_test(args):
             margv.append("--referee")
         rc = matrix.main(margv)
         report = os.path.join(w, "matrix_report.html")
-        if auto:
-            if not os.path.isfile(report):
-                # Promised and not delivered: say so rather than fall through.
-                print("WARNING: the matrix finished but wrote no report "
-                      "(expected %s)" % report, file=sys.stderr)
-            else:
-                stem = os.path.splitext(os.path.basename(args.input))[0]
-                dest = os.path.join(
-                    os.path.dirname(os.path.abspath(args.input)),
-                    stem + "_matrix_report.html")
-                try:
-                    shutil.move(report, dest)
-                    print("report saved: %s" % dest)
-                except OSError as e:
-                    # Losing the report to the cleanup below would be worse
-                    # than leaving the scratch dir behind. Keep both.
-                    keep = True
-                    print("WARNING: could not move the report to %s (%s)\n"
-                          "         it is still at %s - the scratch "
-                          "directory has been left in place for it"
-                          % (dest, e, report), file=sys.stderr)
+        if not os.path.isfile(report):
+            # Promised and not delivered: say so rather than fall through.
+            print("WARNING: the matrix finished but wrote no report "
+                  "(expected %s)" % report, file=sys.stderr)
+            return rc
+        # Delivered next to the game in every mode. With --workdir the
+        # report used to stay buried inside the scratch directory, which
+        # is how a finished run on a phone read as "no report was
+        # generated". If the game's directory refuses the write (Android
+        # shared storage can), fall back to the current directory, then
+        # home, announcing each refusal and the final location - the one
+        # outcome that must not exist is a finished run whose report
+        # location is a mystery.
+        stem = os.path.splitext(os.path.basename(args.input))[0]
+        name = stem + "_matrix_report.html"
+        candidates = [os.path.dirname(os.path.abspath(args.input)),
+                      os.getcwd(), os.path.expanduser("~")]
+        delivered = None
+        for cand in candidates:
+            dest = os.path.join(cand, name)
+            try:
+                shutil.copyfile(report, dest)
+                delivered = dest
+                break
+            except OSError as e:
+                print("WARNING: could not save the report to %s (%s)"
+                      % (dest, e), file=sys.stderr)
+        if delivered:
+            print("report saved: %s" % delivered)
+        elif auto:
+            # Keep the scratch directory alive: it holds the only copy.
+            keep = True
+            print("WARNING: the report could not be saved anywhere; it "
+                  "is still at %s and the scratch directory has been "
+                  "left in place for it" % report, file=sys.stderr)
         return rc
     finally:
         if auto and not keep and os.path.isdir(w):
