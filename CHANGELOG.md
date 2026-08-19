@@ -68,6 +68,16 @@ The disc inside comes back bit-perfect either way, and that is the archival prom
 The CHD edges of the test suite now run on every machine, not just the ones with a binary
 installed.
 
+And with confidence earned — four consecutive full-suite gates of chdman verifying every CHD
+xVerter built from real pressed discs — **chdman is no longer a dependency of anything.** The
+tool registry, the version checks, the installer and the Setup-tab panel are gone; the
+fallbacks are gone; the two shapes xVerter refuses (parent-delta CHDs, pre-v5 files) are
+refused with a pointer at `chdman copy` rather than handed to it. If chdman happens to be on
+your machine, the test suite will still use it as an independent referee on the CHD edges —
+the reference implementation approving our files is a stronger claim than our own reader
+making the same check — but nothing anywhere needs it, offers to install it, or falls back to
+it. The tool table in the README is deleted because the column would be empty.
+
 ## 1.1.1 — the same bug, three more times
 
 1.1.0 fixed a conversion that rebuilt an image instead of returning it. This release is what
