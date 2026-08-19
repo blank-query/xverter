@@ -36,10 +36,28 @@ speed from the same two lessons the rest of this project keeps re-learning — b
 and hand the parallel part to threads that actually run in parallel.
 
 Reading a foreign CHD's FLAC hunks costs about 3x chdman's speed on those hunks — pure Python,
-decoding at 0.118 ms per hunk across 24 free-threaded cores, 22.7x the single-core figure. CHDs
-xVerter writes contain no FLAC (on DVD images it was measured worth 0.0006% of file size — it
-exists for CD audio), so they read at full speed. And the CHD edges of the test suite now run
-on every machine, not just the ones with a binary installed.
+decoding at 0.118 ms per hunk across 24 free-threaded cores, 22.7x the single-core figure.
+
+**And xVerter writes FLAC too.** CHD is an archival format; if the format uses a codec, a
+complete implementation writes it — and the CD-type discs on the roadmap (PS1, PS2) are where
+FLAC is the difference between 100% and 70% of file size. The encoder is pure Python like
+everything else, and it faced the harshest referee available: chdman verifies a CHD whose
+every hunk is xVerter FLAC and extracts it byte-identical, meaning libFLAC itself accepts the
+frames. Deciding *when* to try FLAC mattered more than writing it: the shipped gate asks "is
+this plausibly PCM?" with a microseconds-cheap probe, so a DVD image pays about 5% to find its
+handful of genuine audio hunks instead of 10x to find nothing, and audio content passes the
+probe everywhere it counts — on pure PCM the audition picks FLAC 8192 hunks out of 8192, at
+24% of original size.
+
+A note on what "byte perfect" means here, because it was asked and deserves the straight
+answer: a CHD's identity is its internal SHA-1s, by the format's own design — codec choice is
+transport, not content. A chdman CHD and an xVerter CHD of the same disc carry **identical**
+internal SHA-1s and match the same DATs; their file bytes differ, as chdman's own files do
+across chdman versions, which is exactly why the format doesn't define identity by file bytes.
+The disc inside comes back bit-perfect either way, and that is the archival promise.
+
+The CHD edges of the test suite now run on every machine, not just the ones with a binary
+installed.
 
 ## 1.1.1 — the same bug, three more times
 
