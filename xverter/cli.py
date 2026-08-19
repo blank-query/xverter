@@ -147,6 +147,11 @@ def _image_opener(kind, path):
         return lambda: cci_mod.CciReader(path)
     if kind == "cso":
         return lambda: cso_mod.CsoReader(path)
+    # CHD is deliberately absent: its reader decodes hunks on the
+    # calling thread, so bulk consumers are faster through the
+    # materialised pivot, whose extraction is parallel. Measured, not
+    # assumed - streaming only wins when the stream is not the
+    # bottleneck.
     return None
 
 
@@ -1391,6 +1396,8 @@ def cmd_convert(args):
             # original file, byte for byte; for one compressed from a
             # full redump image it is the game partition, because the
             # video partition was never in the container to begin with.
+            ahead = (_SourceHashAhead(kind, path, w)
+                     if not args.no_verify else None)
             with _wrapper_reader(kind, path) as r, \
                     open(args.output, "wb") as o:
                 total = getattr(r, "size", 0)
@@ -1406,7 +1413,8 @@ def cmd_convert(args):
                         cb(done, total)
             if not args.no_verify:
                 _verify_wrapper("iso", args.output, kind, path, w,
-                                progress=prog.cb("verify"))
+                                progress=prog.cb("verify"),
+                                source_sha1=ahead.result() if ahead else None)
             ident.report()
             _gil_hint()
             print("wrote %s (%s)"
