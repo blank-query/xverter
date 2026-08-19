@@ -1004,6 +1004,11 @@ def cmd_verify(args):
                     _vcb(n, f.size)
         print("%s verify: all blocks decoded OK (%d bytes, stream sha1 %s)"
               % (kind, n, h.hexdigest()))
+        print("         note: %s carries no checksums, so decoding cleanly "
+              "is the strongest claim the format permits - it cannot prove "
+              "the data is what was originally stored. For storage that "
+              "can testify to its own integrity, prefer CHD or ZAR."
+              % kind)
     elif kind == "chd":
         h = chd_mod.verify(path, progress=prog.cb("verify"))
         print("chd verify: decompressed everything and matched the "
