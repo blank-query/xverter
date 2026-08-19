@@ -1,123 +1,159 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — stop waiting
 
-**Everything is faster, nothing changed what it produces.** Every format's output is
-byte-for-byte what the previous release wrote — GoD trees, zar archives (still byte-identical
-to the reference ZArchive implementation), CCI, CSO, ISOs — and every check that ran before
-still runs. Where output *did* change, it is called out under "Things that changed" below.
+This release converts your library **16% faster on the same Python you already have, and
+36% faster on the one the binaries now ship with** — and produces byte-for-byte exactly what
+1.0 produced. Every GoD tree, every zar, every CCI, CSO and ISO is identical to the last
+release's output, and every check that ran before still runs. If that combination sounds
+suspicious, good; it took a lot of measuring to earn.
 
-### Speed
+The whole Halo test suite, every check enabled:
 
-The full conversion matrix on the Halo quartet, 44 edges per game, same machine, same
-fixtures, all checks enabled:
+| | 1.0 | 1.1.0 |
+| ------------------------------- | ------:| ------:|
+| stock CPython | ~23m48s | **20m05s** |
+| free-threaded CPython 3.14t | — | **15m08s** |
 
-| | previous release | this release |
-| ------------------------- | ---------------:| ------------:|
-| stock CPython 3.14 | ~1428s | **1205s** (1.19x) |
-| free-threaded CPython 3.14t | — | **908s** (1.57x) |
+Here is how that happened, including the parts where we were wrong.
 
-*(The previous release's figure is its published 48-edge run with the CHD edges removed, since
-chdman's cost is unchanged and external. 768 edges ran across the four validation runs behind
-these numbers, with zero failures.)*
+### We had the thread pools tuned backwards
 
-Per operation, on a 7.8 GB Halo CE redump:
+xVerter compresses CCI and CSO in 2 KB blocks and hashes GoD containers in 4 KiB ones. Small
+units. We had them spread across sixteen worker threads, on the reasonable theory that more
+threads means more speed.
 
-| Operation | before | after |
-| ---------------------------------- | ------:| -----:|
-| ZIP output (write + verify) | 111.7s | **26.7s** |
-| 7z output | 67.9s | **21.1s** |
-| CCI compression | 25.9s | **8.1s** *(free-threaded)* |
-| ISO packing | 2.66s | **0.84s** |
-| zar unpacking | 2.94s | **1.68s** |
-| GoD container build | 3.3s | **2.06s** |
-| zar packing | 6.25s | **5.05s** |
+They were slower than four. Sometimes slower than *one*. At that block size the GIL spends
+more time handing work between threads than the threads spend doing it, and we had walked
+straight past the peak without looking down. Sixteen workers on small tasks ran at 453 MB/s;
+four workers on big ones run at 725 MB/s. The GoD hash tree was worse — past two threads it
+was slower than not threading at all.
 
-Where it came from:
+So the pools are now sized from measurement rather than optimism. That alone made compressed
+formats about 35% faster before anything clever happened.
 
-- **Free-threaded Python.** The standalone binaries now ship on CPython 3.14t. xVerter hashes
-  4 KiB blocks and LZ4-compresses 2 KB ones, and at that size GIL hand-off costs more than the
-  work does — with a GIL, *more* threads are measurably slower. The compression, hashing and
-  extraction pools now size themselves from `Py_GIL_DISABLED`, so the right settings are
-  chosen automatically on either interpreter. A frozen binary converting a real 7.8 GB redump:
-  25s built on 3.14, **17s** built on 3.14t, byte-identical output.
-- **Thread pools sized by measurement rather than by hope.** The LZ4 pool was running 16
-  workers on 256-block tasks (453 MB/s) where 4 workers on 4096-block tasks reach 725 MB/s —
-  it had been configured past its own peak.
-- **Work moved off the critical path instead of being made faster.** Verification's two passes
-  now overlap; the source digest is computed *during* the build rather than after it; the
-  redump identity check runs alongside the conversion instead of in front of it. None of these
-  makes any single operation quicker — they stop the program waiting for work that never
-  depended on what it was waiting for.
-- **ZIP deflates with ISA-L**, 21–28x faster than zlib for the same bytes out.
-- **`copy_file_range` for the ISO packer**, which on a copy-on-write filesystem shares extents
-  instead of copying them: 2 GB moved at 17.5 GB/s against 1.2 GB/s for `sendfile`.
-- **Parallel extraction and unpacking** — two files at a time, each on its own reader.
-- **The GoD hash tree** hashes subparts in batches and stops re-seeking per block; `GodStream`
-  reads and verifies a whole subpart at a time instead of 204 separate seeks and hashes.
-- **An identity cache**, so the same image is never hashed twice: 3.02s cold, 0.03s warm,
-  keyed on the bytes (device, inode, size, nanosecond mtime) rather than the path.
+### Then we removed the GIL, and everything we had just learned inverted
 
-### Nothing reaches the network unless you press a button
+Python 3.14 ships a free-threaded build with no global interpreter lock. Run the same
+measurements on it and the answer flips completely: sixteen workers on small tasks, the exact
+configuration that was worst with a GIL, becomes the best by a mile — 2700 MB/s against 453.
+Small-block hashing goes from "never thread this" to **6.5x**. Decompression goes from a 2x
+*penalty* to a 4x gain.
 
-xVerter used to make three network calls nobody asked for: a GitHub release check and a
-tool-version check on every TUI start, and a redump.org hash lookup whenever `verify`'s local
-DAT missed. All three are gone. Startup now makes **zero** network calls — verified by
-instrumenting both `urlopen` and `socket.connect` and counting.
+Every rule of thumb this project had accumulated about threading turned out to be a rule about
+the GIL.
 
-Two buttons on the Setup tab replace them, each taking two presses — the first checks and
-reports, the second acts:
+So the pools now ask the interpreter which world they are in and configure themselves
+accordingly, and **the standalone binaries ship on the free-threaded build**. A real 7.8 GB
+conversion in a frozen binary: 25 seconds before, 17 after, identical bytes out. If you
+install with pip you choose your own interpreter — the README explains how, and xVerter
+mentions it once if you are on the slow one.
 
-- **xVerter Update** — asks GitHub for the newest release, then downloads it beside the
-  running binary and tells you to quit, delete the old one, and launch the new one. (A pip
-  install is told to use pip, which owns that install.)
-- **Database Update** — installs a newer redump DAT and reloads. This is the longevity hatch:
-  releases carry a fresh database, but if releases ever stop, the database stays refreshable
-  from source.
+### The best trick was not making anything faster
 
-### Fixed
+Verifying a conversion means hashing the thing we built and hashing the thing we started
+from, then comparing. We had been doing those one after the other. They have nothing to do
+with each other, so now they run at the same time.
 
-- **`dat update` was downgrading the database.** It fetched only from redump.org, which was
-  serving a June export (3691 games) while the bundled DAT comes from redump.info (3698, and
-  current). Since the cache takes precedence over the bundle at lookup time, updating made
-  authentication *worse*. Now .info first with .org as fallback, plus a guard so neither the
-  button nor the CLI can ever move the database backwards.
-- **`.[tui]` in the binary build was a no-op** — `textual` is a hard dependency and `security`
-  is the only extra, so pip warned and carried on, and every shipped binary fell back to
-  stdlib XML for DAT parsing instead of `defusedxml`.
-- **Three version strings that disagreed** — `xverter/__init__.py` said 1.0.0 while `cli.py`
-  and `pyproject.toml` said 1.0.3. The package now holds it, `cli` imports it, and
-  `pyproject` reads it dynamically.
-- **A valid image with an unparseable executable** is now reported rather than passed over in
-  silence: it converts, and says it will not boot.
+Then the better version of the same thought: the hash of the *source* does not depend on the
+conversion at all. There is no reason to wait until the conversion finishes to start it. So
+it now runs **while the file is being converted** — by the time there is an output to check,
+the answer is already sitting there. Same for authenticating against redump, which used to be
+three seconds of dead time before any work began and now happens alongside the work.
 
-### Things that changed
+None of this made a single operation faster. It stopped the program standing around waiting
+for work that never depended on what it was waiting for. It is the biggest win in the release.
 
-- **`--no-verify` is now `--leeroy-jenkins`.** The old name read like a routine optimisation;
-  it skips *every* check, and outputs carry no guarantees. `verify --no-lookup` still exists
-  and now means what it says — skip authentication and the hashing it needs.
-- **One vocabulary throughout.** *valid* (the image's own structures cohere), *verified* (what
-  came out matches what went in), *authenticated* (it matches redump's canonical hashes).
-  These were previously blurred; the README documents the distinction.
-- **`verify` no longer contacts redump.org.** The DATs ship with the tool and `dat update`
-  refreshes them, so a local miss is the whole verdict — and it now says what that means: the
-  dump may be unknown to the community, and redump would like it.
-- **ZIP output bytes differ** (ISA-L deflate rather than zlib). Still ordinary deflate that
-  every reader handles, 0.04% larger, and about 1.6x slower to *read* — the trade that buys
-  9.7x on writing. Archives are written once and read rarely; `_ISAL_LEVEL` reverses it.
-- **7z output bytes differ** (`-mx1` rather than the engine default `-mx5`): 3.45x faster for
-  0.13% more bytes on an already-compressed payload. `_SEVENZ_LEVEL` reverses it.
-- **New dependency: `isal`** (PSF-2.0), whose wheels statically include Intel ISA-L
-  (BSD-3-Clause). Both notices travel in `xverter/data/THIRD_PARTY_NOTICES.txt`.
-- **`--version` names the interpreter** — `xverter 1.0.3 (CPython 3.14.7, free-threaded)` —
-  because which one you are on is worth knowing, and it is how the release build proves it got
-  the interpreter it asked for.
-- **On a GIL interpreter the CLI mentions the free-threaded one once per run**, to a terminal
-  only. `XVERTER_NO_HINTS=1` silences it; piped and scripted runs never see it.
+It also would have been very easy to cheat here. The obvious version — hash the source once,
+during the build, and skip the second read — is faster still and quietly worse: reading the
+source a second time is exactly what catches a bad cable or bad RAM corrupting the first read,
+which would otherwise be compressed faithfully and then certified correct. So the second read
+stayed. Only the waiting went.
 
-### Testing
+### Things that were embarrassingly slow
 
-- `xverter test --leeroy-jenkins` runs the matrix with the tool's own checks off. The matrix
-  still content-compares every edge, so breakage is still caught — it prices the checks. On
-  the Halo quartet they cost 23% (stock) and 26.5% (free-threaded) of a run.
-- The conversion matrix runs on every push against hand-written synthetic discs.
+**ZIP output took longer than anything else in the tool** — a hundred seconds for a 7.8 GB
+image, worse than CHD — because Python's zipfile deflates with zlib, single-threaded,
+painstakingly hunting for matches in game data that was compressed years ago at the factory.
+Swapping in Intel's ISA-L deflate makes it **21–28x faster for the same bytes out**. The whole
+operation, verification included, went from 1m52s to 27s.
+
+**7z was over-compressing**, spending 69 seconds at the engine's default setting to save 0.13%
+over its fastest one. On an already-compressed disc image that is a bad trade. It now takes
+21 seconds.
+
+**The ISO packer was copying bytes it did not need to touch.** Building an image is mostly
+concatenating files, and Linux has a call that tells the kernel to do that — which on a
+copy-on-write filesystem shares the data instead of duplicating it. 2 GB "copied" in 0.12
+seconds. The whole packing step dropped from 2.7s to 0.8s. We had been using the *second* best
+syscall for this, which we would have known by reading how Python's own standard library
+copies files.
+
+### Things we tried that did not work
+
+Because a release note that only lists wins is a sales pitch.
+
+Windowed decoding for CCI/CSO looked obviously right — read a block of blocks, decode them in
+a batch, parallelise it — and was slower at every size we tried, on both interpreters.
+Extraction reads scattered file extents, so a window decodes megabytes nobody asked for.
+
+Reading zips through the bundled 7-Zip engine: slower than Python. Writing them with it:
+slower still. Widening the zar compression pool: no difference at all, because compression was
+never the bottleneck there — hashing was. Multi-buffer SIMD hashing: a real technique, aimed
+at CPUs without the hardware SHA instructions that yours already has.
+
+And a genuine own goal — three test runs lost to a disk filling up, because our split writers
+emit `Name.1.cci` alongside `Name.cci` and the cleanup only ever deleted the name it was
+given.
+
+### While we were in there
+
+**xVerter was phoning home.** Three times, in fact: checking GitHub for updates on every
+launch, checking for tool updates alongside it, and asking redump.org about any image its
+local database did not recognise. None of that was asked for. Startup now makes **zero**
+network connections — we instrumented the socket layer and counted, rather than believing
+ourselves.
+
+What replaced it is two buttons on the Setup tab, each of which takes two presses: the first
+tells you what it found, the second acts on it. One updates xVerter. The other updates the
+redump database, and it exists for a specific reason — every release ships a fresh database,
+but that only helps while releases keep coming. If this project ever stops, the database stays
+refreshable from the source, and the tool keeps being useful.
+
+**And `dat update` was making things worse.** It fetched from redump.org, which had been
+serving a two-month-old export, and wrote it over the newer database that ships with xVerter —
+which takes precedence once cached. So the command whose entire job is improving
+authentication was quietly degrading it. It now prefers the current source, and refuses to
+move the database backwards under any circumstances.
+
+### `--no-verify` is now `--leeroy-jenkins`
+
+The old name sounded like a performance option. It is not one. It turns off structure
+validation, output verification and redump authentication together, and anything written under
+it carries no guarantees whatsoever. The new name is harder to type by accident and much
+harder to misread. At least you have chicken.
+
+Relatedly, xVerter now uses three words carefully and never interchangeably: **valid** means
+the image's own structures cohere, **verified** means what came out matches what went in, and
+**authenticated** means it is the genuine retail disc. Output that used to blur them no longer
+does.
+
+### The rest
+
+- A valid image whose executable will not parse now says so, and converts anyway, and warns
+  you it will not boot.
+- `verify` no longer contacts anyone. A local miss is the whole verdict, and it now tells you
+  what that verdict means: this dump may be unknown to the community, and redump would like it.
+- `xverter test --leeroy-jenkins` runs the full matrix with the tool's own checks off, so the
+  cost of paranoia is a number rather than a feeling. It is 23%.
+- The same image is never hashed twice in a row: 3 seconds cold, 0.03 warm.
+- `--version` tells you which interpreter you are on, because it matters now.
+- Three different files disagreed about what version xVerter was. They no longer do.
+
+### Under the hood, for people who care
+
+ZIP now deflates with `isal` (PSF-2.0), whose wheels include Intel's ISA-L (BSD-3-Clause);
+both licenses travel inside every binary and wheel as always. ZIP and 7z output bytes differ
+from 1.0 as a result — still ordinary archives any tool reads, marginally larger, and
+substantially faster to create. Both are one constant away from the old behaviour if you would
+rather have the bytes back.
