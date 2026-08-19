@@ -1129,11 +1129,22 @@ def cmd_convert(args):
             _gil_hint()
             print("wrote %s" % args.output)
             return 0
-        if out_kind == "god" and kind == "iso":
-            hdr = builders_mod.build_god(path, args.output,
-                                         verify=not args.no_verify,
-                                         progress=prog.cb("god-write"),
-                                         verify_progress=prog.cb("verify"))
+        if out_kind == "god" and kind in ("iso", "cci", "cso"):
+            # These sources already hold a pressed image, so the GoD gets
+            # that image and not one rebuilt out of its files. Without
+            # this, cci->god and iso->god disagreed about the same disc -
+            # each verifying happily against itself, because a GoD is
+            # checked against its own hash tree and the tree was built
+            # over whichever bytes it was handed.
+            god_src = path if kind == "iso" else _wrapper_reader(kind, path)
+            try:
+                hdr = builders_mod.build_god(god_src, args.output,
+                                             verify=not args.no_verify,
+                                             progress=prog.cb("god-write"),
+                                             verify_progress=prog.cb("verify"))
+            finally:
+                if kind != "iso":
+                    god_src.close()
             ident.report()
             _gil_hint()
             print("wrote GoD container (header: %s) (%s)"

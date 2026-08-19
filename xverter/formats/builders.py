@@ -89,12 +89,18 @@ def build_iso(gamedir, out_iso, verify=True, manifest=None,
                              % (missing, extra, diff))
 
 
-def _allocation_extent(iso_path):
+def _allocation_extent(src):
     """Last allocated byte inside the image's game partition, relative to
     the partition base: max end of every file extent and directory table.
-    This is the minimum data size a lossless GoD container must hold."""
+    This is the minimum data size a lossless GoD container must hold.
+
+    Takes a path or an already-open seekable stream, so a source that is
+    an image without being a file - a compressed container - can be
+    measured without being written out first."""
     import struct
-    with open(iso_path, "rb") as f:
+    own = isinstance(src, (str, bytes, os.PathLike))
+    f = open(src, "rb") if own else src
+    try:
         base = xdvdfs_mod.find_base(f)
         f.seek(base + 32 * xdvdfs_mod.SECTOR + len(xdvdfs_mod.MAGIC))
         root_sector, root_size = struct.unpack("<II", f.read(8))
@@ -109,6 +115,9 @@ def _allocation_extent(iso_path):
                     stack.append((start, sz))
                 else:
                     extent = max(extent, start * xdvdfs_mod.SECTOR + sz)
+    finally:
+        if own:
+            f.close()
     return extent
 
 
@@ -116,7 +125,7 @@ def build_god(iso_path, out_dir, verify=True, progress=None,
               verify_progress=None):
     """Convert an ISO into a GoD container tree with xverter's native
     writer (formats/god.py build); returns the path of the created GoD
-    header file.
+    header file. Takes a path or a seekable stream over an image.
 
     Trimming writes only up to the source's true allocation extent -
     volume descriptor, every directory table, every file - computed by

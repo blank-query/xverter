@@ -193,6 +193,50 @@ def check_partition(edge, got_path, src_path):
     return ok
 
 
+def check_god_data(edge, header, src_path):
+    """A GoD built from an image must hold that image's own bytes.
+
+    The container is trimmed to its allocation extent, so the claim
+    checked here is that its data region is a *prefix* of the source's
+    game partition, not the whole of it. That is still enough to tell a
+    passthrough from a rebuild, which is exactly the distinction a
+    content check cannot make: a GoD is verified against its own hash
+    tree, and that tree is built over whichever bytes the writer was
+    handed, so a container full of rebuilt data verifies perfectly and
+    is still not the disc."""
+    from .formats import god as _god
+    t0 = time.monotonic()
+    # The GoD writer starts at the game partition as xdvdfs finds it,
+    # which is not the offset the CCI writer uses: that one deliberately
+    # skips only the OG-Xbox video region and takes everything else
+    # whole. Two different questions, two different answers, and using
+    # the wrong one here reports a false failure on XGD2 and XGD3.
+    with open(src_path, "rb") as f:
+        off = xdvdfs_mod.find_base(f)
+    ok = True
+    detail = ""
+    at = 0
+    with _god.GodStream(header) as g, open(src_path, "rb") as f:
+        f.seek(off)
+        while True:
+            x = g.read(1 << 22)
+            if not x:
+                break
+            y = f.read(len(x))
+            if x != y:
+                ok = False
+                detail = " (first difference near byte %d of %d)" % (at, g.size)
+                break
+            at += len(x)
+    dt = time.monotonic() - t0
+    RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
+                    "seconds": round(dt, 1), "partition_offset": off,
+                    "bytes": at})
+    print("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt), flush=True)
+    return ok
+
+
 def _first_line(argv):
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=10)
@@ -473,6 +517,7 @@ def main(argv=None):
     # iso -> god -> dir
     run("iso->god", ["convert", d("a.iso"), "-o", d("a.god")])
     hdr = god_header_in(d("a.god"))
+    check_god_data("  bytes(iso-god)", hdr, d("a.iso"))
     run("god->dir", ["convert", hdr, "-o", d("from_god") + "/"])
     check_dir("  content(god)", d("from_god"), baseline)
 
@@ -515,6 +560,9 @@ def main(argv=None):
         run("iso(src)->cso", ["convert", src, "-o", d("s.cso")])
         run("cso(src)->iso", ["convert", d("s.cso"), "-o", d("back_cso.iso")])
         check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
+        run("cci(src)->god", ["convert", d("s.cci"), "-o", d("s.god")])
+        check_god_data("  bytes(cci-god)", god_header_in(d("s.god")), src)
+        shutil.rmtree(d("s.god"), ignore_errors=True)
         for spent in ("s.cci", "s.cso"):
             try:
                 os.unlink(d(spent))
