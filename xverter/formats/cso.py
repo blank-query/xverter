@@ -280,17 +280,13 @@ class CsoReader:
         return block
 
 
-def xbox_image_offset(stream):
-    """Byte offset of the game partition inside stream: 0x18300000 for a
-    full OG-Xbox redump image, else 0 (content-agnostic pass-through)."""
-    pos = stream.tell()
-    try:
-        stream.seek(REDUMP_VD_OFFSET)
-        if stream.read(len(XDVDFS_MAGIC)) == XDVDFS_MAGIC:
-            return REDUMP_IMAGE_OFFSET
-        return 0
-    finally:
-        stream.seek(pos)
+# One definition, shared with the CCI writer. It used to be copied into
+# both, which is how the two came to disagree: a fix to one silently
+# left the other answering the old way, and the round-trip check caught
+# it only because the writers were then compressing different ranges of
+# the same disc. Where the game partition starts is one question and
+# deserves one answer.
+from .cci import xbox_image_offset       # noqa: E402,F401
 
 
 class _PartWriter:

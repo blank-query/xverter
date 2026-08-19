@@ -262,16 +262,33 @@ class CciReader:
 
 
 def xbox_image_offset(stream):
-    """Byte offset of the game partition inside stream: 0x18300000 for a
-    full OG-Xbox redump image, else 0 (bare partition / anything else -
-    the writers are content-agnostic and compress whatever they're
-    given)."""
+    """Byte offset of the game partition inside stream, or 0 if there is
+    no recognisable one.
+
+    CCI and CSO are **optimized** containers: they hold the game
+    partition and drop what comes before it. They were designed for
+    original-Xbox discs and only ever checked for that generation's
+    partition base, which left xverter - which does write them for
+    XGD2 and XGD3, an extension no reference tool offers - keeping the
+    whole image on those discs and the partition alone on OG Xbox. The
+    same format, archival on two disc generations and optimized on the
+    third.
+
+    It now finds the partition the same way every other reader in
+    xverter does, so the answer is the game partition on all three. A
+    stream with no XDVDFS anywhere still returns 0: the block writers
+    are content-agnostic and will compress whatever they are handed.
+
+    Note this changes XGD2/XGD3 output, and cannot change XGD1 output,
+    which is the generation the reference tools actually produce - so
+    the byte-identity those writers were held to is untouched."""
+    from .xdvdfs import find_base, XdvdfsError
     pos = stream.tell()
     try:
-        stream.seek(REDUMP_VD_OFFSET)
-        if stream.read(len(XDVDFS_MAGIC)) == XDVDFS_MAGIC:
-            return REDUMP_IMAGE_OFFSET
-        return 0
+        try:
+            return find_base(stream)
+        except XdvdfsError:
+            return 0
     finally:
         stream.seek(pos)
 
