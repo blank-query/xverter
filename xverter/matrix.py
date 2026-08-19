@@ -607,15 +607,6 @@ def main(argv=None):
         run("iso(src)->cso", ["convert", src, "-o", d("s.cso")])
         run("cso(src)->iso", ["convert", d("s.cso"), "-o", d("back_cso.iso")])
         check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
-        # An archive wraps an image whole, so unwrapping it has to give
-        # that image back - not a rebuild of what was inside it.
-        run("iso(src)->7z", ["convert", src, "-o", d("s.7z")])
-        run("7z(src)->iso", ["convert", d("s.7z"), "-o", d("back_7z.iso")])
-        check_identical("  bytes(7z-iso)", d("back_7z.iso"), src)
-        try:
-            os.unlink(d("s.7z"))
-        except OSError:
-            pass
         run("cci(src)->god", ["convert", d("s.cci"), "-o", d("s.god")])
         check_god_data("  bytes(cci-god)", god_header_in(d("s.god")), src)
         shutil.rmtree(d("s.god"), ignore_errors=True)

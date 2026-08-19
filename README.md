@@ -70,13 +70,13 @@ xVerter detects formats by magic bytes (never extensions), its wrappers are cont
 - **Xbox 360 game inside a CCI or CSO** — compressed wrappers that only modded *original* Xbox hardware (Cerbios, Project Stellar) will ever open, wrapped around a console generation that hardware cannot run. Round-trips bit-perfect.
 - **XBLA title → CHD** — a format no Xbox emulator reads yet, wrapping a container that never saw a disc. xVerter builds it happily, verifies it, and nothing on Earth boots it.
 
-Every cursed edge passes through the same verification as the sane ones — several of them run in the 63-edge matrix on every `xverter test`. Cursed, but checked.
+Every cursed edge passes through the same verification as the sane ones — several of them run in the 60-edge matrix on every `xverter test`. Cursed, but checked.
 
 And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA → `.zar`** reads like it belongs on the list above, but it's the cleanest way to run arcade titles in Xenia — the emulator reads the zar directly, one flat file per game instead of STFS's nested `Content/.../` tree or a GoD container's hash-named directories. ZAR is also routinely the smallest thing in the matrix: it archives the game's *files* rather than the disc image (redump padding never gets stored at all) and compresses with zstd — measured on the Halo CE redump, the zar is **46% of the source ISO** while CCI, CSO, and CHD all land near 88%. On games whose assets ship pre-compressed the formats converge; where there's slack, zar takes it. Tested on real hardware-dumped games, played in Xenia. Yesterday's cursed conversion is tomorrow's workflow — which is exactly why the tool converts and you decide.
 
 ## The test record — three generations of Halo, one hash each
 
-The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 63-edge matrix (49 for STFS, which has no pressed disc to byte-compare against), every edge content- or byte-checked. Three numbers per game tell the whole story:
+The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 60-edge matrix (49 for STFS, which has no pressed disc to byte-compare against), every edge content- or byte-checked. Three numbers per game tell the whole story:
 
 - **Source SHA-1** — the whole input file; matches Redump's canonical dump.
 - **Content digest** — a canonical SHA-1 over every file's path + hash inside the game. This is the *format-invariant* fingerprint: identical across all seven formats, immune to compressor versions and container layout. It even survived xVerter's own writers being replaced wholesale — the digest below for Anniversary is byte-for-byte the one measured back when output ran through delegated third-party tools.
@@ -105,7 +105,7 @@ Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, Cach
 | iso → chd               | 25.8 (56.1)             | 18.1 (48.0)     | 42.2 (84.0)    | 53.1 (123.9)        |
 | **full matrix**         | **3m00s** (5m49s, 48 edges) | **5m45s** (5m55s, 48 edges) | **9m05s** (10m47s, 48 edges) | **11m01s** (14m48s, 48 edges) |
 
-The current column runs **63 edges (49 for Spartan)** — a third more coverage than the launch
+The current column runs **60 edges (49 for Spartan)** — a third more coverage than the launch
 column — and still comes in faster on every game: the launch quartet took 37m07s, the current
 one 28m51s. CHD went native in 1.2.0 (previously delegated to chdman), which is where its
 column's halving comes from.
@@ -265,7 +265,7 @@ xverter test "Some Game.zar"
 (Or select a game in the TUI and click **Test** — the edges stream into the log under the dual progress bars.) Every container round-trips through extraction with hashes diffed against the baseline, every artifact kind gets a `verify` pass, and the run ends by writing a single self-contained `<game>_matrix_report.html` next to your game: verdict, per-edge timings, artifact sizes and compression ratios, decoded-stream SHA-1s, tool versions — with the complete machine-readable JSON embedded inside the page. Expected final lines:
 
 ```
-63 edges, 0 failed
+60 edges, 0 failed
 MATRIX: ALL PASS
 ```
 
