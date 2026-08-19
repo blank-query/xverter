@@ -1152,6 +1152,26 @@ def cmd_convert(args):
                          else "verified against chd internal sha1"))
                 return 0
             kind, path = "iso", chd_iso
+        if out_kind == "iso" and kind == "iso":
+            # Only reachable through the archive layer above - a plain
+            # iso -> iso is refused before this point. The archive held
+            # an image, so the image is what comes out, not something
+            # rebuilt from the files inside it. A zip or 7z wrapping a
+            # full redump is an archival container; handing back a
+            # rebuild would quietly turn it into an optimized one and
+            # end its redump match forever.
+            #
+            # Every member was CRC-checked coming out of the archive,
+            # which is the integrity claim on offer here, and the image
+            # was validated above like any other ISO source.
+            shutil.move(path, args.output)
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output,
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
+                     else "unpacked from the archive, member CRC verified"))
+            return 0
         if out_kind == "iso" and kind == "god":
             # direct verified path, no pivot needed
             god_mod.convert(path, args.output, progress=prog.cb("god-read"))

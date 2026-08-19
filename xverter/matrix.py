@@ -193,6 +193,43 @@ def check_partition(edge, got_path, src_path):
     return ok
 
 
+def check_identical(edge, got_path, want_path):
+    """Two files must be the same file.
+
+    For a container that wraps an image whole - a zip, a 7z - the only
+    correct output is the input, so this asks for exactly that rather
+    than for a partition slice or a set of matching files."""
+    t0 = time.monotonic()
+    ok = os.path.getsize(got_path) == os.path.getsize(want_path)
+    detail = ""
+    if not ok:
+        detail = " (%d bytes, expected %d)" % (os.path.getsize(got_path),
+                                               os.path.getsize(want_path))
+    else:
+        at = 0
+        with open(got_path, "rb") as a, open(want_path, "rb") as b:
+            while True:
+                x = a.read(1 << 22)
+                y = b.read(1 << 22)
+                if x != y:
+                    ok = False
+                    detail = " (first difference near byte %d)" % at
+                    break
+                if not x:
+                    break
+                at += len(x)
+    dt = time.monotonic() - t0
+    RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
+                    "seconds": round(dt, 1)})
+    print("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt), flush=True)
+    try:
+        os.unlink(got_path)
+    except OSError:
+        pass
+    return ok
+
+
 def check_god_data(edge, header, src_path):
     """A GoD built from an image must hold that image's own bytes.
 
@@ -560,6 +597,15 @@ def main(argv=None):
         run("iso(src)->cso", ["convert", src, "-o", d("s.cso")])
         run("cso(src)->iso", ["convert", d("s.cso"), "-o", d("back_cso.iso")])
         check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
+        # An archive wraps an image whole, so unwrapping it has to give
+        # that image back - not a rebuild of what was inside it.
+        run("iso(src)->7z", ["convert", src, "-o", d("s.7z")])
+        run("7z(src)->iso", ["convert", d("s.7z"), "-o", d("back_7z.iso")])
+        check_identical("  bytes(7z-iso)", d("back_7z.iso"), src)
+        try:
+            os.unlink(d("s.7z"))
+        except OSError:
+            pass
         run("cci(src)->god", ["convert", d("s.cci"), "-o", d("s.god")])
         check_god_data("  bytes(cci-god)", god_header_in(d("s.god")), src)
         shutil.rmtree(d("s.god"), ignore_errors=True)
