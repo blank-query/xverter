@@ -1,5 +1,75 @@
 # Changelog
 
+## 1.1.1 — the same bug, three more times
+
+1.1.0 fixed a conversion that rebuilt an image instead of returning it. This release is what
+happened when we went looking for the rest of that bug, and then went looking for the kind of
+bug that hides from tests entirely.
+
+### Two words worth having
+
+A container is now described as one of two things, and the distinction runs through everything
+below:
+
+- **Archival** — holds the entire authenticated disc image, video partition and all. It can
+  still match its redump entry.
+- **Optimized** — strips the unnecessary. It cannot match redump, by design and forever.
+
+An ISO or a CHD of a full dump is archival. GoD, ZAR and STFS are optimized. Once you convert
+to an optimized container the redump match is gone and no later conversion brings it back, so
+it is worth knowing which one you are holding.
+
+### The same bug, three more times
+
+`cci → god` fed the GoD writer a rebuilt image, so `iso → god` and `cci → god` produced
+different containers from the same disc — both reporting success, because a GoD is verified
+against its own hash tree and that tree is computed over whatever bytes the writer was handed.
+
+`zip → iso` and `7z → iso` threw away the image they had just unwrapped and rebuilt it from
+its own files. A zip of a full redump is an archival container; handing back a rebuild
+silently converts it to an optimized one and ends its redump match. On one profile that was
+405,972,992 bytes in and 174,080 bytes out.
+
+**CCI and CSO were archival on two disc generations and optimized on the third.** They hold the
+game partition and drop what comes before it — but only ever looked for the original-Xbox
+partition base, so on XGD2 and XGD3 they found nothing and kept the whole image. They now find
+the partition the way every other reader here does. This is safe because CCI and CSO are XGD1
+formats: the reference implementations never wrote them for XGD2 or XGD3, so there was nothing
+upstream those outputs could have been identical to, and the XGD1 path is untouched. Older
+containers still read correctly.
+
+That one took two attempts, for a reason worth admitting: the partition offset was defined
+twice, once in each writer. Fixing one left the other answering the old way, and the two then
+compressed different ranges of the same disc. There is one definition now.
+
+### How they were found, since it was not by reading the code
+
+Build every intermediate from one original image, then reach each target format from every
+source that can reach it, and require the results to agree. Each of these conversions verified
+perfectly against itself; every one of them is obvious the moment two routes to the same place
+are put side by side. Where routes legitimately disagree the class boundary says so — an
+archive returns the whole disc and a CCI returns the game partition, because that is what each
+one holds.
+
+The test suite now asks for bytes rather than files on those edges, and — the part that
+mattered — starts from the original disc rather than from an image xVerter packed itself.
+Rebuilding our own image reproduces our own image, so from that starting point a rebuild and a
+passthrough are indistinguishable. Aimed at the wrong starting point the new checks pass on
+the broken code and prove nothing.
+
+### A truncated dump could launder itself
+
+The structure check that exists to catch a short image ran only on raw ISOs. CCI and CSO carry
+no integrity of their own, so a container built from a truncated dump decodes perfectly,
+round-trips perfectly, and came out stamped "round-trip verified" while missing game data.
+
+Every source that is an image is now checked before anything is written. GoD, ZAR and STFS do
+carry their own integrity, but a hash tree proves the storage is intact, not that the image
+inside it coheres — a container built faithfully from a truncated dump passes its own checks.
+
+Also: a failed conversion no longer leaves a partial file sitting there wearing the output's
+name, and a damaged wrapper reports an error instead of a stack trace.
+
 ## 1.1.0 — stop waiting
 
 **The full Halo test suite went from 23m48s to 15m08s. That is 36% faster, with every single
@@ -190,9 +260,11 @@ move the database backwards under any circumstances.
 
 ### `--no-verify` is now `--leeroy-jenkins`
 
-The old name sounded like a performance option. It is not one. It turns off structure
-validation, output verification and redump authentication together, and anything written under
-it carries no guarantees whatsoever. The new name is harder to type by accident and much
+The old name sounded like a performance option. It is not one. It turns off output
+verification and redump authentication, and anything written under it carries no guarantees
+whatsoever. It does *not* turn off the source structure check — that runs always, because
+converting from an image already known to be broken is not a speed trade, it is just a
+broken output made faster. The new name is harder to type by accident and much
 harder to misread. At least you have chicken.
 
 Relatedly, xVerter now uses three words carefully and never interchangeably: **valid** means
