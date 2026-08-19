@@ -444,6 +444,8 @@ def _dat_lookup(dat_path, size, crc, sha1):
 
 
 def _wrapper_reader(kind, path):
+    if kind == "iso":
+        return open(path, "rb")
     return (cci_mod.CciReader if kind == "cci" else cso_mod.CsoReader)(path)
 
 
@@ -621,6 +623,11 @@ def _verify_wrapper(out_kind, out_path, in_kind, in_path, w,
         h = hashlib.sha1()
         f.seek(0)
         size = getattr(f, "size", None)
+        if size is None:
+            try:
+                size = os.fstat(f.fileno()).st_size
+            except (AttributeError, OSError, ValueError):
+                size = None
         done = 0
         while True:
             b = f.read(1 << 22)
@@ -1210,6 +1217,44 @@ def cmd_convert(args):
             _gil_hint()
             print("wrote %s (%s)"
                   % (", ".join(written),
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
+                     else "round-trip verified"))
+            return 0
+        if out_kind == "iso" and kind in ("cci", "cso"):
+            # A CCI/CSO is a losslessly compressed image, not a bag of
+            # files: turning one back into an ISO means decompressing
+            # it, not building a new image out of its contents. The
+            # route this replaces did the latter - it extracted the
+            # files and packed a fresh image, discarding the padding and
+            # the pressed layout, so the ISO that came out was a
+            # different image from the one that went in and no longer
+            # matched the dump it was made from.
+            #
+            # What comes out is exactly what the container holds. For a
+            # source compressed from a bare game partition that is the
+            # original file, byte for byte; for one compressed from a
+            # full redump image it is the game partition, because the
+            # video partition was never in the container to begin with.
+            with _wrapper_reader(kind, path) as r, \
+                    open(args.output, "wb") as o:
+                total = getattr(r, "size", 0)
+                cb = prog.cb("decompress")
+                done = 0
+                while True:
+                    chunk = r.read(1 << 22)
+                    if not chunk:
+                        break
+                    o.write(chunk)
+                    done += len(chunk)
+                    if cb and total:
+                        cb(done, total)
+            if not args.no_verify:
+                _verify_wrapper("iso", args.output, kind, path, w,
+                                progress=prog.cb("verify"))
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
             return 0
