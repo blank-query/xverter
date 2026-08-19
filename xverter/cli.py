@@ -431,6 +431,54 @@ def _verify_chd_output(chd_path, src_iso, progress=None):
                        % (got, want, "" if pad_ok else ", nonzero padding"))
 
 
+class _IdentityAhead:
+    """The redump identity check, started early and reported late.
+
+    Authenticating a source hashes the whole image - three seconds on a
+    7.8 GB redump - and the answer gates nothing: it is printed, and a
+    source that is not a known dump converts exactly the same way. So it
+    runs alongside the conversion instead of in front of it, and the
+    verdict is printed when the conversion reaches its result.
+
+    Nothing is skipped or weakened; the same bytes are hashed and the
+    same verdict is printed. It stops being three seconds of dead time
+    before any work starts."""
+
+    def __init__(self, path, enabled, progress=None):
+        self._box = []
+        self._t = None
+        self._done = False
+        if not enabled:
+            return
+        self._t = threading.Thread(target=self._run, args=(path, progress),
+                                   daemon=True)
+        self._t.start()
+
+    def _run(self, path, progress):
+        try:
+            self._box.append(_redump_check(path, progress=progress))
+        except BaseException as exc:                  # noqa: BLE001
+            self._box.append(("error", str(exc)))
+
+    def report(self):
+        """Print the verdict. Safe to call more than once."""
+        if self._t is None or self._done:
+            return
+        self._done = True
+        self._t.join()
+        if not self._box:
+            return
+        status, detail = self._box[0]
+        if status == "match":
+            print("source : authenticated - redump: %s" % detail)
+        elif status == "altered":
+            print("source : NOT authenticated - %s" % detail)
+        elif status == "error":
+            print("source : authentication check failed - %s" % detail)
+        else:
+            print("source : not authenticated - %s" % detail)
+
+
 class _SourceHashAhead:
     """The source half of round-trip verification, started early.
 
@@ -936,6 +984,10 @@ def cmd_convert(args):
             kind, path = detect_mod.detect(payload)
             print("archive payload: %s (%s)"
                   % (os.path.basename(path.rstrip(os.sep)), kind))
+        # Only ISO sources get authenticated, but every path reports,
+        # so start from a disabled one rather than a name that exists on
+        # some branches and not others.
+        ident = _IdentityAhead(path, False)
         if kind == "iso":
             # Validate before writing anything. A raw image carries no
             # internal checksum, and the block wrappers are content-
@@ -958,22 +1010,19 @@ def cmd_convert(args):
                           "unparseable (%s)\n"
                           "         this image will not boot - converting "
                           "it anyway, as asked" % exe)
-                # Authentication is free unless the size is a canonical
-                # redump size, so trimmed images cost nothing.
-                status, detail = _redump_check(
-                    path, progress=prog.cb("identify"))
-                if status == "match":
-                    print("source : authenticated - redump: %s" % detail)
-                elif status == "altered":
-                    print("source : NOT authenticated - %s" % detail)
-                else:
-                    print("source : not authenticated - %s" % detail)
+            # Authentication is free unless the size is a canonical
+            # redump size, so trimmed images cost nothing. It gates
+            # nothing either, so it runs while the conversion does and
+            # reports when the conversion has something to say.
+            ident = _IdentityAhead(path, not args.no_verify,
+                                   progress=prog.cb("identify"))
         if out_kind in ("zip", "7z"):
             # Boring on purpose: the archive wraps the input as-is.
             build = (archives_mod.build_zip if out_kind == "zip"
                      else archives_mod.build_7z)
             build(path, args.output, verify=not args.no_verify,
                   progress=prog.cb(out_kind + "-write"))
+            ident.report()
             print("wrote %s (%s)"
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -995,6 +1044,7 @@ def cmd_convert(args):
                     raise CliError("chd extraction sha1 %s != header raw "
                                    "sha1 %s" % (got, want))
             if out_kind == "iso":
+                ident.report()
                 print("wrote %s (%s)"
                       % (args.output,
                          "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1004,6 +1054,7 @@ def cmd_convert(args):
         if out_kind == "iso" and kind == "god":
             # direct verified path, no pivot needed
             god_mod.convert(path, args.output, progress=prog.cb("god-read"))
+            ident.report()
             print("wrote %s" % args.output)
             return 0
         if out_kind == "god" and kind == "iso":
@@ -1011,6 +1062,7 @@ def cmd_convert(args):
                                          verify=not args.no_verify,
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
+            ident.report()
             print("wrote GoD container (header: %s) (%s)"
                   % (hdr, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash tree verified"))
@@ -1044,6 +1096,7 @@ def cmd_convert(args):
             if not args.no_verify:
                 _verify_chd_output(args.output, src_iso,
                                    progress=prog.cb("verify"))
+            ident.report()
             print("wrote %s (%s)"
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1086,6 +1139,7 @@ def cmd_convert(args):
                 _verify_wrapper(out_kind, written[0], kind, path, w,
                                 progress=prog.cb("verify"),
                                 source_sha1=ahead.result() if ahead else None)
+            ident.report()
             print("wrote %s (%s)"
                   % (", ".join(written),
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1101,6 +1155,7 @@ def cmd_convert(args):
                                    manifest=manifest,
                                    progress=prog.cb("iso-write"),
                                    verify_progress=prog.cb("verify"))
+            ident.report()
             print("wrote %s (manifest %s)"
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1115,6 +1170,7 @@ def cmd_convert(args):
                                          verify=not args.no_verify,
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
+            ident.report()
             print("wrote GoD container (header: %s) (%s)"
                   % (hdr, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash tree verified"))
@@ -1127,6 +1183,7 @@ def cmd_convert(args):
             # A folder is not a container: there is no output-side
             # structure to re-read, so the only claim on offer is that
             # every file was hashed on the way out of the source.
+            ident.report()
             print("wrote %s/ (%s)"
                   % (args.output.rstrip("/"),
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1137,6 +1194,7 @@ def cmd_convert(args):
                          roundtrip_verify=not args.no_verify,
                          manifest=manifest, progress=prog.cb("zar-write"),
                          verify_progress=prog.cb("verify"))
+            ident.report()
             print("wrote %s (%s)"
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
