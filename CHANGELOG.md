@@ -39,6 +39,12 @@ million times, and hashes the stream as it decodes, so the answer to "did that e
 correctly" is free by the time the file exists; chdman's extract answers no integrity question
 at all.
 
+zstd was auditioned for the writer's codec list and declined on measurement: once triage
+stops compressing the incompressible, zstd's famous speed has nothing left to accelerate —
+6% on create, nothing on extract, slightly larger files, and a compatibility cost (zstd CHDs
+need a recent reader) that this format's whole future-proofing purpose argues against. The
+codec is implemented in both directions; the default audition just doesn't use it.
+
 A wrong first draft of the writer took 439 seconds and held most of the image in memory; what
 shipped streams everything, holds a rolling window, and got its speed from the same lessons
 the rest of this project keeps re-learning — batch small units, never compress the
