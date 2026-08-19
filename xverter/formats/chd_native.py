@@ -268,6 +268,17 @@ def read_header(fh):
     hunkbytes, unitbytes = struct.unpack(">II", raw[56:64])
     if hunkbytes == 0 or unitbytes == 0:
         raise ChdNativeError("header declares a zero hunk or unit size")
+    # MAME documents 512k as the hunk-size maximum (chd.h). Anything
+    # larger is not a CHD any tool wrote - it is a header crafted to
+    # make readers allocate absurd decode buffers. Same for a hunk
+    # size that its own units do not divide.
+    if hunkbytes > 512 * 1024:
+        raise ChdNativeError("header claims %d-byte hunks; the format's "
+                             "maximum is 512K - the file is damaged"
+                             % hunkbytes)
+    if hunkbytes % unitbytes:
+        raise ChdNativeError("hunk size %d is not a multiple of unit "
+                             "size %d" % (hunkbytes, unitbytes))
     return {
         "version": version,
         "compressors": [_tag(c) for c in compressors],
@@ -299,6 +310,8 @@ def read_map(fh, header):
     if mapoffset == 0:
         raise ChdNativeError("file has no map: it was never finished")
 
+    fh.seek(0, 2)
+    filesize = fh.tell()
     fh.seek(mapoffset)
     head = fh.read(16)
     if len(head) < 16:
@@ -307,6 +320,18 @@ def read_map(fh, header):
     firstoffs = int.from_bytes(head[4:10], "big")
     mapcrc = struct.unpack(">H", head[10:12])[0]
     lengthbits, selfbits, parentbits = head[12], head[13], head[14]
+    if mapoffset + 16 + mapbytes > filesize:
+        raise ChdNativeError("map runs past the end of the file")
+    # Refuse to size anything from the header's claims alone. Every
+    # hunk costs bits in the compressed map - even the most degenerate
+    # run-length stream encodes under ~730 hunks per map byte - so a
+    # logical size the map could not possibly describe is a crafted
+    # header, and it is caught here for the price of a division,
+    # before the claim is allowed to size an allocation.
+    if hunkcount > max(1, mapbytes) * 1024:
+        raise ChdNativeError(
+            "header claims %d hunks but the map is only %d bytes - "
+            "the file is damaged" % (hunkcount, mapbytes))
 
     compressed = fh.read(mapbytes)
     if len(compressed) < mapbytes:
@@ -1132,7 +1157,15 @@ def read_metadata(fh, header):
     """The metadata chain as [(tag, flags, payload)], in file order."""
     found = []
     offset = header["metaoffset"]
+    seen = set()
     while offset:
+        # A next-pointer that revisits an offset would walk forever;
+        # cap the count too, since a chain of millions of entries is
+        # not metadata, it is a loop with extra steps.
+        if offset in seen or len(found) >= 65536:
+            raise ChdNativeError("metadata chain loops - the file is "
+                                 "damaged")
+        seen.add(offset)
         fh.seek(offset)
         raw = fh.read(16)
         if len(raw) < 16:

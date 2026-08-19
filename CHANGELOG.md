@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.2.1 — hammered
+
+1.2.0 got fuzzed, bombed, and lied to from every direction we could think of. Most attacks
+bounced. Three didn't, and they're fixed.
+
+**A bit-rotted ZAR converted "successfully" into corrupted output.** The format carries
+exactly one piece of integrity data — a whole-file SHA-256 in the footer — and no conversion
+ever checked it: the manifest each conversion verified against was computed from the corrupted
+bytes themselves. Self-consistency, mistaken for integrity, again. Every zar-consuming path
+now checks the footer hash on a thread while the real work runs, and a damaged archive refuses
+to convert. Found by flipping bits: before the fix most flips sailed through; after it,
+20 of 20 refuse. (Bit-flipped CHDs and GoDs were already refused — 100 of 100 — because those
+formats check themselves and our readers enforce it. CCI and CSO contain no checksums *at
+all*, so silent rot there is a format property no reader can fix; the README now says so, and
+recommends self-testifying formats for archival storage.)
+
+**A crafted CHD header could freeze the machine.** `logicalbytes` is attacker-controlled and
+was allowed to size allocations before anything validated it — a claimed exabyte allocated
+terabytes of map. Headers are now held to the format's own physics before any claim sizes
+anything: hunks cost map bytes, hunk size is capped at MAME's documented 512K, the map must
+fit inside the file, and a metadata chain that loops is named for what it is. Five crafted
+attacks, five refusals, under a 2 GB memory ceiling.
+
+**Environment errors printed stack traces.** A read-only output directory — or a full disk —
+now gets the one-line error it deserves.
+
+Also verified while hammering, because a clean sweep should say what it swept: every writer is
+byte-deterministic across runs (all eight formats, run twice, identical digests); the FLAC
+decoder survives 4,000 garbage inputs without a hang or an unexpected exception; the FLAC
+encoder round-trips 300 varied PCM hunks exactly; the CHD map codec round-trips 300 random
+maps exactly; unicode paths, symlinks, relative paths, empty files and pre-existing outputs
+all behave; and a wheel built fresh installs clean and converts on the first try.
+
 ## 1.2.0 — the last binary
 
 xVerter no longer needs chdman. CHD — the one format that was delegated to an external tool —

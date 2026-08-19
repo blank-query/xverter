@@ -1711,6 +1711,13 @@ def main(argv=None):
             lz4compat_mod.Lz4Error, lz4compat_mod.Lz4Missing) as e:
         print("ERROR: %s" % e, file=sys.stderr)
         return 1
+    except OSError as e:
+        # The environment said no - permissions, a missing directory, a
+        # full disk. The user can fix all of these and none of them are
+        # our bug, so they get a sentence, not a stack trace. (Failed
+        # outputs were already cleaned up on the way here.)
+        print("ERROR: %s" % e, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

@@ -170,6 +170,8 @@ A file can be valid and not authenticated (a trimmed rip is a perfectly well-for
 | STFS | the full internal hash chain — every allocated block against its table, tables against parents, up to the descriptor's root |
 | CCI / CSO | every block decoded, whole stream SHA-1 reported |
 | CHD | native: full decompression against both of the header's internal SHA-1s |
+
+A related honesty note on **bit rot**: whether a format can *detect its own decay years later* is a property of the format, not of xVerter. GoD (SHA-1 hash tree), ZAR (whole-file SHA-256 — checked on every read, so a rotted archive refuses to convert rather than quietly producing garbage), STFS (hash chain), CHD (per-hunk CRC + SHA-1s), ZIP/7z (CRCs) all can. **CCI and CSO contain no checksums at all** — a flipped bit in a stored sector is invisible to any reader on Earth, by the format's design. xVerter verifies them exhaustively at creation; for long-term archival storage, prefer a format that can testify to its own integrity.
 | ZIP / 7z | archive integrity, then the game found inside is verified by its own rules |
 
 **Redump authentication** (ISOs) is fully offline out of the box: the tool ships with redump's Xbox **and** Xbox 360 DATs bundled (refreshed weekly by CI from redump's official export — bundling is [explicitly permitted by redump's admin](http://forum.redump.org/topic/18562/redistributing-dat-files/)); `verify` matches computed CRC-32/SHA-1 against them locally. The verdicts mean what they say:

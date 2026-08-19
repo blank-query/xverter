@@ -58,7 +58,48 @@ def is_zar(path):
 UNPACK_WORKERS = 2
 
 
-def iso_tree(zar_path, manifest=None):
+class _IntegrityAhead:
+    """The archive's own whole-file SHA-256, checked on a thread while
+    the archive is being consumed.
+
+    A zar carries exactly one piece of integrity data - the footer's
+    SHA-256 over the entire file - and until this existed no conversion
+    ever looked at it: a bit-rotted archive converted "successfully"
+    into corrupted output, because the manifest it was verified against
+    was computed from the corrupted bytes themselves. Found by flipping
+    bits, kept out by this. The check is an independent second read on
+    its own reader, overlapped with the real work; check() joins and
+    raises, and every zar-consuming path calls it before claiming
+    success."""
+
+    def __init__(self, zar_path):
+        import threading
+        self._path = zar_path
+        self._ok = []
+        self._err = []
+        self._t = threading.Thread(target=self._run, daemon=True)
+        self._t.start()
+
+    def _run(self):
+        try:
+            with zar_native.ZarReader(self._path) as zr:
+                self._ok.append(zr.verify_integrity())
+        except BaseException as exc:                  # noqa: BLE001
+            self._err.append(exc)
+
+    def check(self):
+        self._t.join()
+        if self._err:
+            raise ZarError("integrity check of %s failed to run: %s"
+                           % (self._path, self._err[0]))
+        if not self._ok or not self._ok[0]:
+            raise ZarError(
+                "%s FAILS its own integrity hash - the archive is "
+                "damaged and its contents cannot be trusted"
+                % self._path)
+
+
+def iso_tree(zar_path, manifest=None, integrity=True):
     """(tree, closer) for packing this zar straight into an ISO.
 
     Files are read out of the archive on demand instead of being
@@ -77,8 +118,17 @@ def iso_tree(zar_path, manifest=None):
         return go
 
     entries = [(rel, size, _opener(rel)) for rel, size in zr.files()]
+    guard = _IntegrityAhead(zar_path) if integrity and _NATIVE else None
+
+    def closer():
+        try:
+            zr.close()
+        finally:
+            if guard is not None:
+                guard.check()
+
     from . import xdvdfs as _xd
-    return _xd.tree_from_entries(entries, where=zar_path), zr.close
+    return _xd.tree_from_entries(entries, where=zar_path), closer
 
 
 class _HashingStream:
@@ -119,9 +169,15 @@ class _HashingStream:
         self.close()
 
 
-def unpack(zar_path, out_dir, manifest=None, progress=None):
+def unpack(zar_path, out_dir, manifest=None, progress=None,
+           integrity=True):
     """Extract a zar. Uses the native reader when zstd support is present
-    (allowing inline manifest capture); falls back to the reference binary."""
+    (allowing inline manifest capture); falls back to the reference binary.
+
+    integrity=True (the default) checks the archive's own whole-file
+    SHA-256 on a thread while extracting, and fails the extraction on a
+    mismatch - see _IntegrityAhead for the bit-rot story."""
+    guard = _IntegrityAhead(zar_path) if integrity and _NATIVE else None
     if _NATIVE:
         try:
             with zar_native.ZarReader(zar_path) as zr:
@@ -185,6 +241,8 @@ def unpack(zar_path, out_dir, manifest=None, progress=None):
                         manifest[rel] = digest
             if not any(os.scandir(out_dir)):
                 raise ZarError("zar contained no files")
+            if guard is not None:
+                guard.check()
             return
         except zar_native.ZarNativeError as e:
             raise ZarError("native zar read failed: %s" % e)
