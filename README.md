@@ -328,13 +328,7 @@ python3.14t -m venv .venv && .venv/bin/pip install xverter
 
 # or with pyenv
 pyenv install 3.14.7t && pyenv shell 3.14.7t && pip install xverter
-
-# or with uv, which fetches the interpreter and the tool in one step
-uv tool install --python 3.14t xverter
 ```
-
-`uv` is a third-party tool and entirely optional — it is listed because it is the only one of
-the three that installs the interpreter for you.
 
 Output is byte-identical either way — this is a scheduling difference, not a different
 result, and every format's bytes were checked on both interpreters before this was written.
