@@ -568,7 +568,60 @@ def pack(src_dir, out_iso, progress=None):
     Returns (file_count, total_data_bytes)."""
     if not os.path.isdir(src_dir):
         die("not a directory: %s" % src_dir)
-    root = _scan_dir(src_dir)
+    return pack_tree(_scan_dir(src_dir), out_iso, progress=progress)
+
+
+def tree_from_entries(entries, where="<stream>"):
+    """Build the same node tree _scan_dir produces, from files that are
+    not on disk.
+
+    `entries` is an iterable of (relpath, size, opener) - opener being a
+    zero-argument callable returning a readable stream positioned at the
+    start of that file. The resulting tree is sorted and folded exactly
+    as a directory scan would be, so an image packed from it is
+    byte-identical to one packed from the same files unpacked to disk.
+    That equivalence is the whole point and is checked in the tests."""
+    root = {"entries": []}
+    dirs = {(): root}
+
+    def _dir(parts):
+        node = dirs.get(parts)
+        if node is not None:
+            return node
+        parent = _dir(parts[:-1])
+        node = {"entries": []}
+        parent["entries"].append({"raw": _encode_name(parts[-1], where),
+                                  "dir": True, "node": node, "start": 0})
+        dirs[parts] = node
+        return node
+
+    for rel, size, opener in entries:
+        parts = tuple(p for p in rel.replace("\\", "/").split("/") if p)
+        if not parts:
+            die("empty entry name in %s" % where)
+        if size > 0xFFFFFFFF:
+            die("%s is %d bytes; XDVDFS file sizes are 32-bit" % (rel, size))
+        _dir(parts[:-1])["entries"].append(
+            {"raw": _encode_name(parts[-1], where), "dir": False,
+             "size": size, "open": opener, "start": 0, "src": rel})
+
+    def _sort(node):
+        entries = node["entries"]
+        entries.sort(key=lambda e: _fold(e["raw"]))
+        for i in range(1, len(entries)):
+            if _fold(entries[i]["raw"]) == _fold(entries[i - 1]["raw"]):
+                die("names collide under XDVDFS case folding: %r vs %r"
+                    % (entries[i - 1]["raw"], entries[i]["raw"]))
+        for e in entries:
+            if e["dir"]:
+                _sort(e["node"])
+    _sort(root)
+    return root
+
+
+def pack_tree(root, out_iso, progress=None):
+    """Pack an already-built node tree. See pack() and
+    tree_from_entries() for the two ways to get one."""
 
     tables = []
     file_runs = []
@@ -613,14 +666,21 @@ def pack(src_dir, out_iso, progress=None):
                 if o.tell() != e["start"] * SECTOR:
                     die("internal error: file allocation drift")
                 copied = 0
-                with open(e["src"], "rb") as f:
+                with (e["open"]() if e.get("open") else
+                      open(e["src"], "rb")) as f:
                     # os.sendfile moves the bytes inside the kernel: no
                     # read into Python, no write back out. Falls back to
                     # the portable chunk loop anywhere it is unavailable
                     # or refuses the descriptors.
+                    ifd = None
                     if _KCOPY:
+                        try:
+                            ifd = f.fileno()
+                        except (AttributeError, OSError, ValueError):
+                            ifd = None   # a stream, not a file: copy in Python
+                    if ifd is not None:
                         o.flush()
-                        ofd, ifd = o.fileno(), f.fileno()
+                        ofd = o.fileno()
                         # copy_file_range first, the way CPython's own
                         # shutil orders it: on a copy-on-write filesystem
                         # the kernel shares the extents instead of
@@ -659,7 +719,7 @@ def pack(src_dir, out_iso, progress=None):
                                 progress(total + copied, grand_total)
                 if copied != e["size"]:
                     die("%s changed size during pack (%d != %d)"
-                        % (e["src"], copied, e["size"]))
+                        % (e.get("src", e["raw"]), copied, e["size"]))
                 pad = -e["size"] % SECTOR
                 if pad:
                     o.write(b"\x00" * pad)

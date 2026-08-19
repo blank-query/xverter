@@ -243,6 +243,62 @@ def _stream_hashes(path, progress=None):
     return "%08x" % (state["crc"] & 0xFFFFFFFF), sha.hexdigest()
 
 
+_DAT_SIZES = {}                 # (path, mtime_ns, bytes) -> frozenset
+
+
+def _dat_sizes(dat_path):
+    """Every distinct image size in a DAT, as a set.
+
+    Parsing 1.4 MB of XML to answer one yes/no question is silly when
+    the answer is the same for the life of the file, so the set is kept
+    in memory for this process and on disk for the next one. Both are
+    keyed on the DAT's size and nanosecond mtime, so refreshing the
+    database invalidates them without anyone having to remember to."""
+    try:
+        st = os.stat(dat_path)
+    except OSError:
+        return frozenset()
+    key = (os.path.abspath(dat_path), st.st_mtime_ns, st.st_size)
+    hit = _DAT_SIZES.get(key)
+    if hit is not None:
+        return hit
+
+    cache = os.path.join(datcache.cache_dir(), "datsizes.json")
+    tag = "%s:%d:%d" % key
+    try:
+        with open(cache, "r", encoding="utf-8") as f:
+            disk = json.load(f)
+        if isinstance(disk.get(tag), list):
+            hit = frozenset(disk[tag])
+            _DAT_SIZES[key] = hit
+            return hit
+    except Exception:                                 # noqa: BLE001
+        disk = {}
+
+    try:
+        import defusedxml.ElementTree as ET
+    except ImportError:
+        import xml.etree.ElementTree as ET
+    sizes = set()
+    for rom in ET.parse(dat_path).getroot().iter("rom"):
+        v = rom.get("size")
+        if v and v.isdigit():
+            sizes.add(int(v))
+    hit = frozenset(sizes)
+    _DAT_SIZES[key] = hit
+    try:
+        if not isinstance(disk, dict):
+            disk = {}
+        disk = {tag: sorted(hit)}    # one DAT version per file; drop the rest
+        tmp = cache + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(disk, f)
+        os.replace(tmp, cache)
+    except Exception:                                 # noqa: BLE001
+        pass                          # a cache that cannot write is fine
+    return hit
+
+
 def _dat_has_size(dat_path, size):
     """Cheap prefilter: does any entry in this DAT have exactly this size?
 
@@ -251,15 +307,7 @@ def _dat_has_size(dat_path, size):
     trimmed or modified image can be ruled out by size alone, without
     hashing a single byte. That is what makes the identity check
     affordable enough to run by default."""
-    try:
-        import defusedxml.ElementTree as ET
-    except ImportError:
-        import xml.etree.ElementTree as ET
-    want = str(size)
-    for rom in ET.parse(dat_path).getroot().iter("rom"):
-        if rom.get("size") == want:
-            return True
-    return False
+    return size in _dat_sizes(dat_path)
 
 
 def _executable_check(path):
@@ -1150,6 +1198,26 @@ def cmd_convert(args):
                   % (", ".join(written),
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
+            return 0
+        if kind == "zar" and out_kind == "iso":
+            # Straight out of the archive into the image: no scratch copy
+            # of the whole game written and read back. Byte-identical to
+            # the unpack-then-pack route, which is checked in the tests.
+            man = {}
+            tree, closer = zar_mod.iso_tree(path, manifest=man)
+            try:
+                builders_mod.build_iso_from_tree(
+                    tree, args.output, verify=not args.no_verify,
+                    manifest=man, progress=prog.cb("iso-write"),
+                    verify_progress=prog.cb("verify"))
+            finally:
+                closer()
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output,
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
+                     else "manifest verified"))
             return 0
         manifest = {}
         gamedir = _to_gamedir(kind, path, w, manifest=manifest,

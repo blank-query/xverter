@@ -30,6 +30,38 @@ def _trees_identical(a, b):
     return walk(filecmp.dircmp(a, b, shallow=False))
 
 
+def build_iso_from_tree(tree, out_iso, verify=True, manifest=None,
+                        progress=None, verify_progress=None):
+    """Pack a prebuilt node tree - files supplied by openers rather than
+    by a directory on disk - into a bare XDVDFS ISO.
+
+    Identical output to build_iso() given the same files: the layout
+    depends on names and sizes, not on where the bytes come from. This
+    is what lets a zar go straight to an ISO without being unpacked to
+    a scratch directory first."""
+    if os.path.exists(out_iso):
+        raise BuildError("output already exists: %s" % out_iso)
+    try:
+        xdvdfs_mod.pack_tree(tree, out_iso, progress=progress)
+    except xdvdfs_mod.XdvdfsError as e:
+        raise BuildError("XDVDFS pack failed: %s" % e)
+    if verify:
+        if not manifest:
+            raise BuildError("a streamed pack cannot be verified without "
+                             "the source manifest")
+        got = xdvdfs_mod.hash_walk(out_iso, progress=verify_progress)
+        if manifest != got:
+            missing = sorted(set(manifest) - set(got))[:3]
+            extra = sorted(set(got) - set(manifest))[:3]
+            diff = sorted(k for k in set(manifest) & set(got)
+                          if manifest[k] != got[k])[:3]
+            os.unlink(out_iso)
+            raise BuildError("built ISO failed manifest verification "
+                             "(missing=%s extra=%s content-diff=%s)"
+                             % (missing, extra, diff))
+    return out_iso
+
+
 def build_iso(gamedir, out_iso, verify=True, manifest=None,
               progress=None, verify_progress=None):
     """Pack an extracted game dir into a bare XDVDFS ISO with xverter's

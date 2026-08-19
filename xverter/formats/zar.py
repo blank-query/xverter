@@ -58,6 +58,67 @@ def is_zar(path):
 UNPACK_WORKERS = 2
 
 
+def iso_tree(zar_path, manifest=None):
+    """(tree, closer) for packing this zar straight into an ISO.
+
+    Files are read out of the archive on demand instead of being
+    unpacked to a scratch directory first, which saves writing the whole
+    game to disk and reading it back. Each file is hashed as it is
+    consumed, so `manifest` fills with exactly the per-file digests the
+    ISO writer's verification pass needs."""
+    if not _NATIVE:
+        raise ZarError("streaming a zar needs the native reader (zstd "
+                       "support missing)")
+    zr = zar_native.ZarReader(zar_path)
+
+    def _opener(rel):
+        def go():
+            return _HashingStream(zr.read_iter(rel), rel, manifest)
+        return go
+
+    entries = [(rel, size, _opener(rel)) for rel, size in zr.files()]
+    from . import xdvdfs as _xd
+    return _xd.tree_from_entries(entries, where=zar_path), zr.close
+
+
+class _HashingStream:
+    """Read-only stream over a zar member, hashing as it goes."""
+
+    def __init__(self, chunks, rel, manifest):
+        self._chunks = chunks
+        self._rel = rel
+        self._manifest = manifest
+        self._h = hashlib.sha1() if manifest is not None else None
+        self._buf = b""
+        self._eof = False
+
+    def read(self, n=-1):
+        while not self._eof and (n < 0 or len(self._buf) < n):
+            try:
+                c = next(self._chunks)
+            except StopIteration:
+                self._eof = True
+                break
+            if self._h is not None:
+                self._h.update(c)
+            self._buf += c
+        if n < 0:
+            out, self._buf = self._buf, b""
+        else:
+            out, self._buf = self._buf[:n], self._buf[n:]
+        return out
+
+    def close(self):
+        if self._h is not None and self._manifest is not None:
+            self._manifest[self._rel] = self._h.hexdigest()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
 def unpack(zar_path, out_dir, manifest=None, progress=None):
     """Extract a zar. Uses the native reader when zstd support is present
     (allowing inline manifest capture); falls back to the reference binary."""
