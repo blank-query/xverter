@@ -303,11 +303,11 @@ def machine_info():
 
 
 def tool_versions():
-    # ISO/GoD/ZAR/CCI/CSO writers are xverter-native; chdman is the one
+    # Every writer is xverter-native, CHD included; chdman appears
     # delegated tool.
     from . import cli as cli_mod
     v = {"xverter (native ISO/GoD/ZAR/CCI/CSO writers)": cli_mod.__version__,
-         "chdman": _first_line(["chdman", "help"])}
+         "chdman": _first_line(["chdman", "help"])}  # differential only
     try:
         from importlib.metadata import version
         v["python-lz4"] = version("lz4")
@@ -629,18 +629,38 @@ def main(argv=None):
     run("cso(split)->dir", ["convert", d("u.cso"), "-o", d("from_ucso") + "/"])
     check_dir("  content(cso-split)", d("from_ucso"), baseline)
 
-    # chd: chdman-delegated wrapper (createdvd/extractdvd) - the one
-    # optional binary; without it the CHD edges are skipped, not failed
+    # chd: native reader and writer. chdman is no longer needed for any
+    # edge; when it is installed it runs as a differential reference -
+    # the reference implementation verifying our output is a stronger
+    # claim than our own reader doing so, so it is used when available.
     from . import deps as _deps
     have_chdman = _deps.find("chdman") is not None
-    if have_chdman:
-        run("iso->chd", ["convert", d("a.iso"), "-o", d("a.chd")])
-        run("chd->dir", ["convert", d("a.chd"), "-o", d("from_chd") + "/"])
-        check_dir("  content(chd)", d("from_chd"), baseline)
-    else:
-        for edge in ("iso->chd", "chd->dir", "  content(chd)"):
-            print("%-24s SKIP   (chdman not installed - optional)" % edge,
-                  flush=True)
+    run("iso->chd", ["convert", d("a.iso"), "-o", d("a.chd")])
+    run("chd->dir", ["convert", d("a.chd"), "-o", d("from_chd") + "/"])
+    check_dir("  content(chd)", d("from_chd"), baseline)
+    if kind == "iso":
+        run("iso(src)->chd", ["convert", src, "-o", d("s.chd")])
+        run("chd(src)->iso", ["convert", d("s.chd"), "-o", d("back_chd.iso")])
+        check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
+        if have_chdman:
+            t0 = time.monotonic()
+            r = subprocess.run(["chdman", "verify", "-i", d("s.chd")],
+                               capture_output=True, text=True)
+            ok = r.returncode == 0 and "successful" in (r.stdout + r.stderr)
+            RESULTS.append({"edge": "  chdman(chd)", "type": "differential",
+                            "ok": ok,
+                            "seconds": round(time.monotonic() - t0, 1)})
+            print("%-24s %s  %7.1fs"
+                  % ("  chdman(chd)",
+                     "PASS" if ok else "FAIL (reference rejects our CHD)",
+                     time.monotonic() - t0), flush=True)
+        else:
+            print("%-24s SKIP   (chdman not installed - optional "
+                  "differential)" % "  chdman(chd)", flush=True)
+        try:
+            os.unlink(d("s.chd"))
+        except OSError:
+            pass
 
     # verify subcommand on every artifact kind
     run("verify iso", ["verify", d("a.iso"), "--no-lookup"])
@@ -650,11 +670,7 @@ def main(argv=None):
     run("verify cso", ["verify", d("a.cso")])
     run("verify cci(split)", ["verify", d("u.cci")])
     run("verify cso(split)", ["verify", d("u.cso")])
-    if have_chdman:
-        run("verify chd", ["verify", d("a.chd")])
-    else:
-        print("%-24s SKIP   (chdman not installed - optional)"
-              % "verify chd", flush=True)
+    run("verify chd", ["verify", d("a.chd")])
 
     failed = [r["edge"] for r in RESULTS if not r["ok"]]
     total = time.monotonic() - t_start

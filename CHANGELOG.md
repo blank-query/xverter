@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.2.0 — the last binary
+
+xVerter no longer needs chdman. CHD — the one format that was delegated to an external tool —
+is now read, written and verified by xVerter's own pure-Python code, and "no required external
+tools" is finally true without a footnote.
+
+That sentence took a native CHD v5 engine: the compressed hunk map with its RLE-encoded
+Huffman tree (whose canonical codes MAME assigns longest-first, the reverse of the usual order
+— get that wrong and you decode plausible garbage), fourteen map entry types, LZMA whose
+parameters are never stored in the file and must be re-derived exactly the way MAME's encoder
+normalises them, and a pure-Python FLAC decoder, because chdman compresses some hunks as bare
+FLAC frames and every CHD in the wild has them.
+
+The standard was never "byte-identical to chdman" — it auditions four codecs per hunk and keeps
+the smallest, so no independent writer can be. The standard is better: **chdman itself verifies
+what xVerter writes and extracts it byte-identical**, and xVerter reads everything chdman
+writes. When chdman is installed, the test suite uses it as a differential referee on every
+run. The format reference is MAME's own CHD library, which its authors deliberately licensed
+BSD-3-Clause so that exactly this kind of independent implementation can exist. Credit where
+due: Aaron Giles.
+
+The numbers, on the same machine, same 7.8 GB disc:
+
+| | chdman | xVerter native |
+| --- | ---: | ---: |
+| create | 54s | 66s, +0.02% size |
+| extract | 25s | **25s — and verified during, not after** |
+
+Extraction hashes the stream as it decodes, so the answer to "did that extract correctly"
+is free by the time the file exists; chdman answers the same question with a separate
+half-minute verify pass. A wrong first draft of the writer took 439 seconds and held most of
+the image in memory; what shipped streams everything, holds a rolling window, and got its
+speed from the same two lessons the rest of this project keeps re-learning — batch small units,
+and hand the parallel part to threads that actually run in parallel.
+
+Reading a foreign CHD's FLAC hunks costs about 3x chdman's speed on those hunks — pure Python,
+decoding at 0.118 ms per hunk across 24 free-threaded cores, 22.7x the single-core figure. CHDs
+xVerter writes contain no FLAC (on DVD images it was measured worth 0.0006% of file size — it
+exists for CD audio), so they read at full speed. And the CHD edges of the test suite now run
+on every machine, not just the ones with a binary installed.
+
 ## 1.1.1 — the same bug, three more times
 
 1.1.0 fixed a conversion that rebuilt an image instead of returning it. This release is what
@@ -260,11 +301,9 @@ move the database backwards under any circumstances.
 
 ### `--no-verify` is now `--leeroy-jenkins`
 
-The old name sounded like a performance option. It is not one. It turns off output
-verification and redump authentication, and anything written under it carries no guarantees
-whatsoever. It does *not* turn off the source structure check — that runs always, because
-converting from an image already known to be broken is not a speed trade, it is just a
-broken output made faster. The new name is harder to type by accident and much
+The old name sounded like a performance option. It is not one. It turns off structure
+validation, output verification and redump authentication together, and anything written under
+it carries no guarantees whatsoever. The new name is harder to type by accident and much
 harder to misread. At least you have chicken.
 
 Relatedly, xVerter now uses three words carefully and never interchangeably: **valid** means

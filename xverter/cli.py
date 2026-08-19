@@ -1121,7 +1121,10 @@ def cmd_convert(args):
         # some branches and not others.
         ident = _IdentityAhead(path, False)
         img_open = _image_opener(kind, path)
-        if img_open is not None:
+        # --leeroy-jenkins means every check, including this one. The
+        # flag exists to answer "how much do the guarantees cost", and a
+        # check it could not turn off would not appear in that answer.
+        if img_open is not None and not args.no_verify:
             # Validate before writing anything, for every source that is
             # an image - not just raw ones.
             #
@@ -1189,6 +1192,16 @@ def cmd_convert(args):
                     os.unlink(chd_iso)
                     raise CliError("chd extraction sha1 %s != header raw "
                                    "sha1 %s" % (got, want))
+            # The CHD's own SHA-1 proves the wrapper carried its bytes
+            # intact; it says nothing about whether the image inside
+            # coheres, so the materialised image gets the same structure
+            # check every other image source gets - and skips it under
+            # --leeroy-jenkins, like every other check.
+            if not args.no_verify:
+                try:
+                    xdvdfs_mod.validate_image(chd_iso)
+                except xdvdfs_mod.XdvdfsError as e:
+                    raise CliError("source is INVALID: %s" % e)
             if out_kind == "iso":
                 ident.report()
                 _gil_hint()

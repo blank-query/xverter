@@ -1,36 +1,26 @@
-"""CHD (MAME Compressed Hunks of Data) support via the reference
-`chdman` binary.
+"""CHD (MAME Compressed Hunks of Data) - native v5 reader and writer.
 
-Scope: DVD-type CHDs (chdman createdvd / extractdvd) wrapping a
-2048-byte-sector XDVDFS image - a bare game partition, a full redump
-image, or (through the pivot) anything else xverter can read. All Xbox
-and Xbox 360 discs are DVD-structured, so `createcd` never applies in
-this project's scope; the writers stay content-agnostic like CCI/CSO.
+Scope: DVD-type CHDs wrapping a 2048-byte-sector XDVDFS image - a bare
+game partition, a full redump image, or (through the pivot) anything
+else xverter can read. All Xbox and Xbox 360 discs are DVD-structured,
+so createcd semantics never apply here; the writer stays
+content-agnostic like CCI/CSO.
 
 Consumer status (2026-08): no released Xbox emulator reads CHD yet.
 xemu had working CHD support in review (PR #2921, libchdr, tested on
 both redump and trimmed images) before the author deleted their fork;
 xverter produces the format that work targeted, ready for its revival.
 
-Same delegation policy as ZAR/ISO/GoD: chdman (MAME's own maintained
-tool) does the writing and extraction; xverter parses the CHD v5 header
-natively for detection and info (it stores logical size and SHA-1s of
-the decompressed data), and round-trip verification is done with
-xverter's readers on the extracted stream.
-
-CHD v5 header (all big-endian, 124 bytes):
-  char[8] magic         "MComprHD"
-  u32     length        124
-  u32     version       5
-  u32[4]  compressors   fourccs (zero-padded list)
-  u64     logicalbytes  decompressed size
-  u64     mapoffset
-  u64     metaoffset
-  u32     hunkbytes
-  u32     unitbytes
-  u8[20]  rawsha1       data SHA-1
-  u8[20]  sha1          data+metadata SHA-1
-  u8[20]  parentsha1    zero when standalone
+This was the last delegated format. Reading, writing and verification
+are native (formats/chd_native.py, formats/chd_flac.py); the format
+reference is MAME's own BSD-3-Clause CHD library (src/lib/util/chd.cpp
+and friends, Aaron Giles), reimplemented rather than copied, and held
+to the only standard that matters: chdman verifies what we write and
+extracts it byte-identical, and we read everything chdman writes -
+FLAC hunks included. chdman remains recognised as an optional
+differential reference and as the escape hatch for the two shapes we
+refuse: parent-delta CHDs and pre-v5 files, both of which
+`chdman copy` flattens into something we read.
 """
 
 import os
@@ -118,7 +108,24 @@ def _run(argv, progress=None):
 
 
 def extract(chd_path, out_iso, progress=None):
-    """chd -> ISO via chdman extractdvd."""
+    """chd -> ISO, natively and in parallel, verified as it goes: the
+    decoded stream's SHA-1 is computed during extraction and must match
+    the header's, so a damaged CHD cannot extract quietly.
+
+    Parent-delta CHDs are the one case handed to chdman when present -
+    they reference a file we do not have."""
+    from . import chd_native
+    try:
+        got = chd_native.extract_to(chd_path, out_iso, progress=progress)
+        with open(chd_path, "rb") as fh:
+            want = chd_native.read_header(fh)["rawsha1"]
+        if got != want:
+            raise ChdError("extracted data sha1 %s does not match the "
+                           "header's %s - the CHD is damaged" % (got, want))
+        return out_iso
+    except chd_native.ChdNativeError as e:
+        if "parent" not in str(e):
+            raise ChdError(str(e))
     exe = _need_chdman()
     _run([exe, "extractdvd", "-i", chd_path, "-o", out_iso, "-f"],
          progress=progress)
@@ -128,21 +135,30 @@ def extract(chd_path, out_iso, progress=None):
 
 
 def build(iso_path, out_chd, progress=None):
-    """ISO -> chd via chdman createdvd; the input is wrapped as-is
-    (bare partition, full redump image, whatever - content-agnostic)."""
-    exe = _need_chdman()
+    """ISO -> chd with xverter's native writer; the input is wrapped
+    as-is (bare partition, full redump image, whatever -
+    content-agnostic). chdman verifies the result and extracts it
+    byte-identical; that equivalence gates this writer in the suite."""
+    from . import chd_native
     if os.path.exists(out_chd):
         raise ChdError("output already exists: %s" % out_chd)
-    _run([exe, "createdvd", "-i", iso_path, "-o", out_chd],
-         progress=progress)
-    if not os.path.isfile(out_chd):
-        raise ChdError("chdman reported success but wrote no output")
+    try:
+        chd_native.write_dvd(iso_path, out_chd, progress=progress)
+    except chd_native.ChdNativeError as e:
+        raise ChdError("native CHD build failed: %s" % e)
     return out_chd
 
 
 def verify(chd_path, progress=None):
-    """chdman verify: decompresses everything and checks the header's
-    internal SHA-1s. Returns the parsed header on success."""
-    exe = _need_chdman()
-    _run([exe, "verify", "-i", chd_path], progress=progress)
+    """Decompress everything and check both of the header's internal
+    SHA-1s, natively. Returns the parsed header on success."""
+    from . import chd_native
+    try:
+        chd_native.verify_file(chd_path, progress=progress)
+    except chd_native.ChdNativeError as e:
+        if "parent" in str(e):
+            exe = _need_chdman()
+            _run([exe, "verify", "-i", chd_path], progress=progress)
+            return read_header(chd_path)
+        raise ChdError(str(e))
     return read_header(chd_path)
