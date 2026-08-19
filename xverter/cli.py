@@ -523,33 +523,62 @@ def _sha1_file(path, limit=None):
     return h.hexdigest()
 
 
-def _verify_chd_output(chd_path, src_iso, progress=None):
-    """Round-trip a built CHD: the decompressed stream must equal the
-    source ISO byte-for-byte, with only zero padding beyond it (chdman
-    pads the last hunk)."""
+class _FileHashAhead:
+    """SHA-1 of a file, computed on a thread while other work runs.
+
+    The zar trick, applied again: the source half of a round-trip check
+    depends on nothing the build produces, so it starts when the source
+    exists and the answer is waiting by the time the output needs it.
+    Still a second, independent read - only the waiting is removed."""
+
+    def __init__(self, path):
+        self._box = []
+        self._err = []
+        self._t = threading.Thread(target=self._run, args=(path,),
+                                   daemon=True)
+        self._t.start()
+
+    def _run(self, path):
+        try:
+            self._box.append(_sha1_file(path))
+        except BaseException as exc:                  # noqa: BLE001
+            self._err.append(exc)
+
+    def result(self):
+        self._t.join()
+        if self._err or not self._box:
+            return None
+        return self._box[0]
+
+
+def _verify_chd_output(chd_path, want_sha1, want_size, progress=None):
+    """Round-trip a built CHD: an independent decode of the container
+    must reproduce the source stream exactly.
+
+    This used to extract the CHD to a temporary file just to hash it -
+    a 7.8 GB scratch write and read per conversion - and then read the
+    source, serially, afterwards. The decode now hashes in place with
+    no file, and the source half arrives precomputed from a thread that
+    ran during the build. Both halves are still independent second
+    reads; only the disk traffic and the waiting went.
+
+    Our writer sets logicalbytes to the source size exactly, so the old
+    tolerance for trailing padding tightened into an equality."""
     hdr = chd_mod.read_header(chd_path)
-    src_size = os.path.getsize(src_iso)
-    if hdr["logical_bytes"] < src_size:
+    if hdr["logical_bytes"] != want_size:
         os.unlink(chd_path)
-        raise CliError("built chd holds %d bytes < source %d"
-                       % (hdr["logical_bytes"], src_size))
-    with tempfile.TemporaryDirectory(prefix="xverter_chdchk_") as cw:
-        back = os.path.join(cw, "back.iso")
-        chd_mod.extract(chd_path, back, progress=progress)
-        got = _sha1_file(back, limit=src_size)
-        want = _sha1_file(src_iso)
-        pad_ok = True
-        with open(back, "rb") as f:
-            f.seek(src_size)
-            while pad_ok:
-                b = f.read(1 << 20)
-                if not b:
-                    break
-                pad_ok = b.count(0) == len(b)
-    if got != want or not pad_ok:
+        raise CliError("built chd holds %d bytes, source is %d"
+                       % (hdr["logical_bytes"], want_size))
+    from .formats import chd_native
+    got = chd_native.extract_to(chd_path, None, progress=progress)
+    if got != hdr["raw_sha1"]:
         os.unlink(chd_path)
-        raise CliError("built chd failed round-trip (sha1 %s != %s%s)"
-                       % (got, want, "" if pad_ok else ", nonzero padding"))
+        raise CliError("built chd is self-inconsistent: decodes to sha1 "
+                       "%s, header says %s" % (got, hdr["raw_sha1"]))
+    if got != want_sha1:
+        os.unlink(chd_path)
+        raise CliError("built chd failed round-trip: decoded sha1 %s != "
+                       "source %s" % (got, want_sha1))
 
 
 class _IdentityAhead:
@@ -1261,27 +1290,47 @@ def cmd_convert(args):
                      if args.no_verify else "hash tree verified"))
             return 0
         if out_kind == "chd":
+            # Sources that hold an image feed the CHD writer directly -
+            # no pivot copy written and read back - and the round-trip
+            # check's source half runs on a thread during the build
+            # (an independent second read through a fresh reader), so
+            # by the time the output needs verifying, half the answer
+            # is already in hand. GodStream reads through the hash-
+            # verifying container view, checked equivalent to the old
+            # materialised route byte-for-byte.
+            ahead = None
+            closer = None
             if kind == "iso":
-                src_iso = path
-            elif kind == "god":
-                src_iso = os.path.join(w, "pivot_out.iso")
-                god_mod.convert(path, src_iso, progress=prog.cb("god-read"))
-            elif kind in ("cci", "cso"):
-                src_iso = os.path.join(w, "pivot_out.iso")
-                with _wrapper_reader(kind, path) as r, \
-                        open(src_iso, "wb") as out:
-                    while True:
-                        chunk = r.read(1 << 22)
-                        if not chunk:
-                            break
-                        out.write(chunk)
+                chd_src = path
+                src_size = os.path.getsize(path)
+                if not args.no_verify:
+                    ahead = _FileHashAhead(path)
+            elif kind in ("god", "cci", "cso"):
+                chd_src = (god_mod.GodStream(path) if kind == "god"
+                           else _wrapper_reader(kind, path))
+                closer = chd_src.close
+                src_size = chd_src.size
+                if not args.no_verify:
+                    ahead = _SourceHashAhead(kind, path, w)
             else:
                 src_iso = _pivot_iso(kind, path, w, prog,
                                      not args.no_verify)
-            chd_mod.build(src_iso, args.output,
-                          progress=prog.cb("chd-write"))
+                chd_src = src_iso
+                src_size = os.path.getsize(src_iso)
+                if not args.no_verify:
+                    ahead = _FileHashAhead(src_iso)
+            try:
+                chd_mod.build(chd_src, args.output,
+                              progress=prog.cb("chd-write"))
+            finally:
+                if closer is not None:
+                    closer()
             if not args.no_verify:
-                _verify_chd_output(args.output, src_iso,
+                want = ahead.result() if ahead else None
+                if want is None:
+                    raise CliError("source hash for chd verification "
+                                   "failed; not certifying the output")
+                _verify_chd_output(args.output, want, src_size,
                                    progress=prog.cb("verify"))
             ident.report()
             _gil_hint()
