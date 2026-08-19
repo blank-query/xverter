@@ -85,6 +85,12 @@ compress it, decompress it, and be handed something that no longer matches the d
 from and never will again. And it reported success the whole way, because the check it was
 passing was "did the files survive" — which was true, and was not the question.
 
+The same thing was true one conversion over: building a **GoD container** from a CCI or CSO
+fed the writer a rebuild too, so `iso → god` and `cci → god` produced different containers from
+the same disc and both reported success. Both had to, because a GoD is checked against its own
+hash tree — and that tree is computed over whatever bytes the writer was handed. Feed it a
+rebuild and it will faithfully certify the rebuild. All three routes now agree byte for byte.
+
 It now decompresses, which is what the format means. Out comes exactly what the container
 holds: the original file byte for byte when it was made from a bare game partition, and the
 game partition when it was made from a full redump image, because the video partition was
