@@ -187,6 +187,36 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
     return out
 
 
+def _pivot_iso(kind, path, w, prog, verify):
+    """Materialise a source that is not already an image as one, and
+    return its path.
+
+    Only formats with no image of their own get here - an archive or a
+    folder - so an image has to be built rather than passed through. A
+    zar goes straight from the archive into the image; anything else is
+    extracted to a directory first, because it has no other way in."""
+    iso = os.path.join(w, "pivot_out.iso")
+    if kind == "zar" and zar_mod.can_stream():
+        man = {}
+        tree, closer = zar_mod.iso_tree(path, manifest=man)
+        try:
+            builders_mod.build_iso_from_tree(
+                tree, iso, verify=verify, manifest=man,
+                progress=prog.cb("iso-write"),
+                verify_progress=prog.cb("verify"))
+        finally:
+            closer()
+        return iso
+    manifest = {}
+    gamedir = _to_gamedir(kind, path, w, manifest=manifest,
+                          progress=prog.cb("extract"))
+    builders_mod.build_iso(gamedir, iso, verify=verify,
+                           manifest=manifest or None,
+                           progress=prog.cb("iso-write"),
+                           verify_progress=prog.cb("verify"))
+    return iso
+
+
 def _output_kind(out_path):
     # A trailing separator of either flavor means "extract to directory"
     # (Windows callers hand us backslashes).
@@ -1167,14 +1197,8 @@ def cmd_convert(args):
                             break
                         out.write(chunk)
             else:
-                manifest = {}
-                gamedir = _to_gamedir(kind, path, w, manifest=manifest,
-                      progress=prog.cb("extract"))
-                src_iso = os.path.join(w, "pivot_out.iso")
-                builders_mod.build_iso(gamedir, src_iso,
-                                       verify=not args.no_verify,
-                                       manifest=manifest or None,
-                                       progress=prog.cb("iso-write"))
+                src_iso = _pivot_iso(kind, path, w, prog,
+                                     not args.no_verify)
             chd_mod.build(src_iso, args.output,
                           progress=prog.cb("chd-write"))
             if not args.no_verify:
@@ -1210,14 +1234,7 @@ def cmd_convert(args):
                     written = build(stream, args.output, split=split,
                                     progress=prog.cb("compress"))
             else:
-                manifest = {}
-                gamedir = _to_gamedir(kind, path, w, manifest=manifest,
-                      progress=prog.cb("extract"))
-                iso = os.path.join(w, "pivot_out.iso")
-                builders_mod.build_iso(gamedir, iso, verify=not args.no_verify,
-                                       manifest=manifest or None,
-                                       progress=prog.cb("iso-write"),
-                                       verify_progress=prog.cb("verify"))
+                iso = _pivot_iso(kind, path, w, prog, not args.no_verify)
                 written = build(iso, args.output, split=split,
                                 progress=prog.cb("compress"))
             if not args.no_verify:
@@ -1315,6 +1332,22 @@ def cmd_convert(args):
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
             return 0
+        if out_kind == "god":
+            # Everything that holds an image already returned above, so
+            # what is left has none and needs one built. Ahead of the
+            # extraction rather than after it, because a zar can go
+            # straight into the pivot without touching a scratch copy.
+            iso = _pivot_iso(kind, path, w, prog, not args.no_verify)
+            hdr = builders_mod.build_god(iso, args.output,
+                                         verify=not args.no_verify,
+                                         progress=prog.cb("god-write"),
+                                         verify_progress=prog.cb("verify"))
+            ident.report()
+            _gil_hint()
+            print("wrote GoD container (header: %s) (%s)"
+                  % (hdr, "NO GUARANTEES - --leeroy-jenkins"
+                     if args.no_verify else "hash tree verified"))
+            return 0
         manifest = {}
         gamedir = _to_gamedir(kind, path, w, manifest=manifest,
                       progress=prog.cb("extract"))
@@ -1331,21 +1364,6 @@ def cmd_convert(args):
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
-            return 0
-        if out_kind == "god":
-            iso = os.path.join(w, "pivot_out.iso")
-            builders_mod.build_iso(gamedir, iso, verify=not args.no_verify,
-                                   manifest=manifest,
-                                   progress=prog.cb("iso-write"))
-            hdr = builders_mod.build_god(iso, args.output,
-                                         verify=not args.no_verify,
-                                         progress=prog.cb("god-write"),
-                                         verify_progress=prog.cb("verify"))
-            ident.report()
-            _gil_hint()
-            print("wrote GoD container (header: %s) (%s)"
-                  % (hdr, "NO GUARANTEES - --leeroy-jenkins"
-                     if args.no_verify else "hash tree verified"))
             return 0
         if out_kind == "gamedir":
             os.makedirs(args.output, exist_ok=True)
