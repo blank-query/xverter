@@ -354,7 +354,7 @@ def scan_artifacts(w, decoded_ref_size):
             elif name.endswith(".chd") and os.path.isfile(p):
                 add(name, os.path.getsize(p),
                     chd_mod.read_header(p)["raw_sha1"],
-                    note="sha1 from CHD header, confirmed by chdman verify")
+                    note="sha1 from CHD header, confirmed by full native decode")
             elif (name.endswith(".cci") or name.endswith(".cso")) \
                     and os.path.isfile(p) and name.count(".") == 1:
                 mod = cci_mod if name.endswith(".cci") else cso_mod
@@ -644,7 +644,7 @@ def main(argv=None):
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
         if have_chdman:
             t0 = time.monotonic()
-            r = subprocess.run(["chdman", "verify", "-i", d("s.chd")],
+            r = subprocess.run([_deps.find("chdman"), "verify", "-i", d("s.chd")],
                                capture_output=True, text=True)
             ok = r.returncode == 0 and "successful" in (r.stdout + r.stderr)
             RESULTS.append({"edge": "  chdman(chd)", "type": "differential",

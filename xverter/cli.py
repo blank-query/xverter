@@ -1006,7 +1006,7 @@ def cmd_verify(args):
               % (kind, n, h.hexdigest()))
     elif kind == "chd":
         h = chd_mod.verify(path, progress=prog.cb("verify"))
-        print("chd verify: chdman decompressed everything and matched the "
+        print("chd verify: decompressed everything and matched the "
               "internal SHA-1s (%d bytes, raw sha1 %s)"
               % (h["logical_bytes"], h["raw_sha1"]))
     elif kind == "stfs":

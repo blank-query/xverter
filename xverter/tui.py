@@ -27,7 +27,6 @@ from textual.widgets import (Button, DataTable, Header, Label,
                              ProgressBar, RichLog, Static, Switch,
                              TabbedContent, TabPane)
 
-from . import deps as deps_mod
 from . import detect as detect_mod
 
 KIND_BADGE = {
@@ -198,16 +197,9 @@ class XVerterApp(App):
         background: $foreground 12%;
     }
     #convert-top { height: auto; }
-    #depspanel {
-        border: round $secondary;
-        border-title-color: $text;
-        padding: 0 1;
-        height: auto;
-    }
     .deprow { height: 3; }
     .deprow .depstatus { padding: 1 1 0 0; width: 1fr; }
     .deprow Button { min-width: 14; }
-    #depsnote { color: $text-muted; margin: 0 0 1 0; }
     #depspanel2 {
         border: round $secondary;
         border-title-color: $text;
@@ -288,22 +280,6 @@ class XVerterApp(App):
                     yield RichLog(id="log", wrap=True, markup=False)
             with TabPane("Setup", id="tab-setup"):
                 with Vertical():
-                    with Vertical(id="depspanel"):
-                        yield Static("Presence is checked at startup, "
-                                     "offline. Version checks and "
-                                     "downloads happen only when you press "
-                                     "a button. Installs go to xverter's "
-                                     "own tool folder (%s) - your system is "
-                                     "not touched."
-                                     % deps_mod.bin_dir(), id="depsnote")
-                        for tool in deps_mod.TOOLS:
-                            with Horizontal(classes="deprow"):
-                                yield Static("%s: checking ..." % tool,
-                                             classes="depstatus",
-                                             id="dep-st-%s" % tool)
-                                yield Button("Install",
-                                             id="dep-in-%s" % tool,
-                                             disabled=True)
                     if sys.platform.startswith("linux"):
                         with Vertical(id="depspanel2"):
                             with Horizontal(classes="deprow"):
@@ -342,8 +318,6 @@ class XVerterApp(App):
         self.query_one("#details", Static).border_title = "details"
         self.query_one("#actions", Vertical).border_title = "convert selected to"
         self.query_one("#log", RichLog).border_title = "log"
-        self.query_one("#depspanel", Vertical).border_title = \
-            "external tools"
         self.query_one("#depslog", RichLog).border_title = "setup log"
         self.query_one("#updpanel", Vertical).border_title = "updates"
         from . import cli as cli_mod
@@ -357,7 +331,6 @@ class XVerterApp(App):
                 mt).strftime("%Y-%m-%d %H:%M")
         self._log("xverter %s%s" % (cli_mod.__version__, stamp))
         self.action_rescan()
-        self._check_deps()
 
     def action_rescan(self):
         t = self.query_one("#table", DataTable)
@@ -467,34 +440,6 @@ class XVerterApp(App):
             self._install_desktop_entry()
         elif bid == "remove-desktop":
             self._remove_desktop_entry()
-        elif bid and bid.startswith("dep-in-"):
-            tool = bid[len("dep-in-"):]
-            check_only = str(event.button.label) == "Check"
-            event.button.disabled = True
-            if check_only:
-                self._check_dep_online(tool)
-            else:
-                self._install_dep(tool)
-
-    def _on_update_button(self, bid):
-        if bid == "upd-app":
-            self._update_app()
-        else:
-            self._update_dat()
-
-    def on_switch_changed(self, event):
-        if event.switch.id == "opt-leeroy":
-            self.leeroy = event.value
-            if event.value:
-                self._log("!!! LEEROY JENKINS MODE ON !!!")
-                self._log("    structure is NOT validated, output is NOT "
-                          "verified, sources are NOT authenticated.")
-                self._log("    Anything written from here carries no "
-                          "guarantees at all. At least you have chicken.")
-            else:
-                self._log("checks back ON - structure validated, every "
-                          "output re-read and verified, sources "
-                          "authenticated against redump")
         elif event.switch.id == "opt-ram":
             self.ram_scratch = event.value
             if event.value:
@@ -599,63 +544,6 @@ class XVerterApp(App):
     def _deps_log(self, msg):
         self.query_one("#depslog", RichLog).write(
             "[%s] %s" % (time.strftime("%H:%M:%S"), msg))
-
-    def _apply_dep_status(self, st):
-        tool = st["tool"]
-        label = self.query_one("#dep-st-%s" % tool, Static)
-        btn = self.query_one("#dep-in-%s" % tool, Button)
-        iv, lv = st["installed_version"], st["latest_version"]
-        # Button state comes from `repo` (a static fact about the tool),
-        # never from `asset` - asset is only filled in by an online
-        # query, and this panel must be fully usable having asked the
-        # network nothing at all.
-        if st["path"]:
-            txt = "%s: OK (%s)" % (tool, st["path"])
-            if iv:
-                txt = "%s: OK v%s" % (tool, iv)
-            if iv and lv and iv != lv:
-                txt += "  ->  v%s available" % lv
-                btn.label = "Update"
-                btn.disabled = False
-            elif lv or not st["repo"]:
-                btn.label = "Installed"
-                btn.disabled = True
-            else:
-                # nothing asked of GitHub yet: offer the check as a press
-                btn.label = "Check"
-                btn.disabled = False
-        else:
-            txt = "%s: MISSING (needed for %s)" % (tool, st["needed_for"])
-            if st["repo"]:
-                btn.label = "Install"
-                btn.disabled = False
-            else:
-                txt += " - %s" % st["hint"]
-                btn.label = "manual"
-                btn.disabled = True
-        if st.get("error"):
-            txt += "  [update check failed: offline?]"
-        label.update(txt)
-
-    @work(thread=True, group="deps")
-    def _check_deps(self):
-        """Local probe only - which tools are installed. Version
-        comparison needs GitHub, and nothing here asks the network
-        without the user pressing a button."""
-        missing = []
-        for st in deps_mod.check_all(online=False):
-            self.call_from_thread(self._apply_dep_status, st)
-            if not st["path"]:
-                missing.append(st["tool"])
-        if missing:
-            self.call_from_thread(
-                self._deps_log,
-                "missing: %s - conversions needing them will fail; "
-                "one-click installs on this tab where available"
-                % ", ".join(missing))
-        else:
-            self.call_from_thread(self._deps_log,
-                                  "all external tools present")
 
     def _asset_name(self):
         """The release asset that matches this platform, for frozen
@@ -860,40 +748,6 @@ class XVerterApp(App):
 
     def _set_btn_label(self, selector, label):
         self.query_one(selector, Button).label = label
-
-    @work(thread=True, group="deps")
-    def _check_dep_online(self, tool):
-        """Ask GitHub for one tool's newest release. Only ever reached
-        by pressing that tool's Check button."""
-        self.call_from_thread(self._deps_log,
-                              "asking GitHub for the newest %s release ..."
-                              % tool)
-        try:
-            st = deps_mod.check(tool, online=True)
-        except Exception as e:                        # noqa: BLE001
-            self.call_from_thread(self._deps_log,
-                                  "%s update check failed: %s" % (tool, e))
-            try:
-                st = deps_mod.check(tool, online=False)
-            except Exception:                         # noqa: BLE001
-                return
-        self.call_from_thread(self._apply_dep_status, st)
-
-    @work(thread=True, group="deps")
-    def _install_dep(self, tool):
-        try:
-            deps_mod.install(
-                tool,
-                log=lambda m: self.call_from_thread(self._deps_log, m))
-            st = deps_mod.check(tool, online=True)
-        except Exception as e:                        # noqa: BLE001
-            self.call_from_thread(self._deps_log,
-                                  "%s install FAILED: %s" % (tool, e))
-            try:
-                st = deps_mod.check(tool, online=False)
-            except Exception:                         # noqa: BLE001
-                return
-        self.call_from_thread(self._apply_dep_status, st)
 
     def _install_desktop_entry(self):
         """Write ~/.local/share/applications/xverter.desktop launching

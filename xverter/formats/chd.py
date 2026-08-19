@@ -17,16 +17,15 @@ reference is MAME's own BSD-3-Clause CHD library (src/lib/util/chd.cpp
 and friends, Aaron Giles), reimplemented rather than copied, and held
 to the only standard that matters: chdman verifies what we write and
 extracts it byte-identical, and we read everything chdman writes -
-FLAC hunks included. chdman remains recognised as an optional
-differential reference and as the escape hatch for the two shapes we
-refuse: parent-delta CHDs and pre-v5 files, both of which
-`chdman copy` flattens into something we read.
+FLAC hunks included. chdman is not a dependency in any
+direction: the test suite will use it as a differential referee when
+it happens to be installed, and the two shapes we refuse - parent-delta
+CHDs and pre-v5 files - are refused with a pointer at `chdman copy`,
+which flattens both into something we read.
 """
 
 import os
-import shutil
 import struct
-import subprocess
 
 MAGIC = b"MComprHD"
 V5_HEADER = struct.Struct(">8sII4IQQQII20s20s20s")
@@ -35,17 +34,6 @@ V5_SIZE = 124
 
 class ChdError(Exception):
     pass
-
-
-def _need_chdman():
-    from .. import deps
-    exe = deps.find("chdman")
-    if not exe:
-        raise ChdError("`chdman` binary not found - install MAME tools "
-                       "(Arch/Debian/Ubuntu: mame-tools, macOS: brew "
-                       "install rom-tools, Windows: chdman.exe ships "
-                       "inside the MAME download)")
-    return exe
 
 
 def is_chd(path):
@@ -84,53 +72,25 @@ def read_header(path):
     }
 
 
-def _run(argv, progress=None):
-    import re as _re
-    p = subprocess.Popen(argv, stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT, text=True, bufsize=1)
-    tail = []
-    # chdman reports "Compressing, 45.6% complete" style lines (\r-separated)
-    for raw in iter(p.stdout.readline, ""):
-        for line in raw.replace("\r", "\n").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            tail = (tail + [line])[-4:]
-            if progress:
-                m = _re.search(r"(\d+(?:\.\d+)?)%", line)
-                if m:
-                    progress(int(float(m.group(1)) * 10), 1000)
-    p.stdout.close()
-    if p.wait() != 0:
-        raise ChdError("%s failed: %s"
-                       % (os.path.basename(argv[0]), tail[-1:] or ["?"]))
-    return p
-
-
 def extract(chd_path, out_iso, progress=None):
     """chd -> ISO, natively and in parallel, verified as it goes: the
     decoded stream's SHA-1 is computed during extraction and must match
     the header's, so a damaged CHD cannot extract quietly.
 
-    Parent-delta CHDs are the one case handed to chdman when present -
-    they reference a file we do not have."""
+    Parent-delta CHDs are refused with directions rather than handled:
+    they reference a file we were not given, and `chdman copy` flattens
+    them into the standalone form this reads. Naming the escape hatch
+    in an error message is not a dependency."""
     from . import chd_native
     try:
         got = chd_native.extract_to(chd_path, out_iso, progress=progress)
-        with open(chd_path, "rb") as fh:
-            want = chd_native.read_header(fh)["rawsha1"]
-        if got != want:
-            raise ChdError("extracted data sha1 %s does not match the "
-                           "header's %s - the CHD is damaged" % (got, want))
-        return out_iso
     except chd_native.ChdNativeError as e:
-        if "parent" not in str(e):
-            raise ChdError(str(e))
-    exe = _need_chdman()
-    _run([exe, "extractdvd", "-i", chd_path, "-o", out_iso, "-f"],
-         progress=progress)
-    if not os.path.isfile(out_iso):
-        raise ChdError("chdman reported success but wrote no output")
+        raise ChdError(str(e))
+    with open(chd_path, "rb") as fh:
+        want = chd_native.read_header(fh)["rawsha1"]
+    if got != want:
+        raise ChdError("extracted data sha1 %s does not match the "
+                       "header's %s - the CHD is damaged" % (got, want))
     return out_iso
 
 
@@ -164,9 +124,5 @@ def verify(chd_path, progress=None):
     try:
         chd_native.verify_file(chd_path, progress=progress)
     except chd_native.ChdNativeError as e:
-        if "parent" in str(e):
-            exe = _need_chdman()
-            _run([exe, "verify", "-i", chd_path], progress=progress)
-            return read_header(chd_path)
         raise ChdError(str(e))
     return read_header(chd_path)
