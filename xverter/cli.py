@@ -47,6 +47,38 @@ class CliError(Exception):
 
 # ---------------------------------------------------------------- helpers
 
+def render_bar(label, stage, done, total, out=None):
+    """One pacman-style progress line, redrawn in place on a tty:
+
+        iso->chd       god-write   [##########----------------]  42%
+
+    Sized to the terminal, cleared by the caller when the job ends.
+    Rendering only - never called on a non-tty, so piped output and
+    benchmark logs are byte-identical to before this existed."""
+    import shutil as _shutil
+    if out is None:
+        out = sys.stderr
+    cols = _shutil.get_terminal_size((80, 24)).columns
+    pct = 100 * done // max(total, 1)
+    head = " %-22s %-11s" % (label[:22], stage[:11])
+    tail = " %3d%%" % pct
+    barw = max(10, cols - len(head) - len(tail) - 3)
+    fill = barw * done // max(total, 1)
+    line = "%s [%s%s]%s" % (head, "#" * fill, "-" * (barw - fill), tail)
+    out.write("\r" + line[:cols - 1])
+    out.flush()
+
+
+def clear_bar(out=None):
+    """Erase an in-place bar line before printing a real line over it."""
+    import shutil as _shutil
+    if out is None:
+        out = sys.stderr
+    cols = _shutil.get_terminal_size((80, 24)).columns
+    out.write("\r" + " " * (cols - 1) + "\r")
+    out.flush()
+
+
 class _Progress:
     """Progress sink. mode 'lines' prints machine-readable
     'PROGRESS <stage> <done> <total>' lines (the TUI parses these);
@@ -71,10 +103,10 @@ class _Progress:
                 sys.stderr.write("PROGRESS %s %d %d\n"
                                  % (stage, done, max(total, 1)))
             else:
-                pct = 100 * done // max(total, 1)
-                sys.stderr.write("\r%-10s %3d%%%s"
-                                 % (stage, pct,
-                                    "\n" if done >= total else ""))
+                render_bar("", stage, done, total)
+                if done >= total:
+                    clear_bar()
+                    sys.stderr.write("%-11s done\n" % stage)
             sys.stderr.flush()
         return fn
 

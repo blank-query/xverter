@@ -106,10 +106,8 @@ def run(edge, argv):
             if tty:
                 try:
                     _t, stage, d, tot = line.split()
-                    sys.stderr.write("\r  %-24s %-10s %3d%%"
-                                     % (edge, stage,
-                                        100 * int(d) // max(int(tot), 1)))
-                    sys.stderr.flush()
+                    from .cli import render_bar
+                    render_bar(edge, stage, int(d), int(tot))
                 except ValueError:
                     pass
             continue
@@ -117,7 +115,8 @@ def run(edge, argv):
     p.stdout.close()
     rc = p.wait()
     if tty:
-        sys.stderr.write("\r" + " " * 60 + "\r")
+        from .cli import clear_bar
+        clear_bar()
     dt = time.monotonic() - t0
     ok = rc == 0
     detail = (lines or [""])[-1]
