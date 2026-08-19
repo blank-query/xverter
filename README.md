@@ -302,24 +302,33 @@ flag to set.
 | ----------------------- | ----:| -----:|
 | CCI compression, 7.8 GB image | 15.8s | **8.1s** |
 | GoD hash-tree build | 3.3s | **2.1s** |
-| Full 44-edge matrix, Halo CE | 217s | **161s** |
+| Full 44-edge matrix, Halo CE | 193s | **154s** |
 
 The reason is specific: xVerter hashes 4 KiB blocks and LZ4-compresses 2 KB ones, and at that
 size the GIL hand-off between threads costs more than the work does — with a GIL, *more*
 threads are measurably slower, which is why the pools stay small there. Without one the same
 code parallelises properly.
 
+**The simplest way to get it is to not install anything**: the standalone binary already
+carries a free-threaded interpreter inside it. Nothing to choose, nothing to manage.
+
+If you want a Python install, you need a free-threaded interpreter first — pip cannot provide
+one, because pip installs *into* an interpreter rather than supplying it. Get it however you
+normally get Pythons:
+
 ```bash
-uv tool install --python 3.14t xverter    # fetches the interpreter too
+# from your distro, if it packages one (Fedora: python3.14-freethreading)
+python3.14t -m venv .venv && .venv/bin/pip install xverter
+
+# or with pyenv
+pyenv install 3.14.7t && pyenv shell 3.14.7t && pip install xverter
+
+# or with uv, which fetches the interpreter and the tool in one step
+uv tool install --python 3.14t xverter
 ```
 
-`uv` will download the free-threaded interpreter and install xVerter against it in one step —
-pip cannot do this, because pip installs *into* an interpreter and has no way to provide one.
-With plain pip you pick the interpreter yourself first:
-
-```bash
-uv python install 3.14t && uv venv --python 3.14t && uv pip install xverter
-```
+`uv` is a third-party tool and entirely optional — it is listed because it is the only one of
+the three that installs the interpreter for you.
 
 Output is byte-identical either way — this is a scheduling difference, not a different
 result, and every format's bytes were checked on both interpreters before this was written.
