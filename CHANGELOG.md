@@ -21,19 +21,28 @@ run. The format reference is MAME's own CHD library, which its authors deliberat
 BSD-3-Clause so that exactly this kind of independent implementation can exist. Credit where
 due: Aaron Giles.
 
-The numbers, on the same machine, same 7.8 GB disc:
+The numbers, on the same machine, same 7.8 GB disc, byte-identical outputs both ways:
 
 | | chdman | xVerter native |
 | --- | ---: | ---: |
-| create | 54s | 66s, +0.02% size |
-| extract | 25s | **25s — and verified during, not after** |
+| create | 53.9s | **34.5s — 1.56x faster** (+0.08% size) |
+| extract | 16.8s | **9.7s — 1.73x faster, and verified during, not after** |
 
-Extraction hashes the stream as it decodes, so the answer to "did that extract correctly"
-is free by the time the file exists; chdman answers the same question with a separate
-half-minute verify pass. A wrong first draft of the writer took 439 seconds and held most of
-the image in memory; what shipped streams everything, holds a rolling window, and got its
-speed from the same two lessons the rest of this project keeps re-learning — batch small units,
-and hand the parallel part to threads that actually run in parallel.
+Yes: the pure-Python implementation beats the C reference at its own format, both directions.
+Not by being cleverer at compression — by refusing to waste work. Four hunks in five on a real
+disc are pre-compressed assets, and the most expensive thing a compressor does is fail, so a
+cheap triage pass sends hopeless hunks straight to storage instead of letting the match finder
+churn on them. LZMA runs in fast mode, which the format cannot even see — the properties byte
+carries no encoder-effort settings, a fact confirmed by decoding fast-mode streams with plain
+properties. Extraction reads contiguous spans in single syscalls instead of seeking 1.9
+million times, and hashes the stream as it decodes, so the answer to "did that extract
+correctly" is free by the time the file exists; chdman's extract answers no integrity question
+at all.
+
+A wrong first draft of the writer took 439 seconds and held most of the image in memory; what
+shipped streams everything, holds a rolling window, and got its speed from the same lessons
+the rest of this project keeps re-learning — batch small units, never compress the
+incompressible, and hand the parallel part to threads that actually run in parallel.
 
 Reading a foreign CHD's FLAC hunks costs about 3x chdman's speed on those hunks — pure Python,
 decoding at 0.118 ms per hunk across 24 free-threaded cores, 22.7x the single-core figure.
