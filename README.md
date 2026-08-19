@@ -54,7 +54,7 @@ xverter convert <anything> -o out.zar      # or out.iso, out.god, outdir/
 
 **Archives are first-class citizens, both directions.** Games travel the internet in `.zip` and `.7z`, so xverter takes them straight: hand any conversion an archive and it extracts it, finds the game inside (announcing what it found), and carries on — `Halo 3.7z → .zar` is one command. As *output*, `.zip`/`.7z` targets wrap your input exactly as it is (no format change smuggled in; convert first if you want the payload converted). ZIP output is canonicalized — sorted entries, fixed timestamps, deterministic — and round-trip verified; 7z is CRC-verified. `.7z` runs on the official 7-Zip engine, multithreaded — bundled inside both the standalone binaries and the pip platform wheels, invoked as a separate program, never linked. RAR is deliberately absent: no free native implementation exists anywhere, and xverter doesn't take binary dependencies for it.
 
-Everything routes through a common pivot (the extracted game directory), so every cell is two verified hops at most.
+Formats that hold a disc image convert **directly, stream to stream** — no intermediate copy of the game is written at all; the rest route through a common pivot (the extracted game directory), so every cell is two verified hops at most.
 
 \* Yes, really — see the cursed corner below.
 
@@ -70,13 +70,13 @@ xVerter detects formats by magic bytes (never extensions), its wrappers are cont
 - **Xbox 360 game inside a CCI or CSO** — compressed wrappers that only modded *original* Xbox hardware (Cerbios, Project Stellar) will ever open, wrapped around a console generation that hardware cannot run. Round-trips bit-perfect.
 - **XBLA title → CHD** — a format no Xbox emulator reads yet, wrapping a container that never saw a disc. xVerter builds it happily, verifies it, and nothing on Earth boots it.
 
-Every cursed edge passes through the same verification as the sane ones — several of them run in the 48-edge matrix on every `xverter test`. Cursed, but checked.
+Every cursed edge passes through the same verification as the sane ones — several of them run in the 63-edge matrix on every `xverter test`. Cursed, but checked.
 
 And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA → `.zar`** reads like it belongs on the list above, but it's the cleanest way to run arcade titles in Xenia — the emulator reads the zar directly, one flat file per game instead of STFS's nested `Content/.../` tree or a GoD container's hash-named directories. ZAR is also routinely the smallest thing in the matrix: it archives the game's *files* rather than the disc image (redump padding never gets stored at all) and compresses with zstd — measured on the Halo CE redump, the zar is **46% of the source ISO** while CCI, CSO, and CHD all land near 88%. On games whose assets ship pre-compressed the formats converge; where there's slack, zar takes it. Tested on real hardware-dumped games, played in Xenia. Yesterday's cursed conversion is tomorrow's workflow — which is exactly why the tool converts and you decide.
 
 ## The test record — three generations of Halo, one hash each
 
-The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 48-edge matrix, every edge content-checked. Three numbers per game tell the whole story:
+The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 63-edge matrix (49 for STFS, which has no pressed disc to byte-compare against), every edge content- or byte-checked. Three numbers per game tell the whole story:
 
 - **Source SHA-1** — the whole input file; matches Redump's canonical dump.
 - **Content digest** — a canonical SHA-1 over every file's path + hash inside the game. This is the *format-invariant* fingerprint: identical across all seven formats, immune to compressor versions and container layout. It even survived xVerter's own writers being replaced wholesale — the digest below for Anniversary is byte-for-byte the one measured back when output ran through delegated third-party tools.
@@ -89,27 +89,32 @@ The release gate is the full test suite: real media, one franchise, every format
 | Halo: CE Anniversary  | XGD3 (full redump) | `2994534528e086c574e2223f2bc5c175075b9c89` | `bd84d86bfa51c755629fd99864ef46ec47533ede` (448 files) | `99e3c0e330e6ebd05f78ace21a69ec42f37093b0` |
 | Halo: Spartan Assault | XBLA (LIVE/STFS)   | `159ec0269bb3a6f10ba3a6d819e554b341ff0163` | `653f5d1ccd8e7c14a8c02ffcda59197f259c4680` (906 files) | `97869f3322450a7235328ab213a30b0591809482` |
 
-One franchise, every format Microsoft pressed — XGD1/2/3 — plus the download-era STFS container: 48/48 edges each. Every number above is reproducible on your own copy — `xverter test "Your Game.iso"` on the command line, or the TUI's **Test** button (select a game, one click, edges stream under the dual progress bars). Either way produces the same self-contained HTML report; the ones each release publishes are generated by exactly that harness.
+One franchise, every format Microsoft pressed — XGD1/2/3 — plus the download-era STFS container: every edge green, every run. Every number above is reproducible on your own copy — `xverter test "Your Game.iso"` on the command line, or the TUI's **Test** button (select a game, one click, edges stream under the dual progress bars). Either way produces the same self-contained HTML report; the ones each release publishes are generated by exactly that harness.
 
 ## Benchmarks
 
-Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, CachyOS Linux, Python 3.14. **Every conversion time includes full verification** (round-trip hash checks are not optional in these numbers). Seconds:
+Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, CachyOS Linux, free-threaded Python 3.14t. **Every conversion time includes full verification** (round-trip hash checks are not optional in these numbers). Seconds, with the 1.0.2 launch figure in parentheses:
 
 | Conversion              | Spartan Assault (2.3GB) | Halo CE (7.3GB) | Halo 3 (7.8GB) | Anniversary (8.7GB) |
 | ----------------------- | -----------------------:| ---------------:| --------------:| -------------------:|
-| dir → iso               | 3.1                     | 4.5             | 7.7            | 10.3                |
-| dir → zar               | 17.2                    | 10.5            | 25.2           | 34.1                |
-| iso → god               | 3.3                     | 5.1             | 8.4            | 10.9                |
-| iso → cci               | 11.0                    | 15.1            | 26.5           | 34.5                |
-| iso → cso               | 11.4                    | 14.8            | 26.4           | 34.2                |
-| iso → chd               | 56.1                    | 48.0            | 84.0           | 123.9               |
-| **full 48-edge matrix** | **5m49s**               | **5m55s**       | **10m47s**     | **14m48s**          |
+| dir → iso               | 2.9 (3.1)               | 3.9 (4.5)       | 5.9 (7.7)      | 9.2 (10.3)          |
+| dir → zar               | 6.1 (17.2)              | 5.4 (10.5)      | 10.5 (25.2)    | 14.7 (34.1)         |
+| iso → god               | 1.5 (3.3)               | 2.2 (5.1)       | 3.3 (8.4)      | 5.9 (10.9)          |
+| iso → cci               | 6.9 (11.0)              | 6.7 (15.1)      | 12.6 (26.5)    | 15.7 (34.5)         |
+| iso → cso               | 6.6 (11.4)              | 6.2 (14.8)      | 11.5 (26.4)    | 15.5 (34.2)         |
+| iso → chd               | 25.8 (56.1)             | 18.1 (48.0)     | 42.2 (84.0)    | 53.1 (123.9)        |
+| **full matrix**         | **3m00s** (5m49s, 48 edges) | **5m45s** (5m55s, 48 edges) | **9m05s** (10m47s, 48 edges) | **11m01s** (14m48s, 48 edges) |
+
+The current column runs **63 edges (49 for Spartan)** — a third more coverage than the launch
+column — and still comes in faster on every game: the launch quartet took 37m07s, the current
+one 28m51s. CHD went native in 1.2.0 (previously delegated to chdman), which is where its
+column's halving comes from.
 
 Compression, as a fraction of the raw ISO (content-dependent — Anniversary's assets are already compressed, Spartan's aren't): CHD 60–90%, ZAR 60–93%, CCI/CSO 70–96%, GoD ~100.5% (its SHA-1 hash tree costs half a percent).
 
 ### The same matrix on a mid-range laptop
 
-For a realistic second data point: Halo CE again, this time on an HP Envy x360 14 (AMD Ryzen 7 8840HS, 8c/16t, 16GB RAM, Windows 11 Home) running the standalone `xverter.exe` — no Python install, no chdman:
+For a realistic second data point: Halo CE again, this time on an HP Envy x360 14 (AMD Ryzen 7 8840HS, 8c/16t, 16GB RAM, Windows 11 Home) running the standalone `xverter.exe` — no Python install, no chdman. (Both columns are **v1.0.2 measurements**, kept as an honest hardware comparison; current builds are roughly twice as fast on both machines, per the table above.)
 
 | Conversion            | desktop (above) | laptop |
 | --------------------- | ---------------:| ------:|
@@ -118,7 +123,7 @@ For a realistic second data point: Halo CE again, this time on an HP Envy x360 1
 | iso → god             | 5.1             | 16.0   |
 | iso → cci             | 15.1            | 51.2   |
 | iso → cso             | 14.8            | 45.5   |
-| full matrix           | 5m55s (48 edges)| 15m57s (44 edges — chdman absent, CHD edges skipped) |
+| full matrix           | 5m55s (48 edges)| 15m57s (44 edges — v1.0.2 delegated CHD to chdman, which was absent; CHD is native since 1.2.0 and runs everywhere) |
 
 Roughly 3× the desktop's times across the board — a laptop-class CPU converts a full-size XGD1 disc to any format in under a minute, and every check still passes. All 44 edges: ALL PASS.
 
@@ -170,9 +175,9 @@ A file can be valid and not authenticated (a trimmed rip is a perfectly well-for
 | STFS | the full internal hash chain — every allocated block against its table, tables against parents, up to the descriptor's root |
 | CCI / CSO | every block decoded, whole stream SHA-1 reported |
 | CHD | native: full decompression against both of the header's internal SHA-1s |
-
-A related honesty note on **bit rot**: whether a format can *detect its own decay years later* is a property of the format, not of xVerter. GoD (SHA-1 hash tree), ZAR (whole-file SHA-256 — checked on every read, so a rotted archive refuses to convert rather than quietly producing garbage), STFS (hash chain), CHD (per-hunk CRC + SHA-1s), ZIP/7z (CRCs) all can. **CCI and CSO contain no checksums at all** — a flipped bit in a stored sector is invisible to any reader on Earth, by the format's design. xVerter verifies them exhaustively at creation; for long-term archival storage, prefer a format that can testify to its own integrity.
 | ZIP / 7z | archive integrity, then the game found inside is verified by its own rules |
+
+A related honesty note on **bit rot**: whether a format can *detect its own decay years later* is a property of the format, not of xVerter. GoD (SHA-1 hash tree), ZAR (whole-file SHA-256 — checked on every read, so a rotted archive refuses to convert rather than quietly producing garbage), STFS (hash chain), CHD (per-hunk CRC + SHA-1s), ZIP/7z (CRCs) all can. **CCI and CSO contain no checksums at all** — a flipped bit in a stored sector is invisible to any reader on Earth, by the format's design. xVerter verifies them exhaustively at creation, and `verify` says exactly this when asked about one; for long-term archival storage, prefer a format that can testify to its own integrity.
 
 **Redump authentication** (ISOs) is fully offline out of the box: the tool ships with redump's Xbox **and** Xbox 360 DATs bundled (refreshed weekly by CI from redump's official export — bundling is [explicitly permitted by redump's admin](http://forum.redump.org/topic/18562/redistributing-dat-files/)); `verify` matches computed CRC-32/SHA-1 against them locally. The verdicts mean what they say:
 
@@ -186,13 +191,12 @@ A related honesty note on **bit rot**: whether a format can *detect its own deca
 
 Converting, verifying and authenticating are **fully offline operations**. The tool ships with redump's DATs, so authentication is answered locally, every time. Nothing phones home on startup, no telemetry, no update nag, no "just checking" hash lookup behind your back.
 
-Exactly three things reach the internet, and all three are a button or a command you typed:
+Exactly two things reach the internet, and both are a button or a command you typed:
 
 | Action | What it fetches |
 |--------|-----------------|
 | **Database Update** (Setup tab) or `xverter dat update` | redump's current DAT export |
 | **xVerter Update** (Setup tab) | the newest release from GitHub |
-| **Install** next to a missing external tool (Setup tab) | that tool's release binary |
 
 Both update buttons take **two presses**: the first checks and tells you what it found, the second downloads. Neither one downloads anything on the first press.
 
@@ -223,7 +227,7 @@ xverter dat     update|status              # manage the bundled/cached redump da
 | `--workdir DIR` | put pivot files somewhere specific (overrides `--scratch`) |
 | `--progress` | machine-readable `PROGRESS` lines on stderr (a tty gets human percentages automatically) |
 
-`verify` options: `--deep` (read every byte, not just structure), `--dat FILE` (your own Logiqx DAT), `--no-lookup` (skip redump authentication, and the whole-image hashing it needs), `--progress`. `test` takes `--workdir DIR` for its scratch (default: temp dir next to the game, cleaned up after). `dat update` refreshes the cached redump database (`--system xbox360|xbox`); `dat status` shows what's bundled and cached.
+`verify` options: `--deep` (read every byte, not just structure), `--dat FILE` (your own Logiqx DAT), `--no-lookup` (skip redump authentication, and the whole-image hashing it needs), `--progress`. `test` takes `--workdir DIR` for its scratch (default: temp dir next to the game, cleaned up after) and `--referee`, which additionally runs any installed reference implementation against xVerter's output (today: chdman on the CHD edges) — a release-gate check, off by default because it spends minutes testing *their* code agreeing with ours. `dat update` refreshes the cached redump database (`--system xbox360|xbox`); `dat status` shows what's bundled and cached.
 
 ## Progress you can actually see
 
@@ -261,13 +265,13 @@ xverter test "Some Game.zar"
 (Or select a game in the TUI and click **Test** — the edges stream into the log under the dual progress bars.) Every container round-trips through extraction with hashes diffed against the baseline, every artifact kind gets a `verify` pass, and the run ends by writing a single self-contained `<game>_matrix_report.html` next to your game: verdict, per-edge timings, artifact sizes and compression ratios, decoded-stream SHA-1s, tool versions — with the complete machine-readable JSON embedded inside the page. Expected final lines:
 
 ```
-48 edges, 0 failed
+63 edges, 0 failed
 MATRIX: ALL PASS
 ```
 
-(All edges run everywhere — the CHD edges are native; with `chdman` installed the suite also has it verify xVerter's CHD output as a differential reference.)
+(49 edges for STFS input, which has no pressed disc image to byte-compare against. All edges run everywhere — the CHD edges are native; pass `--referee` to additionally have an installed `chdman` verify xVerter's CHD output as a differential reference.)
 
-Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release test-suite runs on real XGD1, XGD2, XGD3 and STFS dumps — and it narrates itself: per-edge results stream live with within-edge progress (no binaries required; `chdman`, if present, is used purely as a differential reference on the CHD edges). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
+Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release test-suite runs on real XGD1, XGD2, XGD3 and STFS dumps — and it narrates itself: per-edge results stream live with within-edge progress (no binaries required; `--referee` opts into using an installed `chdman` as a differential reference on the CHD edges). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
 
 ## TUI
 
@@ -277,7 +281,7 @@ xverter tui /path/to/library    # or just `xverter` for the current folder
 
 A terminal UI over the same verified machinery, fully mouse-driven — no hotkeys to memorize, identical on Linux, Windows, and macOS terminals, and fully usable over SSH (your terminal forwards mouse clicks, so it drives fine on a headless server or a Pi). Two tabs:
 
-- **Convert** — browse the library like a file manager: single click selects (details appear, magic-detected — including the native disc structure XGD1/2/3-or-bare, the console, and for ISOs the game's *true redump name* looked up by hash against the bundled databases, regardless of filename), double click enters a folder, the `..` row goes back up. Click the button for the output you want (ISO, ZAR, GoD, CCI, CSO, CHD, 7z, ZIP, or extracted folder), flip the RAM-scratch / 4GiB-split switches as needed, and watch the stage-labeled progress bar and log. **Batch mode**: press spacebar to mark any number of games (a ● appears), then click one format button — they process alphabetically under two bars, overall batch progress plus the current game's stage, with per-game results in the log. Mixed input formats in one batch are fine (each member is detected independently); members that aren't recognizable games, are already in the target format, or already have their output are *skipped*, never failed, and the final summary counts OK / skipped / failed honestly. The header shows the running version, the log's first line stamps it plus (for standalone binaries) the build date, and on launch xverter quietly checks GitHub for a newer release — if one exists you get one log line with the link, and nothing ever nags beyond that.
+- **Convert** — browse the library like a file manager: single click selects (details appear, magic-detected — including the native disc structure XGD1/2/3-or-bare, the console, and for ISOs the game's *true redump name* looked up by hash against the bundled databases, regardless of filename), double click enters a folder, the `..` row goes back up. Click the button for the output you want (ISO, ZAR, GoD, CCI, CSO, CHD, 7z, ZIP, or extracted folder), flip the RAM-scratch / 4GiB-split switches as needed, and watch the stage-labeled progress bar and log. **Batch mode**: press spacebar to mark any number of games (a ● appears), then click one format button — they process alphabetically under two bars, overall batch progress plus the current game's stage, with per-game results in the log. Mixed input formats in one batch are fine (each member is detected independently); members that aren't recognizable games, are already in the target format, or already have their output are *skipped*, never failed, and the final summary counts OK / skipped / failed honestly. The header shows the running version, and the log's first line stamps it plus (for standalone binaries) the build date. Nothing checks the network at launch — updates live behind the Setup tab's two-press buttons.
 - **Setup** — the two-press update buttons (xVerter itself, and the redump database), and on Linux one-click **Install**/**Remove** of an app-menu launcher entry.
 
 The **Test** button runs the full test suite against the selected game right on the Convert tab — edges stream into the log under the same two bars batch mode uses, report saved next to the game.
@@ -304,7 +308,7 @@ flag to set.
 | ----------------------- | ----:| -----:|
 | CCI compression, 7.8 GB image | 15.8s | **8.1s** |
 | GoD hash-tree build | 3.3s | **2.1s** |
-| Full 44-edge matrix, Halo CE | 193s | **154s** |
+| Full matrix, Halo CE (measured at 1.1.0, 44 edges) | 193s | **154s** |
 
 The reason is specific: xVerter hashes 4 KiB blocks and LZ4-compresses 2 KB ones, and at that
 size the GIL hand-off between threads costs more than the work does — with a GIL, *more*
@@ -337,7 +341,7 @@ result, and every format's bytes were checked on both interpreters before this w
 Plain 3.14 (or 3.9+) remains fully supported and is what you get by default; on one, xVerter
 mentions this once per run to a terminal, and `XVERTER_NO_HINTS=1` silences that.
 
-The full picture, Halo quartet, 44 edges per game, same machine and same code:
+The full picture, Halo quartet, same machine and same code (measured at 1.1.0, 44 edges per game — current totals are in the Benchmarks section):
 
 | | checks on | with `--leeroy-jenkins` |
 | ------------------ | --------:| -----------------------:|
@@ -362,7 +366,7 @@ termux-setup-storage        # one-time: lets xverter see shared storage
 xverter ~/storage/shared    # TUI on your phone's files
 ```
 
-Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clang during install. `.7z` support comes from the `7zip` package (the engine bundled in the platform wheels is glibc-only, so the PATH fallback picks up Termux's `7zz` instead). CHD stays optional as everywhere — Termux has no `chdman` package, so CHD edges are simply skipped, exactly as on any machine without it. The TUI is touch-friendly: taps arrive as mouse clicks.
+Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clang during install. `.7z` support comes from the `7zip` package (the engine bundled in the platform wheels is glibc-only, so the PATH fallback picks up Termux's `7zz` instead). CHD works here too — it is pure Python like everything else since 1.2.0, so a phone converts to and from `.chd` with nothing extra installed. The TUI is touch-friendly: taps arrive as mouse clicks.
 
 ![xVerter running in Termux on a Galaxy Z Fold 4](docs/termux-zfold4.jpg)
 
@@ -400,7 +404,7 @@ GoD needs no such setting — the format is natively multi-part (its `Data####` 
 - **STFS entries** live in a 64-byte-record file table; SHA-1 hash tables interleave with the data blocks (one per 170, higher levels above), and the volume descriptor seals the chain's root — which is why xverter can verify every allocated block against the package's own math. XBLA titles are `000D0000` content, DLC `00000002`, title updates `000B0000` — all the same container.
 - **The XDVDFS tree comparator is ASCII-*uppercase* fold** — real Microsoft-mastered images contain adjacent name pairs that only sort correctly under uppercase folding (`_` between the cases). Lowercase folding, the obvious guess, misorders three pairs across four reference images.
 - **XDVDFS cannot hold a >4GiB file** (dirent sizes are u32) — which is why CCI/CSO splitting exists for consoles and why no real game ships one (Halo 3's largest file is a 542MB map).
-- **CHD v5 carries its own SHA-1s** in a 124-byte big-endian header (raw-data and data+metadata digests), which is why xverter can identify and sanity-check `.chd` files natively with no chdman installed — only conversion needs the binary.
+- **CHD v5 carries its own SHA-1s** in a 124-byte big-endian header (raw-data and data+metadata digests) — and, less obviously, its LZMA parameters are *not* in the file: MAME derives them from the hunk size and both sides must repeat that arithmetic exactly. xVerter reads and writes the format natively; `chdman copy` remains the pointer for the two shapes it refuses (parent-delta CHDs and pre-v5 files).
 - **Case-insensitivity is load-bearing**: real discs ship `default.xex`, `DEFAULT.XEX`, and `Default.xex`. Anything matching case-sensitively will eventually lie to you.
 
 ## License
