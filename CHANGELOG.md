@@ -2,18 +2,20 @@
 
 ## 1.1.0 — stop waiting
 
-This release converts your library **16% faster on the same Python you already have, and
-36% faster on the one the binaries now ship with** — and produces byte-for-byte exactly what
-1.0 produced. Every GoD tree, every zar, every CCI, CSO and ISO is identical to the last
-release's output, and every check that ran before still runs. If that combination sounds
-suspicious, good; it took a lot of measuring to earn.
+**The full Halo test suite went from 23m48s to 15m08s. That is 36% faster, with every single
+check still running** — and byte-for-byte the same output. Every GoD tree, every zar, every
+CCI, CSO and ISO is identical to what 1.0 wrote. If "much faster, verifies exactly as much,
+produces exactly the same bytes" sounds suspicious, good; it took a lot of measuring to earn.
 
-The whole Halo test suite, every check enabled:
+| The whole quartet, every check enabled | |
+| -------------------------------------- | ------:|
+| 1.0, its best | 23m48s |
+| **1.1.0, its best** | **15m08s** |
 
-| | 1.0 | 1.1.0 |
-| ------------------------------- | ------:| ------:|
-| stock CPython | ~23m48s | **20m05s** |
-| free-threaded CPython 3.14t | — | **15m08s** |
+Two things got us there and they multiply: the work itself got faster, and the binaries now
+ship on a Python that can actually run it in parallel. If you install with pip and stay on a
+stock interpreter you still get 20m05s — a 16% improvement for changing nothing — but the
+free-threaded build is where this release lives, and the binaries are already on it.
 
 Here is how that happened, including the parts where we were wrong.
 
