@@ -1023,6 +1023,7 @@ def cmd_convert(args):
             build(path, args.output, verify=not args.no_verify,
                   progress=prog.cb(out_kind + "-write"))
             ident.report()
+            _gil_hint()
             print("wrote %s (%s)"
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1045,6 +1046,7 @@ def cmd_convert(args):
                                    "sha1 %s" % (got, want))
             if out_kind == "iso":
                 ident.report()
+                _gil_hint()
                 print("wrote %s (%s)"
                       % (args.output,
                          "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1055,6 +1057,7 @@ def cmd_convert(args):
             # direct verified path, no pivot needed
             god_mod.convert(path, args.output, progress=prog.cb("god-read"))
             ident.report()
+            _gil_hint()
             print("wrote %s" % args.output)
             return 0
         if out_kind == "god" and kind == "iso":
@@ -1063,6 +1066,7 @@ def cmd_convert(args):
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
             ident.report()
+            _gil_hint()
             print("wrote GoD container (header: %s) (%s)"
                   % (hdr, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash tree verified"))
@@ -1097,6 +1101,7 @@ def cmd_convert(args):
                 _verify_chd_output(args.output, src_iso,
                                    progress=prog.cb("verify"))
             ident.report()
+            _gil_hint()
             print("wrote %s (%s)"
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1140,6 +1145,7 @@ def cmd_convert(args):
                                 progress=prog.cb("verify"),
                                 source_sha1=ahead.result() if ahead else None)
             ident.report()
+            _gil_hint()
             print("wrote %s (%s)"
                   % (", ".join(written),
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1156,6 +1162,7 @@ def cmd_convert(args):
                                    progress=prog.cb("iso-write"),
                                    verify_progress=prog.cb("verify"))
             ident.report()
+            _gil_hint()
             print("wrote %s (manifest %s)"
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1171,6 +1178,7 @@ def cmd_convert(args):
                                          progress=prog.cb("god-write"),
                                          verify_progress=prog.cb("verify"))
             ident.report()
+            _gil_hint()
             print("wrote GoD container (header: %s) (%s)"
                   % (hdr, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash tree verified"))
@@ -1184,6 +1192,7 @@ def cmd_convert(args):
             # structure to re-read, so the only claim on offer is that
             # every file was hashed on the way out of the source.
             ident.report()
+            _gil_hint()
             print("wrote %s/ (%s)"
                   % (args.output.rstrip("/"),
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
@@ -1195,12 +1204,44 @@ def cmd_convert(args):
                          manifest=manifest, progress=prog.cb("zar-write"),
                          verify_progress=prog.cb("verify"))
             ident.report()
+            _gil_hint()
             print("wrote %s (%s)"
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
         return 0
     finally:
         shutil.rmtree(w, ignore_errors=True)
+
+
+_HINTED = [False]
+
+
+def _gil_hint():
+    """Mention the free-threaded interpreter once, to a human, on a
+    build that has the GIL.
+
+    Deliberately quiet: only to a terminal, only once per process, and
+    silenced entirely by XVERTER_NO_HINTS. Piped or scripted runs never
+    see it, which keeps it out of the test matrix's logs and out of
+    anything parsing our output. It is a note, not a nag - the tool
+    works fine either way, it is simply about a quarter slower."""
+    if _HINTED[0] or os.environ.get("XVERTER_NO_HINTS"):
+        return
+    try:
+        import sysconfig
+        if sysconfig.get_config_var("Py_GIL_DISABLED"):
+            return                       # already on the fast one
+        if not sys.stderr.isatty():
+            return
+    except Exception:                                 # noqa: BLE001
+        return
+    _HINTED[0] = True
+    print("note: this is a GIL interpreter. Free-threaded Python 3.14t "
+          "converts about 25%% faster\n"
+          "      (compression ~2x, hashing ~6x) - `uv tool install "
+          "--python 3.14t xverter`.\n"
+          "      The standalone binaries already ship on it. Silence "
+          "with XVERTER_NO_HINTS=1." % (), file=sys.stderr)
 
 
 def _version_string():

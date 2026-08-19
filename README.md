@@ -310,13 +310,28 @@ threads are measurably slower, which is why the pools stay small there. Without 
 code parallelises properly.
 
 ```bash
-uv python install 3.14t          # or your distro's free-threading package
-uv venv --python 3.14t && uv pip install xverter
+uv tool install --python 3.14t xverter    # fetches the interpreter too
+```
+
+`uv` will download the free-threaded interpreter and install xVerter against it in one step —
+pip cannot do this, because pip installs *into* an interpreter and has no way to provide one.
+With plain pip you pick the interpreter yourself first:
+
+```bash
+uv python install 3.14t && uv venv --python 3.14t && uv pip install xverter
 ```
 
 Output is byte-identical either way — this is a scheduling difference, not a different
 result, and every format's bytes were checked on both interpreters before this was written.
-Plain 3.14 (or 3.9+) remains fully supported and is what you get by default.
+Plain 3.14 (or 3.9+) remains fully supported and is what you get by default; on one, xVerter
+mentions this once per run to a terminal, and `XVERTER_NO_HINTS=1` silences that.
+
+The full picture, Halo quartet, 44 edges per game, same machine and same code:
+
+| | checks on | with `--leeroy-jenkins` |
+| ------------------ | --------:| -----------------------:|
+| GIL | 1205s | 980s |
+| **free-threaded** | **908s** | **718s** |
 
 **xVerter has no required external tools.** Every reader and every writer is its own code — ISO, GoD, ZAR, CCI, CSO, STFS, ZIP: native, pure Python, nothing to hunt down. `pip install` brings the three Python packages it runs on (`textual` for the TUI, `lz4` for CCI/CSO compression, and `zstandard` only on Python < 3.14, where zstd isn't in the stdlib yet — the marker handles it, you don't). `.7z` support comes with the engine included everywhere: the standalone binaries and the platform wheels PyPI serves both carry the official 7-Zip engine inside; only a from-source install (plain sdist) falls back to a system 7-Zip with a clear hint. One binary exists in the picture at all, and it's opt-in: install it only if you want CHD.
 
