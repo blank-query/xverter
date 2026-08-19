@@ -431,8 +431,78 @@ def _verify_chd_output(chd_path, src_iso, progress=None):
                        % (got, want, "" if pad_ok else ", nonzero padding"))
 
 
+class _SourceHashAhead:
+    """The source half of round-trip verification, started early.
+
+    Verifying a built CCI/CSO compares the decoded output's stream SHA-1
+    against the source's. The source half depends on nothing the build
+    produces, so there is no reason to wait for the build to finish
+    before computing it - it runs alongside, on a free core, and by the
+    time the output needs checking the answer is already in hand.
+
+    This is still a second, independent read of the source, which is the
+    property worth keeping: a transient read error during the build gets
+    compressed faithfully and would otherwise verify as correct. Reading
+    it again, separately, is what catches that. Only the waiting is
+    removed."""
+
+    def __init__(self, in_kind, in_path, w):
+        self._box = []
+        self._err = []
+        self._t = None
+        if in_kind not in ("iso", "god", "cci", "cso"):
+            return                       # pivot cases: let verify do it
+        self._t = threading.Thread(
+            target=self._run, args=(in_kind, in_path, w), daemon=True)
+        self._t.start()
+
+    def _run(self, in_kind, in_path, w):
+        try:
+            self._box.append(_source_stream_sha1(in_kind, in_path, w))
+        except BaseException as exc:                  # noqa: BLE001
+            self._err.append(exc)
+
+    def result(self):
+        """The digest, or None if it was not started or did not finish -
+        in which case the caller computes it the ordinary way."""
+        if self._t is None:
+            return None
+        self._t.join()
+        if self._err or not self._box:
+            return None
+        return self._box[0]
+
+
+def _source_stream_sha1(in_kind, in_path, w):
+    """SHA-1 of the source's decoded ISO stream, however it is stored."""
+    import hashlib
+
+    def _hash(f, seek0=True):
+        h = hashlib.sha1()
+        if seek0:
+            f.seek(0)
+        while True:
+            b = f.read(1 << 22)
+            if not b:
+                break
+            h.update(b)
+        return h.hexdigest()
+
+    if in_kind == "iso":
+        with open(in_path, "rb") as f:
+            from .formats.cci import xbox_image_offset
+            off = xbox_image_offset(f)
+            f.seek(off)
+            return _hash(f, seek0=False)
+    if in_kind == "god":
+        with god_mod.GodStream(in_path) as f:
+            return _hash(f)
+    with _wrapper_reader(in_kind, in_path) as f:
+        return _hash(f)
+
+
 def _verify_wrapper(out_kind, out_path, in_kind, in_path, w,
-                    progress=None):
+                    progress=None, source_sha1=None):
     """Round-trip a built CCI/CSO: decoded stream sha1 must equal source
     ISO stream sha1."""
     import hashlib
@@ -469,7 +539,9 @@ def _verify_wrapper(out_kind, out_path, in_kind, in_path, w,
 
     got_t = threading.Thread(target=_hash_output, daemon=True)
     got_t.start()
-    if in_kind == "iso":
+    if source_sha1 is not None:
+        want = source_sha1               # computed during the build
+    elif in_kind == "iso":
         with open(in_path, "rb") as f:
             from .formats.cci import xbox_image_offset
             off = xbox_image_offset(f)
@@ -980,6 +1052,10 @@ def cmd_convert(args):
         if out_kind in ("cci", "cso"):
             build = cci_mod.build_cci if out_kind == "cci" else cso_mod.build_cso
             split = getattr(args, "split", False)
+            # The source half of the round-trip check needs nothing the
+            # build produces, so it starts now and runs alongside it.
+            ahead = (_SourceHashAhead(kind, path, w)
+                     if not args.no_verify else None)
             if kind == "iso":
                 written = build(path, args.output, split=split,
                                 progress=prog.cb("compress"))
@@ -1008,7 +1084,8 @@ def cmd_convert(args):
                                 progress=prog.cb("compress"))
             if not args.no_verify:
                 _verify_wrapper(out_kind, written[0], kind, path, w,
-                                progress=prog.cb("verify"))
+                                progress=prog.cb("verify"),
+                                source_sha1=ahead.result() if ahead else None)
             print("wrote %s (%s)"
                   % (", ".join(written),
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
