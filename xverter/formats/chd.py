@@ -143,7 +143,15 @@ def build(iso_path, out_chd, progress=None):
     if os.path.exists(out_chd):
         raise ChdError("output already exists: %s" % out_chd)
     try:
-        chd_native.write_dvd(iso_path, out_chd, progress=progress)
+        # Everything xverter currently wraps in a CHD is an XDVDFS or
+        # STFS payload - game data, no CD audio - so the FLAC audition
+        # is left out of the codec list entirely rather than probed per
+        # hunk. The encoder exists and is exercised (chd_native's
+        # default list includes it, and the CD-type path will want it);
+        # this call site simply knows its content.
+        chd_native.write_dvd(iso_path, out_chd,
+                             compressors=(b"lzma", b"zlib"),
+                             progress=progress)
     except chd_native.ChdNativeError as e:
         raise ChdError("native CHD build failed: %s" % e)
     return out_chd

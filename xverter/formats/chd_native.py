@@ -718,15 +718,45 @@ def _pcm_likely(raw):
     return diff * 2 < amp
 
 
+#: Triage threshold: when single-pass deflate at level 1 cannot get a
+#: hunk under this fraction of its size, the real codecs are not tried
+#: and the hunk is stored. Compressing the incompressible is the most
+#: expensive thing a compressor does - the match finder churns hardest
+#: exactly when there is nothing to find - and on a real disc most
+#: hunks are pre-compressed assets. Chosen from measurement on real
+#: game hunks; the cost of a rare wrong call is a slightly larger
+#: file, never a wrong one.
+TRIAGE = 0.97
+
+
+def _lzma_effort(hunkbytes):
+    """Encoder effort for the audition. LZMA1's properties byte encodes
+    lc/lp/pb/dict only, so match-finder settings are invisible to the
+    decoder - MAME reconstructs the same props either way - and this is
+    free speed, checked against a plain-props decode in the tests."""
+    import lzma as _lzma
+    f = dict(_lzma_filters(hunkbytes)[0])
+    f["mode"] = _lzma.MODE_FAST
+    f["nice_len"] = 32
+    return [f]
+
+
 def _compress_hunk(raw, tags, hunkbytes, level):
     """Best of the configured codecs for one hunk, or None to store it
     raw. Returns (type_index, payload)."""
     best = None
     flac_index = None
+    triage = None
     for index, tag in enumerate(tags):
         try:
             if tag == b"flac":
                 flac_index = index
+                continue
+            if triage is None:
+                obj = zlib.compressobj(1, zlib.DEFLATED, -15)
+                probe = obj.compress(raw) + obj.flush()
+                triage = len(probe) < hunkbytes * TRIAGE
+            if not triage:
                 continue
             if tag == b"zlib":
                 # CHD stores raw deflate, without zlib's 2-byte header
@@ -740,7 +770,7 @@ def _compress_hunk(raw, tags, hunkbytes, level):
                 import lzma as _lzma
                 comp = _lzma.compress(
                     raw, format=_lzma.FORMAT_RAW,
-                    filters=_lzma_filters(hunkbytes))
+                    filters=_lzma_effort(hunkbytes))
             elif tag == b"zstd":
                 try:
                     from compression import zstd as _zstd
@@ -826,7 +856,7 @@ def write_dvd(src, out_path, compressors=DEFAULT_COMPRESSORS, level=6,
         import collections
         import concurrent.futures
 
-        with open(out_path, "wb") as out:
+        with open(out_path, "wb", buffering=1 << 22) as out:
             out.seek(data_start)
             offset = data_start
             index = 0
@@ -940,7 +970,8 @@ def _encode_map(entries, hunkbytes, data_start):
     return head + body
 
 
-def extract_to(chd_path, out_path, workers=None, progress=None):
+def extract_to(chd_path, out_path, workers=None, progress=None,
+               hunk_crcs=False):
     """Decompress a CHD to an image file, in parallel.
 
     The sequential read() path decodes one hunk at a time on one
@@ -952,6 +983,15 @@ def extract_to(chd_path, out_path, workers=None, progress=None):
     which on a real image is the padding, not the game.
 
     out_path=None decodes and hashes without writing - the verify path.
+
+    hunk_crcs: the map's per-hunk CRC-16s are checked only on request.
+    Every caller of this function compares the returned stream SHA-1
+    against the header, and SHA-1 over the same bytes strictly
+    supersedes CRC-16 over pieces of them - the CRCs' only added value
+    is naming the damaged hunk, so they are recomputed on demand when a
+    mismatch needs localising, not paid for on every clean read. The
+    random-access reader still checks them per hunk, because it has no
+    stream hash to lean on.
 
     Returns the SHA-1 of the decoded image, which the caller is
     expected to compare against the header's rawsha1 - reporting a
@@ -976,19 +1016,21 @@ def extract_to(chd_path, out_path, workers=None, progress=None):
         retained = {}
         codecs = _Codecs(header)
 
-        def job(batch):
-            """Decode one run of stored hunks: (index, raw) each."""
+        def job(batch, buf):
+            """Decode one run of stored hunks out of one shared read."""
             done = []
-            for index, comp, length, offset, crc, blob in batch:
+            view = memoryview(buf)
+            for index, comp, length, crc, at in batch:
+                blob = view[at:at + (length if comp != _NONE else hunkbytes)]
                 if comp == _NONE:
-                    raw = blob
+                    raw = bytes(blob)
                 else:
                     raw = codecs.decode(comp, blob, hunkbytes)
                 if len(raw) != hunkbytes:
                     raise ChdNativeError(
                         "hunk %d decoded to %d bytes, expected %d"
                         % (index, len(raw), hunkbytes))
-                if crc and crc16(raw) != crc:
+                if hunk_crcs and crc and crc16(raw) != crc:
                     raise ChdNativeError("hunk %d failed its CRC" % index)
                 done.append((index, raw))
             return done
@@ -999,17 +1041,24 @@ def extract_to(chd_path, out_path, workers=None, progress=None):
         with open(out_path if out_path is not None else os.devnull,
                   "wb") as out:
             def emit(results):
+                # One join, one hash update, one write per batch: at
+                # 1.9M hunks, per-hunk write() and update() calls were
+                # measurable main-thread time.
+                keep = []
                 for index, raw in results:
                     if index in wanted:
                         retained[index] = raw
                     take = min(hunkbytes, logical - written[0])
-                    if take > 0:
-                        chunk = raw[:take]
-                        out.write(chunk)
-                        digest.update(chunk)
-                        written[0] += take
-                    if progress:
-                        progress(written[0], logical)
+                    if take <= 0:
+                        break
+                    keep.append(raw[:take] if take < hunkbytes else raw)
+                    written[0] += take
+                if keep:
+                    blob = b"".join(keep)
+                    out.write(blob)
+                    digest.update(blob)
+                if progress:
+                    progress(written[0], logical)
 
             # The deque holds futures and self-references in file
             # order; emission is FIFO, so by the time a self-reference
@@ -1037,12 +1086,21 @@ def extract_to(chd_path, out_path, workers=None, progress=None):
                 def flush_batch():
                     nonlocal batch
                     if batch:
-                        pending.append(("fut", pool.submit(job, batch)))
+                        fh.seek(span_start)
+                        buf = fh.read(span_end - span_start)
+                        pending.append(("fut", pool.submit(job, batch, buf)))
                         batch = []
 
+                # Stored hunks lie consecutively in the file - both we
+                # and chdman write them in order - so a batch is one
+                # contiguous span read with one syscall, not hundreds.
+                # A discontiguous entry (a foreign layout) just starts
+                # a fresh span; correctness never depends on adjacency.
+                span_start = span_end = None
                 for index, (comp, length, offset, crc) in enumerate(entries):
                     if comp == _SELF:
                         flush_batch()
+                        span_start = span_end = None
                         pending.append(("self", index, offset))
                     elif comp == _PARENT:
                         raise ChdNativeError(
@@ -1050,11 +1108,18 @@ def extract_to(chd_path, out_path, workers=None, progress=None):
                             "which xverter does not read - `chdman copy` "
                             "will flatten it")
                     else:
-                        fh.seek(offset)
-                        blob = fh.read(length if comp != _NONE else hunkbytes)
-                        batch.append((index, comp, length, offset, crc, blob))
+                        need = length if comp != _NONE else hunkbytes
+                        if span_end is not None and offset != span_end:
+                            flush_batch()
+                            span_start = span_end = None
+                        if span_start is None:
+                            span_start = span_end = offset
+                        batch.append((index, comp, length, crc,
+                                      offset - span_start))
+                        span_end = offset + need
                         if len(batch) >= batch_hunks:
                             flush_batch()
+                            span_start = span_end = None
                     while len(pending) > workers + 4:
                         emit_one(pending.popleft())
                 flush_batch()
