@@ -71,6 +71,12 @@ def sha1_file(path):
 #: is the point: it measures what those checks cost.
 LEEROY = False
 
+#: Run reference implementations against our output when they are
+#: installed. Off by default: the differential adds real minutes to a
+#: run without testing any xverter code, so it is asked for on release
+#: gates rather than paid on every iteration.
+REFEREE = False
+
 
 def run(edge, argv):
     t0 = time.monotonic()
@@ -518,9 +524,13 @@ def main(argv=None):
     global LEEROY
     argv = sys.argv[1:] if argv is None else argv
     argv = list(argv)
+    global REFEREE
     if "--leeroy-jenkins" in argv:
         argv.remove("--leeroy-jenkins")
         LEEROY = True
+    if "--referee" in argv:
+        argv.remove("--referee")
+        REFEREE = True
     if len(argv) != 2:
         raise SystemExit(__doc__)
     src, w = argv
@@ -642,7 +652,7 @@ def main(argv=None):
         run("iso(src)->chd", ["convert", src, "-o", d("s.chd")])
         run("chd(src)->iso", ["convert", d("s.chd"), "-o", d("back_chd.iso")])
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
-        if have_chdman:
+        if have_chdman and REFEREE:
             t0 = time.monotonic()
             r = subprocess.run([_deps.find("chdman"), "verify", "-i", d("s.chd")],
                                capture_output=True, text=True)
@@ -654,6 +664,9 @@ def main(argv=None):
                   % ("  chdman(chd)",
                      "PASS" if ok else "FAIL (reference rejects our CHD)",
                      time.monotonic() - t0), flush=True)
+        elif have_chdman:
+            print("%-24s SKIP   (differential referee off - pass "
+                  "--referee to run it)" % "  chdman(chd)", flush=True)
         else:
             print("%-24s SKIP   (chdman not installed - optional "
                   "differential)" % "  chdman(chd)", flush=True)

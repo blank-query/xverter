@@ -1052,6 +1052,8 @@ def cmd_test(args):
         margv = [args.input, w]
         if getattr(args, "no_verify", False):
             margv.append("--leeroy-jenkins")
+        if getattr(args, "referee", False):
+            margv.append("--referee")
         rc = matrix.main(margv)
         report = os.path.join(w, "matrix_report.html")
         if auto:
@@ -1633,6 +1635,12 @@ def main(argv=None):
                                     "matrix, every edge content-verified, "
                                     "and write a self-contained HTML report")
     p.add_argument("input", help="a game in any readable format")
+    p.add_argument("--referee", action="store_true",
+                   help="also run installed reference implementations "
+                        "against xverter's output as a differential check "
+                        "(today: chdman on the CHD edges); adds minutes and "
+                        "tests their code agreeing with ours, so it is for "
+                        "release gates, not every run")
     p.add_argument("--workdir", metavar="DIR",
                    help="scratch dir for the run (default: auto temp dir "
                         "next to the input, cleaned up after; needs ~4-5x "
