@@ -621,8 +621,19 @@ def main(argv=None):
     # wrappers from our own trimmed rebuild *as well* was redundancy
     # that bought nothing. For other inputs a.iso is the only image in
     # the room, so it stays the substrate and no duplication exists.
-    first = (lambda: src) if kind == "iso" else (lambda: d("a.iso"))
-    flbl = "iso(src)" if kind == "iso" else "iso"
+    # ALWAYS the true source, for every input kind: an STFS package
+    # pivots straight into its wrappers, a zar streams into them - the
+    # machinery exists, so building the family from a.iso as well was
+    # the same conversion twice with different provenance labels.
+    def hop(tgt):
+        """Source and label for a first-hop conversion to `tgt`: the
+        true original, except when the target IS the input's own kind -
+        X -> X is refused by the tool, so that one pairing (an iso
+        reader feeding X's writer) comes from a.iso, which is exactly
+        the iso the suite built to prove dir->iso."""
+        if tgt == kind:
+            return d("a.iso"), "iso"
+        return src, "%s(src)" % kind
 
     # baseline: input -> dir
     run("%s->dir" % kind, ["convert", src, "-o", d("base") + "/"])
@@ -641,9 +652,15 @@ def main(argv=None):
     check_dir("  content(zar)", d("from_zar"), baseline)
 
     # iso -> god -> dir
-    run("%s->god" % flbl, ["convert", first(), "-o", d("a.god")])
+    _s, _l = hop("god")
+    run("%s->god" % _l, ["convert", _s, "-o", d("a.god")])
     hdr = god_header_in(d("a.god"))
-    check_god_data("  bytes(iso-god)", hdr, first())
+    if kind == "iso":
+        # Byte-compare the GoD's data region against the pressed
+        # source. Only an image source has pressed bytes to compare
+        # against; other kinds audit their GoD through god->dir's
+        # content check instead.
+        check_god_data("  bytes(iso-god)", hdr, src)
     run("god->dir", ["convert", hdr, "-o", d("from_god") + "/"])
     check_dir("  content(god)", d("from_god"), baseline)
 
@@ -658,15 +675,18 @@ def main(argv=None):
     # zar -> iso ; zar -> god ; iso -> zar
     run("zar->iso", ["convert", d("a.zar"), "-o", d("c.iso")])
     run("zar->god", ["convert", d("a.zar"), "-o", d("c.god")])
-    run("%s->zar" % flbl, ["convert", first(), "-o", d("c.zar")])
+    _s, _l = hop("zar")
+    run("%s->zar" % _l, ["convert", _s, "-o", d("c.zar")])
     run("zar(c)->dir", ["convert", d("c.zar"), "-o", d("from_czar") + "/"])
     check_dir("  content(iso-zar)", d("from_czar"), baseline)
 
     # wrapper formats: CCI / CSO (content-agnostic block-compressed ISO)
-    run("%s->cci" % flbl, ["convert", first(), "-o", d("a.cci")])
+    _s, _l = hop("cci")
+    run("%s->cci" % _l, ["convert", _s, "-o", d("a.cci")])
     run("cci->dir", ["convert", d("a.cci"), "-o", d("from_cci") + "/"])
     check_dir("  content(cci)", d("from_cci"), baseline)
-    run("%s->cso" % flbl, ["convert", first(), "-o", d("a.cso")])
+    _s, _l = hop("cso")
+    run("%s->cso" % _l, ["convert", _s, "-o", d("a.cso")])
     run("cso->dir", ["convert", d("a.cso"), "-o", d("from_cso") + "/"])
     check_dir("  content(cso)", d("from_cso"), baseline)
     # Back to an image: the one direction where the content check is not
@@ -699,7 +719,12 @@ def main(argv=None):
         # GoD is how XBLA lands on a modded 360) and each one is
         # round-tripped and content-checked against the baseline. No
         # container is exempt because of what the input happened to be.
-        for tgt in ("iso", "zar", "god", "cci", "cso", "chd"):
+        # iso and zar are the two targets whose family artifacts come
+        # from the dir pairing (dir->iso / dir->zar must prove
+        # themselves); everything else in the family now descends from
+        # the source directly, so only these two need a separate
+        # from-the-source conversion.
+        for tgt in ("iso", "zar"):
             if tgt == kind:
                 continue
             out = d("s." + tgt) if tgt != "god" else d("s.god")
@@ -717,17 +742,20 @@ def main(argv=None):
     check_dir("  content(cci-cso)", d("from_xcso"), baseline)
 
     # split wrappers: opt-in 4GiB console slices (--split)
-    run("%s->cci(split)" % flbl, ["convert", first(), "-o", d("u.cci"),
+    _s, _l = hop("cci")
+    run("%s->cci(split)" % _l, ["convert", _s, "-o", d("u.cci"),
                             "--split"])
     run("cci(split)->dir", ["convert", d("u.cci"), "-o", d("from_ucci") + "/"])
     check_dir("  content(cci-split)", d("from_ucci"), baseline)
-    run("%s->cso(split)" % flbl, ["convert", first(), "-o", d("u.cso"),
+    _s, _l = hop("cso")
+    run("%s->cso(split)" % _l, ["convert", _s, "-o", d("u.cso"),
                             "--split"])
     run("cso(split)->dir", ["convert", d("u.cso"), "-o", d("from_ucso") + "/"])
     check_dir("  content(cso-split)", d("from_ucso"), baseline)
 
     # chd: native reader and writer, no external tool involved.
-    run("%s->chd" % flbl, ["convert", first(), "-o", d("a.chd")])
+    _s, _l = hop("chd")
+    run("%s->chd" % _l, ["convert", _s, "-o", d("a.chd")])
     run("chd->dir", ["convert", d("a.chd"), "-o", d("from_chd") + "/"])
     check_dir("  content(chd)", d("from_chd"), baseline)
     if kind == "iso":
