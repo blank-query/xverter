@@ -70,6 +70,23 @@ def sha1_file(path):
 #: caught - what goes away is xverter's own internal verification, which
 #: is the point: it measures what those checks cost.
 LEEROY = False
+
+#: Open file handle for --log: the run's full record (results and
+#: machine-readable PROGRESS lines) written by the suite itself. This
+#: exists so nobody pipes a live run through tee again: two streams
+#: racing through different buffering was how a progress bar got
+#: orphaned mid-screen with a result line welded to it.
+LOG = None
+
+
+def say(line, **_kw):
+    """A human-facing line: to stdout, and into the log if one is open.
+    Accepts and ignores print()'s keyword arguments so every existing
+    call site works unchanged; say always flushes."""
+    print(line, flush=True)
+    if LOG:
+        LOG.write(line + "\n")
+        LOG.flush()
 def run(edge, argv):
     t0 = time.monotonic()
     env = dict(os.environ)
@@ -93,8 +110,12 @@ def run(edge, argv):
         if not line:
             continue
         if line.startswith("PROGRESS "):
-            # forward for the TUI; render in place for humans
-            print(line, flush=True)
+            # log always; forward on stdout only for a pipe (the TUI
+            # parses these) - on a tty the bar below replaces them
+            if LOG:
+                LOG.write(line + "\n")
+            if not sys.stdout.isatty():
+                print(line, flush=True)
             if tty:
                 try:
                     _t, stage, d, tot = line.split()
@@ -115,10 +136,9 @@ def run(edge, argv):
     RESULTS.append({"edge": edge, "type": "convert", "ok": ok,
                     "seconds": round(dt, 1), "argv": argv, "detail": detail})
     del lines
-    print("%-24s %s  %7.1fs" % (edge, "PASS" if ok else "FAIL", dt),
-          flush=True)
+    say("%-24s %s  %7.1fs" % (edge, "PASS" if ok else "FAIL", dt))
     if not ok:
-        print("    " + detail)
+        say("    " + detail)
     return ok
 
 
@@ -131,7 +151,7 @@ def check_dir(edge, path, baseline):
                     "seconds": round(dt, 1),
                     "content_digest": content_digest(got),
                     "matches_baseline": ok})
-    print("%-24s %s  %7.1fs"
+    say("%-24s %s  %7.1fs"
           % (edge, "PASS" if ok else "FAIL (content mismatch)", dt),
           flush=True)
     # The digest is recorded - the extracted tree is dead weight from
@@ -180,8 +200,8 @@ def check_partition(edge, got_path, src_path):
     RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
                     "seconds": round(dt, 1), "partition_offset": off,
                     "bytes": got})
-    print("%-24s %s  %7.1fs"
-          % (edge, "PASS" if ok else "FAIL" + detail, dt), flush=True)
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt))
     # A second copy of the game is not worth keeping once compared.
     try:
         os.unlink(got_path)
@@ -218,8 +238,8 @@ def check_identical(edge, got_path, want_path):
     dt = time.monotonic() - t0
     RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
                     "seconds": round(dt, 1)})
-    print("%-24s %s  %7.1fs"
-          % (edge, "PASS" if ok else "FAIL" + detail, dt), flush=True)
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt))
     try:
         os.unlink(got_path)
     except OSError:
@@ -266,8 +286,8 @@ def check_god_data(edge, header, src_path):
     RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
                     "seconds": round(dt, 1), "partition_offset": off,
                     "bytes": at})
-    print("%-24s %s  %7.1fs"
-          % (edge, "PASS" if ok else "FAIL" + detail, dt), flush=True)
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt))
     return ok
 
 
@@ -391,7 +411,7 @@ def write_report(w, src, kind, baseline, total_seconds, exit_code):
     path = os.path.join(w, "matrix_report.html")
     with open(path, "w") as f:
         f.write(_render_html(report))
-    print("report: %s" % path)
+    say("report: %s" % path)
 
 
 def _render_html(report):
@@ -505,18 +525,23 @@ def main(argv=None):
     global LEEROY
     argv = sys.argv[1:] if argv is None else argv
     argv = list(argv)
+    global LOG
     if "--leeroy-jenkins" in argv:
         argv.remove("--leeroy-jenkins")
         LEEROY = True
+    if "--log" in argv:
+        i = argv.index("--log")
+        LOG = open(argv[i + 1], "w")
+        del argv[i:i + 2]
     if len(argv) != 2:
         raise SystemExit(__doc__)
     src, w = argv
     os.makedirs(w, exist_ok=True)
     t_start = time.monotonic()
     kind, _ = detect_mod.detect(src)
-    print("matrix check: input kind=%s\n" % kind)
+    say("matrix check: input kind=%s\n" % kind)
     if LEEROY:
-        print("!!! LEEROY JENKINS MODE: every convert runs with xverter's "
+        say("!!! LEEROY JENKINS MODE: every convert runs with xverter's "
               "own checks OFF !!!\n    edges are still content-compared by "
               "the matrix itself, but nothing here proves the tool "
               "verifies its own output.\n")
@@ -526,7 +551,7 @@ def main(argv=None):
     # baseline: input -> dir
     run("%s->dir" % kind, ["convert", src, "-o", d("base") + "/"])
     baseline = xdvdfs_mod.hash_tree(d("base"))
-    print("baseline: %d files\n" % len(baseline))
+    say("baseline: %d files\n" % len(baseline))
 
     # dir -> iso -> dir
     run("dir->iso", ["convert", d("base"), "-o", d("a.iso")])
@@ -631,13 +656,13 @@ def main(argv=None):
 
     failed = [r["edge"] for r in RESULTS if not r["ok"]]
     total = time.monotonic() - t_start
-    print("\n%d edges, %d failed, %dm%02ds total"
+    say("\n%d edges, %d failed, %dm%02ds total"
           % (len(RESULTS), len(failed), total // 60, total % 60))
     write_report(w, src, kind, baseline, total, 1 if failed else 0)
     if failed:
-        print("FAILED:", ", ".join(failed))
+        say("FAILED:", ", ".join(failed))
         return 1
-    print("MATRIX: ALL PASS")
+    say("MATRIX: ALL PASS")
     return 0
 
 

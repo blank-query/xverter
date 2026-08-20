@@ -1089,6 +1089,8 @@ def cmd_test(args):
         margv = [args.input, w]
         if getattr(args, "no_verify", False):
             margv.append("--leeroy-jenkins")
+        if getattr(args, "log", None):
+            margv += ["--log", args.log]
         rc = matrix.main(margv)
         report = os.path.join(w, "matrix_report.html")
         if not os.path.isfile(report):
@@ -1688,6 +1690,12 @@ def main(argv=None):
                    help="scratch dir for the run (default: auto temp dir "
                         "next to the input, cleaned up after; needs ~4-5x "
                         "the game's size free)")
+    p.add_argument("--log", metavar="FILE",
+                   help="also write the run's full record (results plus "
+                        "machine-readable PROGRESS lines) to FILE - the "
+                        "supported way to keep a log of a live run, so "
+                        "the terminal stays a clean tty for the progress "
+                        "bars instead of being piped through tee")
     p.add_argument("--leeroy-jenkins", dest="no_verify", action="store_true",
                    help="run every conversion with xverter's own checks "
                         "off. The matrix still content-compares every edge, "
