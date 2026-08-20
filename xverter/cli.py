@@ -94,6 +94,53 @@ class _Progress:
     def __init__(self, mode):
         self.mode = mode
         self._last = 0.0
+        if mode == "tty":
+            # The same liveness contract the test suite has: a ticker
+            # redraws the bar twice a second with elapsed time, so a
+            # stage that reports nothing for a while still shows a
+            # moving clock instead of impersonating a hang.
+            import threading
+            import time as _time
+            self._t0 = _time.monotonic()
+            self._state = {"stage": "...", "done": 0, "total": 1,
+                           "on": True}
+
+            def _tick():
+                while self._state["on"]:
+                    render_bar("", self._state["stage"],
+                               self._state["done"], self._state["total"],
+                               elapsed=_time.monotonic() - self._t0)
+                    _time.sleep(0.5)
+
+            self._ticker = threading.Thread(target=_tick, daemon=True)
+            self._ticker.start()
+            import atexit
+            atexit.register(self.stop)
+            # Anything printed to stdout while a bar is on screen would
+            # weld itself onto the bar's line. One choke point fixes
+            # every print in the program: clear the bar line first.
+            outer = self
+
+            class _BarAwareOut:
+                def __init__(self, wrapped):
+                    self._w = wrapped
+
+                def write(self, text):
+                    if text.strip() and outer._state["on"]:
+                        sys.stderr.write("\r\x1b[K")
+                        sys.stderr.flush()
+                    return self._w.write(text)
+
+                def __getattr__(self, name):
+                    return getattr(self._w, name)
+
+            sys.stdout = _BarAwareOut(sys.stdout)
+
+    def stop(self):
+        if self.mode == "tty" and self._state["on"]:
+            self._state["on"] = False
+            self._ticker.join(timeout=1)
+            clear_bar()
 
     def cb(self, stage):
         if self.mode is None:
@@ -109,10 +156,13 @@ class _Progress:
                 sys.stderr.write("PROGRESS %s %d %d\n"
                                  % (stage, done, max(total, 1)))
             else:
-                render_bar("", stage, done, total)
+                self._state["stage"] = stage
+                self._state["done"] = done
+                self._state["total"] = max(total, 1)
                 if done >= total:
                     clear_bar()
-                    sys.stderr.write("%-11s done\n" % stage)
+                    sys.stderr.write("%-11s done  %5.1fs\n"
+                                     % (stage, _time.monotonic() - self._t0))
             sys.stderr.flush()
         return fn
 
@@ -1626,11 +1676,11 @@ def _gil_hint():
         return
     _HINTED[0] = True
     print("note: this is a GIL interpreter. Free-threaded Python 3.14t "
-          "converts about 25%% faster\n"
-          "      (compression ~2x, hashing ~6x) - `uv tool install "
-          "--python 3.14t xverter`.\n"
-          "      The standalone binaries already ship on it. Silence "
-          "with XVERTER_NO_HINTS=1." % (), file=sys.stderr)
+          "converts about 25% faster (compression ~2x, hashing ~6x).\n"
+          "      The standalone binaries already ship on it; the README "
+          "covers getting a\n"
+          "      3.14t interpreter for pip installs. Silence with "
+          "XVERTER_NO_HINTS=1.", file=sys.stderr)
 
 
 def _version_string():
