@@ -615,6 +615,15 @@ def main(argv=None):
 
     d = lambda *p: os.path.join(w, *p)
 
+    # For ISO input, every first-hop conversion starts from the pressed
+    # source: optimized formats must prove they strip the real disc
+    # correctly, archival formats that they preserve it - and building
+    # wrappers from our own trimmed rebuild *as well* was redundancy
+    # that bought nothing. For other inputs a.iso is the only image in
+    # the room, so it stays the substrate and no duplication exists.
+    first = (lambda: src) if kind == "iso" else (lambda: d("a.iso"))
+    flbl = "iso(src)" if kind == "iso" else "iso"
+
     # baseline: input -> dir
     run("%s->dir" % kind, ["convert", src, "-o", d("base") + "/"])
     with _LiveBar("baseline"):
@@ -632,9 +641,9 @@ def main(argv=None):
     check_dir("  content(zar)", d("from_zar"), baseline)
 
     # iso -> god -> dir
-    run("iso->god", ["convert", d("a.iso"), "-o", d("a.god")])
+    run("%s->god" % flbl, ["convert", first(), "-o", d("a.god")])
     hdr = god_header_in(d("a.god"))
-    check_god_data("  bytes(iso-god)", hdr, d("a.iso"))
+    check_god_data("  bytes(iso-god)", hdr, first())
     run("god->dir", ["convert", hdr, "-o", d("from_god") + "/"])
     check_dir("  content(god)", d("from_god"), baseline)
 
@@ -649,15 +658,15 @@ def main(argv=None):
     # zar -> iso ; zar -> god ; iso -> zar
     run("zar->iso", ["convert", d("a.zar"), "-o", d("c.iso")])
     run("zar->god", ["convert", d("a.zar"), "-o", d("c.god")])
-    run("iso->zar", ["convert", d("a.iso"), "-o", d("c.zar")])
+    run("%s->zar" % flbl, ["convert", first(), "-o", d("c.zar")])
     run("zar(c)->dir", ["convert", d("c.zar"), "-o", d("from_czar") + "/"])
     check_dir("  content(iso-zar)", d("from_czar"), baseline)
 
     # wrapper formats: CCI / CSO (content-agnostic block-compressed ISO)
-    run("iso->cci", ["convert", d("a.iso"), "-o", d("a.cci")])
+    run("%s->cci" % flbl, ["convert", first(), "-o", d("a.cci")])
     run("cci->dir", ["convert", d("a.cci"), "-o", d("from_cci") + "/"])
     check_dir("  content(cci)", d("from_cci"), baseline)
-    run("iso->cso", ["convert", d("a.iso"), "-o", d("a.cso")])
+    run("%s->cso" % flbl, ["convert", first(), "-o", d("a.cso")])
     run("cso->dir", ["convert", d("a.cso"), "-o", d("from_cso") + "/"])
     check_dir("  content(cso)", d("from_cso"), baseline)
     # Back to an image: the one direction where the content check is not
@@ -671,20 +680,16 @@ def main(argv=None):
     # can tell the two apart - which is exactly why this direction went
     # unchecked while it was wrong.
     if kind == "iso":
-        run("iso(src)->cci", ["convert", src, "-o", d("s.cci")])
-        run("cci(src)->iso", ["convert", d("s.cci"), "-o", d("back_cci.iso")])
+        # a.cci / a.cso are built from the pressed source now, so the
+        # decompress-and-compare round trips run against them directly:
+        # one build per wrapper, from reality, byte-audited both ways.
+        run("cci(src)->iso", ["convert", d("a.cci"), "-o", d("back_cci.iso")])
         check_partition("  bytes(cci-iso)", d("back_cci.iso"), src)
-        run("iso(src)->cso", ["convert", src, "-o", d("s.cso")])
-        run("cso(src)->iso", ["convert", d("s.cso"), "-o", d("back_cso.iso")])
+        run("cso(src)->iso", ["convert", d("a.cso"), "-o", d("back_cso.iso")])
         check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
-        run("cci(src)->god", ["convert", d("s.cci"), "-o", d("s.god")])
+        run("cci(src)->god", ["convert", d("a.cci"), "-o", d("s.god")])
         check_god_data("  bytes(cci-god)", god_header_in(d("s.god")), src)
         shutil.rmtree(d("s.god"), ignore_errors=True)
-        for spent in ("s.cci", "s.cso"):
-            try:
-                os.unlink(d(spent))
-            except OSError:
-                pass
     else:
         # Non-image sources get the same rule with the strongest check
         # they permit. There is no pressed disc to byte-compare against
@@ -712,27 +717,23 @@ def main(argv=None):
     check_dir("  content(cci-cso)", d("from_xcso"), baseline)
 
     # split wrappers: opt-in 4GiB console slices (--split)
-    run("iso->cci(split)", ["convert", d("a.iso"), "-o", d("u.cci"),
+    run("%s->cci(split)" % flbl, ["convert", first(), "-o", d("u.cci"),
                             "--split"])
     run("cci(split)->dir", ["convert", d("u.cci"), "-o", d("from_ucci") + "/"])
     check_dir("  content(cci-split)", d("from_ucci"), baseline)
-    run("iso->cso(split)", ["convert", d("a.iso"), "-o", d("u.cso"),
+    run("%s->cso(split)" % flbl, ["convert", first(), "-o", d("u.cso"),
                             "--split"])
     run("cso(split)->dir", ["convert", d("u.cso"), "-o", d("from_ucso") + "/"])
     check_dir("  content(cso-split)", d("from_ucso"), baseline)
 
     # chd: native reader and writer, no external tool involved.
-    run("iso->chd", ["convert", d("a.iso"), "-o", d("a.chd")])
+    run("%s->chd" % flbl, ["convert", first(), "-o", d("a.chd")])
     run("chd->dir", ["convert", d("a.chd"), "-o", d("from_chd") + "/"])
     check_dir("  content(chd)", d("from_chd"), baseline)
     if kind == "iso":
-        run("iso(src)->chd", ["convert", src, "-o", d("s.chd")])
-        run("chd(src)->iso", ["convert", d("s.chd"), "-o", d("back_chd.iso")])
+        run("chd(src)->iso", ["convert", d("a.chd"), "-o", d("back_chd.iso")])
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
-        try:
-            os.unlink(d("s.chd"))
-        except OSError:
-            pass
+
     # verify subcommand on every artifact kind
     run("verify iso", ["verify", d("a.iso"), "--no-lookup"])
     run("verify zar", ["verify", d("a.zar")])
@@ -745,11 +746,18 @@ def main(argv=None):
 
     failed = [r["edge"] for r in RESULTS if not r["ok"]]
     total = time.monotonic() - t_start
+    # The report is written BEFORE the summary line prints. The summary
+    # is what humans and scripts key on to declare a run finished, and
+    # report generation after it is minutes of artifact re-decoding - a
+    # window in which an automation that trusted the summary once
+    # deleted the workdir out from under the report being written. The
+    # last line of output is now genuinely the last work done.
+    with _LiveBar("report", "artifacts"):
+        write_report(w, src, kind, baseline, total, 1 if failed else 0)
     say("\n%d edges, %d failed, %dm%02ds total"
           % (len(RESULTS), len(failed), total // 60, total % 60))
-    write_report(w, src, kind, baseline, total, 1 if failed else 0)
     if failed:
-        say("FAILED:", ", ".join(failed))
+        say("FAILED: " + ", ".join(failed))
         return 1
     say("MATRIX: ALL PASS")
     return 0

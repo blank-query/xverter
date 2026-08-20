@@ -339,6 +339,18 @@ def _pivot_iso(kind, path, w, prog, verify):
         finally:
             closer()
         return iso
+    if kind == "stfs":
+        man = {}
+        entries, closer = stfs_mod.file_entries(path, manifest=man)
+        try:
+            tree = xdvdfs_mod.tree_from_entries(entries, where=path)
+            builders_mod.build_iso_from_tree(
+                tree, iso, verify=verify, manifest=man,
+                progress=prog.cb("iso-write"),
+                verify_progress=prog.cb("verify"))
+        finally:
+            closer()
+        return iso
     manifest = {}
     gamedir = _to_gamedir(kind, path, w, manifest=manifest,
                           progress=prog.cb("extract"))
@@ -1543,6 +1555,24 @@ def cmd_convert(args):
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
             return 0
+        if kind == "stfs" and out_kind == "iso":
+            man = {}
+            entries, closer = stfs_mod.file_entries(path, manifest=man)
+            try:
+                tree = xdvdfs_mod.tree_from_entries(entries, where=path)
+                builders_mod.build_iso_from_tree(
+                    tree, args.output, verify=not args.no_verify,
+                    manifest=man, progress=prog.cb("iso-write"),
+                    verify_progress=prog.cb("verify"))
+            finally:
+                closer()
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output,
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
+                     else "manifest verified"))
+            return 0
         if kind == "zar" and out_kind == "iso":
             # Straight out of the archive into the image: no scratch copy
             # of the whole game written and read back. Byte-identical to
@@ -1562,6 +1592,27 @@ def cmd_convert(args):
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "manifest verified"))
+            return 0
+        if (kind == "stfs" and out_kind == "zar"
+                and zar_mod.can_stream()):
+            # The package feeds the archive writer directly - the same
+            # no-scratch-copy treatment every other file-tree source
+            # got, wired the day someone asked why STFS still pivoted.
+            man = {}
+            entries, closer = stfs_mod.file_entries(path, manifest=man)
+            try:
+                zar_mod.pack_entries(entries, args.output,
+                                     roundtrip_verify=not args.no_verify,
+                                     manifest=man,
+                                     progress=prog.cb("zar-write"),
+                                     verify_progress=prog.cb("verify"))
+            finally:
+                closer()
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output, "NO GUARANTEES - --leeroy-jenkins"
+                     if args.no_verify else "verified"))
             return 0
         stream_op = (_image_opener(kind, path)
                      if out_kind == "zar" and zar_mod.can_stream() else None)

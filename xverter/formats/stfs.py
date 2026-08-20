@@ -293,6 +293,81 @@ def _safe_relpath(p):
     return os.path.join(*parts) if parts else ""
 
 
+class _FileStream:
+    """Read-only stream over one file inside a package, block-verified
+    as it goes. The manifest entry is recorded only when the file was
+    read to its end: a partially consumed stream records nothing, so a
+    consumer that skips bytes fails verification loudly instead of
+    certifying a short read."""
+
+    def __init__(self, pkg, entry, manifest):
+        self._pkg = pkg
+        self._rel = entry["path"]
+        self._left = entry["size"]
+        nblocks = (entry["size"] + BLOCK - 1) // BLOCK
+        self._chain = pkg.chain(entry["startclust"], nblocks)
+        self._buf = b""
+        self._manifest = manifest
+        self._h = hashlib.sha1() if manifest is not None else None
+
+    def read(self, n=-1):
+        if n is None or n < 0:
+            n = self._left + len(self._buf)
+        while len(self._buf) < n and self._left > 0:
+            c = next(self._chain)
+            b = self._pkg.verified_block(c)
+            chunk = b[:self._left] if self._left < BLOCK else b
+            self._left -= len(chunk)
+            if self._h is not None:
+                self._h.update(chunk)
+            self._buf += chunk
+        out, self._buf = self._buf[:n], self._buf[n:]
+        return out
+
+    def close(self):
+        if (self._h is not None and self._left == 0
+                and not self._buf):
+            self._manifest[self._rel.replace(os.sep, "/")] = \
+                self._h.hexdigest()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+def file_entries(stfs_path, manifest=None):
+    """(entries, closer) for feeding this package straight into a
+    writer: entries is [(relpath, size, opener)], opener returning a
+    verified stream over that file's blocks. The same shape zar and the
+    image readers expose, so STFS converts without being unpacked to a
+    scratch directory first. The hash chain is loaded and verified up
+    front, every data block is checked against its L0 entry as it is
+    read, and each file hashes itself into `manifest` as it is
+    consumed."""
+    pkg = _open(stfs_path)
+    try:
+        pkg.load_tables()
+        raw = pkg.entries()
+    except BaseException:
+        pkg.f.close()
+        raise
+    if not any(not e["is_dir"] for e in raw):
+        pkg.f.close()
+        raise StfsError("empty STFS file table")
+
+    def make(entry):
+        def go():
+            return _FileStream(pkg, entry, manifest)
+        return go
+
+    entries = [(_safe_relpath(e["path"]).replace(os.sep, "/"), e["size"],
+                make(e))
+               for e in raw if not e["is_dir"]]
+    return entries, pkg.f.close
+
+
 def extract(stfs_path, out_dir, manifest=None, verify=True,
             progress=None):
     """Extract all entries of an STFS package into out_dir, streaming
