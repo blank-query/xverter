@@ -1,15 +1,9 @@
 """Locating optional helper binaries.
 
 xVerter requires no external tools - every reader and writer is its
-own code, CHD included as of 1.2.0. What remains here is a resolver
-for the strictly optional helpers some workflows still recognise (the
-test suite will use chdman as a differential referee when present;
-the zar path can point at a reference binary for cross-checks). Tools
-are searched first in xverter's own bin directory, then on PATH.
-
-The registry, version checks, GitHub release lookups and one-click
-installers that used to live here left with the last delegated
-format: there is nothing to install any more.
+own code. What remains here is a path resolver kept for the zar
+cross-check hook and any future optional helper. Tools are searched
+first in xverter's own bin directory, then on PATH.
 """
 
 import os

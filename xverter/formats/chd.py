@@ -3,25 +3,21 @@
 Scope: DVD-type CHDs wrapping a 2048-byte-sector XDVDFS image - a bare
 game partition, a full redump image, or (through the pivot) anything
 else xverter can read. All Xbox and Xbox 360 discs are DVD-structured,
-so createcd semantics never apply here; the writer stays
-content-agnostic like CCI/CSO.
+so CD semantics never apply here; the writer stays content-agnostic
+like CCI/CSO.
 
 Consumer status (2026-08): no released Xbox emulator reads CHD yet.
 xemu had working CHD support in review (PR #2921, libchdr, tested on
 both redump and trimmed images) before the author deleted their fork;
 xverter produces the format that work targeted, ready for its revival.
 
-This was the last delegated format. Reading, writing and verification
-are native (formats/chd_native.py, formats/chd_flac.py); the format
-reference is MAME's own BSD-3-Clause CHD library (src/lib/util/chd.cpp
-and friends, Aaron Giles), reimplemented rather than copied, and held
-to the only standard that matters: chdman verifies what we write and
-extracts it byte-identical, and we read everything chdman writes -
-FLAC hunks included. chdman is not a dependency in any
-direction: the test suite will use it as a differential referee when
-it happens to be installed, and the two shapes we refuse - parent-delta
-CHDs and pre-v5 files - are refused with a pointer at `chdman copy`,
-which flattens both into something we read.
+Reading, writing and verification are fully native
+(formats/chd_native.py, formats/chd_flac.py). The format reference is
+MAME's BSD-3-Clause CHD library, reimplemented rather than copied; see
+the README for the validation story. Two shapes are refused outright:
+parent-delta CHDs (they reference a file we were not given) and
+pre-v5 files (flatten either to a standalone v5 CHD with MAME's tools
+and it reads fine).
 """
 
 import os
@@ -45,7 +41,7 @@ def is_chd(path):
 
 
 def read_header(path):
-    """Parse the CHD v5 header natively (no chdman needed)."""
+    """Parse the CHD v5 header natively."""
     with open(path, "rb") as f:
         raw = f.read(V5_SIZE)
     if len(raw) < V5_SIZE or raw[:8] != MAGIC:
@@ -53,8 +49,8 @@ def read_header(path):
     (_, length, version, c0, c1, c2, c3, logical, mapoff, metaoff,
      hunkbytes, unitbytes, rawsha1, sha1, parentsha1) = V5_HEADER.unpack(raw)
     if version != 5:
-        raise ChdError("CHD v%d not supported (chdman can upgrade it: "
-                       "`chdman copy`)" % version)
+        raise ChdError("CHD v%d is not supported - only v5; convert it "
+                       "to a standalone v5 CHD first" % version)
     comps = []
     for c in (c0, c1, c2, c3):
         if c:
@@ -77,10 +73,8 @@ def extract(chd_path, out_iso, progress=None):
     decoded stream's SHA-1 is computed during extraction and must match
     the header's, so a damaged CHD cannot extract quietly.
 
-    Parent-delta CHDs are refused with directions rather than handled:
-    they reference a file we were not given, and `chdman copy` flattens
-    them into the standalone form this reads. Naming the escape hatch
-    in an error message is not a dependency."""
+    Parent-delta CHDs are refused: they reference a file we were not
+    given. Flattened standalone v5 files read fine."""
     from . import chd_native
     try:
         got = chd_native.extract_to(chd_path, out_iso, progress=progress)
@@ -97,8 +91,9 @@ def extract(chd_path, out_iso, progress=None):
 def build(iso_path, out_chd, progress=None):
     """ISO -> chd with xverter's native writer; the input is wrapped
     as-is (bare partition, full redump image, whatever -
-    content-agnostic). chdman verifies the result and extracts it
-    byte-identical; that equivalence gates this writer in the suite."""
+    content-agnostic). The reference implementation verified this
+    writer's output and extracted it byte-identical before it shipped;
+    the suite holds it to byte-identity against the source ever since."""
     from . import chd_native
     if os.path.exists(out_chd):
         raise ChdError("output already exists: %s" % out_chd)

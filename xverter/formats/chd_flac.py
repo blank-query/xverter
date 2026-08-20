@@ -4,7 +4,7 @@ MAME compresses some hunks as bare FLAC frames: 16-bit stereo, 44.1 kHz
 declared (the rate is a fiction for disc data), metadata stripped, so
 there is no 'fLaC' magic and no STREAMINFO - decoding starts straight
 at a frame header. Byte 0 of the hunk is 'L' or 'B' for the byte order
-of the samples chdman chose, per hunk, whichever compressed smaller.
+of the samples MAME's encoder chose, per hunk, whichever compressed smaller.
 
 Correctness is checked two ways: against an independent straightforward
 decoder during development, and against every hunk's stored CRC-16 in
@@ -521,12 +521,12 @@ def encode_hunk(data, out_limit):
     """Encode one CHD hunk as MAME's FLAC codec would accept it, or
     None when the result would not fit under out_limit.
 
-    Tries both endiannesses and keeps the smaller, exactly as chdman
+    Tries both endiannesses and keeps the smaller, exactly as MAME's encoder
     does - the hunk's first byte records which won. The output is not
     byte-identical to libFLAC's (no two FLAC encoders agree on bytes,
     which is fine: CHD identity is content, not codec) but it is valid
     FLAC that libFLAC itself verifies, which the suite checks through
-    chdman."""
+    MAME's encoder."""
     if len(data) % 4:
         return None
     import sys

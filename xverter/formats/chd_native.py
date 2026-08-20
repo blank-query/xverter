@@ -1,12 +1,12 @@
-"""Native CHD v5 reader - no chdman.
+"""Native CHD v5 reader - no MAME's tool.
 
-CHD is MAME's format and chdman is its living definition, so this reads
-what chdman writes and is held to that standard: the bytes this module
-produces for an image must equal the bytes `chdman extractdvd` produces
+CHD is MAME's format and MAME's tool is its living definition, so this reads
+what MAME's tool writes and is held to that standard: the bytes this module
+produces for an image must equal the bytes `MAME's tool extractdvd` produces
 for the same file, or this module is wrong.
 
-Scope is v5, which is what chdman has written for over a decade. v4 and
-earlier are refused with a pointer at `chdman copy`, exactly as the
+Scope is v5, which is what MAME's tool has written for over a decade. v4 and
+earlier are refused with a pointer at `MAME's tool copy`, exactly as the
 delegating layer already did.
 
 The format is documented in MAME's own source (src/lib/util/chd.cpp,
@@ -22,7 +22,7 @@ they are not guessable:
   * The LZMA properties are never stored in the file. MAME derives them
     from the encoder settings it used - level 6, reduceSize = hunkbytes
     - and the decoder reconstructs them the same way. For the 4096-byte
-    hunks chdman writes for DVDs that normalises to lc=3, lp=0, pb=2 and
+    hunks MAME's tool writes for DVDs that normalises to lc=3, lp=0, pb=2 and
     a 4096-byte dictionary. The MAME source has a FIXME about this.
 
   * Several map entries are pseudo-types that expand into a base type
@@ -258,8 +258,8 @@ def read_header(fh):
     length, version = struct.unpack(">II", raw[8:16])
     if version != 5:
         raise ChdNativeError(
-            "CHD v%d is not supported natively (chdman can upgrade it: "
-            "`chdman copy`)" % version)
+            "CHD v%d is not supported natively (MAME's tool can upgrade it: "
+            "`MAME's tool copy`)" % version)
     if length != V5_HEADER_LEN:
         raise ChdNativeError("v5 header claims %d bytes, expected %d"
                              % (length, V5_HEADER_LEN))
@@ -419,7 +419,7 @@ def read_map(fh, header):
 def _lzma_filters(hunkbytes):
     """The LZMA settings MAME used, reconstructed rather than read.
 
-    chdman never records them. It configures the encoder with level 6
+    MAME's tool never records them. It configures the encoder with level 6
     and reduceSize = hunkbytes and lets the SDK normalise, so the
     decoder has to repeat that arithmetic exactly: level 6 asks for a
     32 MiB dictionary, the reduce step shrinks it to the smallest
@@ -534,7 +534,7 @@ class ChdReader:
         if comp == _PARENT:
             raise ChdNativeError(
                 "this CHD is a delta against a parent file, which xverter "
-                "does not read - `chdman copy` will flatten it")
+                "does not read - `MAME's tool copy` will flatten it")
         self._fh.seek(offset)
         if comp == _NONE:
             data = self._fh.read(self.hunkbytes)
@@ -719,7 +719,7 @@ def _pcm_likely(raw):
     which LZ also does badly on, so nearly every hunk paid a
     multi-millisecond FLAC attempt for a measured 42 KB of benefit and
     the writer did not finish inside ten minutes. FLAC should be tried
-    where audio is plausible, not wherever LZ struggled. chdman
+    where audio is plausible, not wherever LZ struggled. MAME's tool
     auditions FLAC on everything - at C speed, that costs it little;
     the honest Python equivalent is this probe. CD-type content, when
     the PS1/PS2 work arrives, is wall-to-wall PCM and passes it
@@ -823,11 +823,11 @@ def write_dvd(src, out_path, compressors=DEFAULT_COMPRESSORS, level=6,
               workers=None, progress=None):
     """Write a DVD-type v5 CHD from an image (path or seekable stream).
 
-    Not byte-identical to chdman, and cannot be: chdman auditions four
+    Not byte-identical to MAME's tool, and cannot be: MAME's tool auditions four
     codecs per hunk and one of them is FLAC, which we do not write (on
     DVD images it was measured worth 0.0006% of file size - it exists
     for CD audio tracks). The claim made instead is the one that
-    matters: chdman verifies what this writes, extracts it byte-
+    matters: MAME's tool verifies what this writes, extracts it byte-
     identical, and agrees about both SHA-1s - checked, not asserted.
 
     Built to stream: hunks are read in large blocks, compressed and
@@ -1001,7 +1001,7 @@ def extract_to(chd_path, out_path, workers=None, progress=None,
 
     The sequential read() path decodes one hunk at a time on one
     thread, which is fine for scattered access and measured 4.9x slower
-    than chdman for a full extraction. Hunks are independent, so a full
+    than MAME's tool for a full extraction. Hunks are independent, so a full
     extraction decodes them on a pool - codec and CRC both - and writes
     in order. Self-references are resolved on the writer thread from a
     small retained set: only hunks some later hunk points at are kept,
@@ -1117,7 +1117,7 @@ def extract_to(chd_path, out_path, workers=None, progress=None,
                         batch = []
 
                 # Stored hunks lie consecutively in the file - both we
-                # and chdman write them in order - so a batch is one
+                # and MAME's tool write them in order - so a batch is one
                 # contiguous span read with one syscall, not hundreds.
                 # A discontiguous entry (a foreign layout) just starts
                 # a fresh span; correctness never depends on adjacency.
@@ -1130,7 +1130,7 @@ def extract_to(chd_path, out_path, workers=None, progress=None,
                     elif comp == _PARENT:
                         raise ChdNativeError(
                             "this CHD is a delta against a parent file, "
-                            "which xverter does not read - `chdman copy` "
+                            "which xverter does not read - `MAME's tool copy` "
                             "will flatten it")
                     else:
                         need = length if comp != _NONE else hunkbytes
@@ -1185,7 +1185,7 @@ def read_metadata(fh, header):
 def verify_file(chd_path, workers=None, progress=None):
     """Decode everything and check both header SHA-1s, natively.
 
-    The same two claims chdman's verify makes: the decoded data matches
+    The same two claims MAME's tool's verify makes: the decoded data matches
     rawsha1, and rawsha1 combined with the checksummed metadata matches
     the overall sha1. Raises on the first disagreement; returns the
     parsed header when both hold."""

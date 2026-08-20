@@ -70,14 +70,6 @@ def sha1_file(path):
 #: caught - what goes away is xverter's own internal verification, which
 #: is the point: it measures what those checks cost.
 LEEROY = False
-
-#: Run reference implementations against our output when they are
-#: installed. Off by default: the differential adds real minutes to a
-#: run without testing any xverter code, so it is asked for on release
-#: gates rather than paid on every iteration.
-REFEREE = False
-
-
 def run(edge, argv):
     t0 = time.monotonic()
     env = dict(os.environ)
@@ -279,15 +271,6 @@ def check_god_data(edge, header, src_path):
     return ok
 
 
-def _first_line(argv):
-    try:
-        r = subprocess.run(argv, capture_output=True, text=True, timeout=10)
-        out = (r.stdout or r.stderr).strip().splitlines()
-        return out[0] if out else "unknown"
-    except Exception:
-        return "not found"
-
-
 def machine_info():
     info = {"platform": platform.platform(),
             "python": platform.python_version()}
@@ -308,11 +291,10 @@ def machine_info():
 
 
 def tool_versions():
-    # Every writer is xverter-native, CHD included; chdman appears
     # delegated tool.
     from . import cli as cli_mod
     v = {"xverter (native ISO/GoD/ZAR/CCI/CSO writers)": cli_mod.__version__,
-         "chdman": _first_line(["chdman", "help"])}  # differential only
+         }
     try:
         from importlib.metadata import version
         v["python-lz4"] = version("lz4")
@@ -523,13 +505,9 @@ def main(argv=None):
     global LEEROY
     argv = sys.argv[1:] if argv is None else argv
     argv = list(argv)
-    global REFEREE
     if "--leeroy-jenkins" in argv:
         argv.remove("--leeroy-jenkins")
         LEEROY = True
-    if "--referee" in argv:
-        argv.remove("--referee")
-        REFEREE = True
     if len(argv) != 2:
         raise SystemExit(__doc__)
     src, w = argv
@@ -629,12 +607,7 @@ def main(argv=None):
     run("cso(split)->dir", ["convert", d("u.cso"), "-o", d("from_ucso") + "/"])
     check_dir("  content(cso-split)", d("from_ucso"), baseline)
 
-    # chd: native reader and writer. chdman is no longer needed for any
-    # edge; when it is installed it runs as a differential reference -
-    # the reference implementation verifying our output is a stronger
-    # claim than our own reader doing so, so it is used when available.
-    from . import deps as _deps
-    have_chdman = _deps.find("chdman") is not None
+    # chd: native reader and writer, no external tool involved.
     run("iso->chd", ["convert", d("a.iso"), "-o", d("a.chd")])
     run("chd->dir", ["convert", d("a.chd"), "-o", d("from_chd") + "/"])
     check_dir("  content(chd)", d("from_chd"), baseline)
@@ -642,29 +615,10 @@ def main(argv=None):
         run("iso(src)->chd", ["convert", src, "-o", d("s.chd")])
         run("chd(src)->iso", ["convert", d("s.chd"), "-o", d("back_chd.iso")])
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
-        if have_chdman and REFEREE:
-            t0 = time.monotonic()
-            r = subprocess.run([_deps.find("chdman"), "verify", "-i", d("s.chd")],
-                               capture_output=True, text=True)
-            ok = r.returncode == 0 and "successful" in (r.stdout + r.stderr)
-            RESULTS.append({"edge": "  chdman(chd)", "type": "differential",
-                            "ok": ok,
-                            "seconds": round(time.monotonic() - t0, 1)})
-            print("%-24s %s  %7.1fs"
-                  % ("  chdman(chd)",
-                     "PASS" if ok else "FAIL (reference rejects our CHD)",
-                     time.monotonic() - t0), flush=True)
-        elif have_chdman:
-            print("%-24s SKIP   (differential referee off - pass "
-                  "--referee to run it)" % "  chdman(chd)", flush=True)
-        else:
-            print("%-24s SKIP   (chdman not installed - optional "
-                  "differential)" % "  chdman(chd)", flush=True)
         try:
             os.unlink(d("s.chd"))
         except OSError:
             pass
-
     # verify subcommand on every artifact kind
     run("verify iso", ["verify", d("a.iso"), "--no-lookup"])
     run("verify zar", ["verify", d("a.zar")])
