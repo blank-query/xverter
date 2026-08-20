@@ -97,18 +97,18 @@ Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, Cach
 
 | Conversion              | Spartan Assault (2.3GB) | Halo CE (7.3GB) | Halo 3 (7.8GB) | Anniversary (8.7GB) |
 | ----------------------- | -----------------------:| ---------------:| --------------:| -------------------:|
-| dir → iso               | 2.9 (3.1)               | 3.9 (4.5)       | 5.9 (7.7)      | 9.2 (10.3)          |
-| dir → zar               | 6.1 (17.2)              | 5.4 (10.5)      | 10.5 (25.2)    | 14.7 (34.1)         |
-| iso → god               | 1.5 (3.3)               | 2.2 (5.1)       | 3.3 (8.4)      | 5.9 (10.9)          |
-| iso → cci               | 6.9 (11.0)              | 6.7 (15.1)      | 12.6 (26.5)    | 15.7 (34.5)         |
-| iso → cso               | 6.6 (11.4)              | 6.2 (14.8)      | 11.5 (26.4)    | 15.5 (34.2)         |
-| iso → chd               | 25.8 (56.1)             | 18.1 (48.0)     | 42.2 (84.0)    | 53.1 (123.9)        |
-| **full matrix**         | **3m00s** (5m49s, 48 edges) | **5m45s** (5m55s, 48 edges) | **9m05s** (10m47s, 48 edges) | **11m01s** (14m48s, 48 edges) |
+| dir → iso               | 3.2 (3.1)               | 4.3 (4.5)       | 6.6 (7.7)      | 10.0 (10.3)         |
+| dir → zar               | 6.4 (17.2)              | 6.0 (10.5)      | 11.3 (25.2)    | 15.3 (34.1)         |
+| iso → god               | 1.5 (3.3)               | 2.3 (5.1)       | 5.1 (8.4)      | 4.9 (10.9)          |
+| iso → cci               | 7.2 (11.0)              | 7.4 (15.1)      | 13.2 (26.5)    | 17.2 (34.5)         |
+| iso → cso               | 6.9 (11.4)              | 6.8 (14.8)      | 12.4 (26.4)    | 15.2 (34.2)         |
+| iso → chd               | 27.6 (56.1)             | 19.5 (48.0)     | 44.9 (84.0)    | 58.4 (123.9)        |
+| **full matrix**         | **3m12s** (5m49s, 48 edges) | **5m43s** (5m55s, 48 edges) | **9m01s** (10m47s, 48 edges) | **11m34s** (14m48s, 48 edges) |
 
-The current column runs **60 edges (49 for Spartan)** — a third more coverage than the launch
+The current column runs **60 edges (49 for Spartan)** — a quarter more coverage than the launch
 column — and still comes in faster on every game: the launch quartet took 37m07s, the current
-one 28m51s. CHD went native in 1.2.0 (previously delegated to chdman), which is where its
-column's halving comes from.
+one 29m30s (single-run figures; the suite's run-to-run noise is about ±4%). CHD went native in
+1.2.0, which is where its column's halving comes from.
 
 Compression, as a fraction of the raw ISO (content-dependent — Anniversary's assets are already compressed, Spartan's aren't): CHD 60–90%, ZAR 60–93%, CCI/CSO 70–96%, GoD ~100.5% (its SHA-1 hash tree costs half a percent).
 
