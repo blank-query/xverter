@@ -1678,9 +1678,18 @@ def cmd_convert(args):
             return 0
         if out_kind == "gamedir":
             os.makedirs(args.output, exist_ok=True)
+            # When the input was already a gamedir, _to_gamedir handed
+            # back the SOURCE directory, not a scratch pivot - moving
+            # entries out of it would empty the user's own files. Copy
+            # from a source; only a scratch pivot may be moved.
             for entry in os.listdir(gamedir):
-                shutil.move(os.path.join(gamedir, entry),
-                            os.path.join(args.output, entry))
+                s_ = os.path.join(gamedir, entry)
+                t_ = os.path.join(args.output, entry)
+                if gamedir == path:
+                    (shutil.copytree if os.path.isdir(s_)
+                     else shutil.copy2)(s_, t_)
+                else:
+                    shutil.move(s_, t_)
             # A folder is not a container: there is no output-side
             # structure to re-read, so the only claim on offer is that
             # every file was hashed on the way out of the source.
