@@ -1201,7 +1201,10 @@ def cmd_test(args):
                 print("WARNING: could not save the report to %s (%s)"
                       % (dest, e), file=sys.stderr)
         if delivered:
-            print("report saved: %s" % delivered)
+            # Through the suite's own writer, so the line reaches the
+            # --log record too - a log that ends without naming where
+            # the report went is a log that half-finished its job.
+            matrix.say("report saved: %s" % delivered)
         elif auto:
             # Keep the scratch directory alive: it holds the only copy.
             keep = True
