@@ -50,27 +50,39 @@ class CliError(Exception):
 def render_bar(label, stage, done, total, out=None, elapsed=None):
     """One pacman-style progress line, redrawn in place on a tty:
 
-        iso->chd       god-write   [##########----------------]  42%   37s
+        iso->chd   god-write  [##########----------------]  42%   37s
 
-    The elapsed seconds are the liveness signal: stages with no
-    progress telemetry keep the clock ticking, so "working but silent"
-    and "hung" stop looking identical.
-
-    Sized to the terminal, cleared by the caller when the job ends.
+    Fits the terminal by construction, narrowest first: when columns
+    run short the label shrinks, then the stage, then the bar - the
+    percent and the clock are the last things standing, because a
+    clipped timer on a phone screen defeats the reason it exists.
     Rendering only - never called on a non-tty, so piped output and
-    benchmark logs are byte-identical to before this existed."""
+    benchmark logs are byte-identical to a world without it."""
     import shutil as _shutil
     if out is None:
         out = sys.stderr
-    cols = _shutil.get_terminal_size((80, 24)).columns
+    cols = max(20, _shutil.get_terminal_size((80, 24)).columns)
     pct = 100 * done // max(total, 1)
-    head = " %-22s %-11s" % (label[:22], stage[:11])
     tail = " %3d%%" % pct
     if elapsed is not None:
-        tail += " %4ds" % int(elapsed)
-    barw = max(10, cols - len(head) - len(tail) - 3)
+        tail += " %4ds" % min(int(elapsed), 9999)
+    budget = cols - 1 - len(tail) - 3          # "[", "]", leading space
+    min_bar = 6
+    label = label[:22]
+    stage = stage[:11]
+    head = ""
+    if label and budget - min_bar > len(label) + len(stage) + 2:
+        head = "%s %s " % (label, stage)
+    elif budget - min_bar > len(stage) + 1:
+        head = "%s " % stage
+    # Capped: a bar spanning the whole terminal is noise, and on a
+    # narrow screen the bar is the part that shrinks so the percent
+    # and the clock never fall off the right edge.
+    barw = min(32, max(min_bar, budget - len(head)))
+    if len(head) + barw > budget:
+        barw = max(1, budget - len(head))
     fill = barw * done // max(total, 1)
-    line = "%s [%s%s]%s" % (head, "#" * fill, "-" * (barw - fill), tail)
+    line = " %s[%s%s]%s" % (head, "#" * fill, "-" * (barw - fill), tail)
     out.write("\r" + line[:cols - 1])
     out.flush()
 
