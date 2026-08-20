@@ -79,6 +79,42 @@ LEEROY = False
 LOG = None
 
 
+class _LiveBar:
+    """Elapsed-ticking bar for the matrix's own in-process work - the
+    content and byte checks hash gigabytes with no telemetry, and on a
+    phone that silence lasts long enough to look like a hang."""
+
+    def __init__(self, label, stage="sha1"):
+        self._on = sys.stderr.isatty()
+        self._label = label
+        self._stage = stage
+
+    def __enter__(self):
+        if not self._on:
+            return self
+        import threading
+        from .cli import render_bar
+        self._live = True
+        t0 = time.monotonic()
+
+        def tick():
+            while self._live:
+                render_bar(self._label, self._stage, 0, 1,
+                           elapsed=time.monotonic() - t0)
+                time.sleep(0.5)
+
+        self._t = threading.Thread(target=tick, daemon=True)
+        self._t.start()
+        return self
+
+    def __exit__(self, *exc):
+        if self._on:
+            self._live = False
+            self._t.join(timeout=1)
+            from .cli import clear_bar
+            clear_bar()
+
+
 def say(line, **_kw):
     """A human-facing line: to stdout, and into the log if one is open.
     Accepts and ignores print()'s keyword arguments so every existing
@@ -105,6 +141,24 @@ def run(edge, argv):
                          env=env)
     lines = []
     tty = sys.stderr.isatty()
+    # Liveness ticker: redraw twice a second with elapsed time, so a
+    # stage that emits no progress telemetry still shows a moving
+    # clock. A frozen fill with ticking seconds is a silent worker; a
+    # frozen everything is a hang - the two used to look identical.
+    state = {"stage": "...", "done": 0, "total": 1, "on": tty}
+    ticker = None
+    if tty:
+        import threading as _threading
+        from .cli import render_bar
+
+        def _tick():
+            while state["on"]:
+                render_bar(edge, state["stage"], state["done"],
+                           state["total"], elapsed=time.monotonic() - t0)
+                time.sleep(0.5)
+
+        ticker = _threading.Thread(target=_tick, daemon=True)
+        ticker.start()
     for raw in iter(p.stdout.readline, ""):
         line = raw.rstrip()
         if not line:
@@ -119,8 +173,8 @@ def run(edge, argv):
             if tty:
                 try:
                     _t, stage, d, tot = line.split()
-                    from .cli import render_bar
-                    render_bar(edge, stage, int(d), int(tot))
+                    state["stage"], state["done"], state["total"] = \
+                        stage, int(d), int(tot)
                 except ValueError:
                     pass
             continue
@@ -128,6 +182,9 @@ def run(edge, argv):
     p.stdout.close()
     rc = p.wait()
     if tty:
+        state["on"] = False
+        if ticker is not None:
+            ticker.join(timeout=1)
         from .cli import clear_bar
         clear_bar()
     dt = time.monotonic() - t0
@@ -144,7 +201,8 @@ def run(edge, argv):
 
 def check_dir(edge, path, baseline):
     t0 = time.monotonic()
-    got = xdvdfs_mod.hash_tree(path)
+    with _LiveBar(edge):
+        got = xdvdfs_mod.hash_tree(path)
     dt = time.monotonic() - t0
     ok = got == baseline
     RESULTS.append({"edge": edge, "type": "content-check", "ok": ok,
@@ -175,6 +233,8 @@ def check_partition(edge, got_path, src_path):
     t0 = time.monotonic()
     with open(src_path, "rb") as f:
         off = xbox_image_offset(f)
+    _lbp = _LiveBar(edge, "compare")
+    _lbp.__enter__()
     ok = True
     detail = ""
     want = os.path.getsize(src_path) - off
@@ -196,6 +256,7 @@ def check_partition(edge, got_path, src_path):
                 if not x:
                     break
                 at += len(x)
+    _lbp.__exit__()
     dt = time.monotonic() - t0
     RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
                     "seconds": round(dt, 1), "partition_offset": off,
@@ -217,6 +278,8 @@ def check_identical(edge, got_path, want_path):
     correct output is the input, so this asks for exactly that rather
     than for a partition slice or a set of matching files."""
     t0 = time.monotonic()
+    _lb = _LiveBar(edge, "compare")
+    _lb.__enter__()
     ok = os.path.getsize(got_path) == os.path.getsize(want_path)
     detail = ""
     if not ok:
@@ -235,6 +298,7 @@ def check_identical(edge, got_path, want_path):
                 if not x:
                     break
                 at += len(x)
+    _lb.__exit__()
     dt = time.monotonic() - t0
     RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
                     "seconds": round(dt, 1)})
@@ -270,6 +334,8 @@ def check_god_data(edge, header, src_path):
     ok = True
     detail = ""
     at = 0
+    _lbg = _LiveBar(edge, "compare")
+    _lbg.__enter__()
     with _god.GodStream(header) as g, open(src_path, "rb") as f:
         f.seek(off)
         while True:
@@ -282,6 +348,7 @@ def check_god_data(edge, header, src_path):
                 detail = " (first difference near byte %d of %d)" % (at, g.size)
                 break
             at += len(x)
+    _lbg.__exit__()
     dt = time.monotonic() - t0
     RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
                     "seconds": round(dt, 1), "partition_offset": off,
@@ -550,7 +617,8 @@ def main(argv=None):
 
     # baseline: input -> dir
     run("%s->dir" % kind, ["convert", src, "-o", d("base") + "/"])
-    baseline = xdvdfs_mod.hash_tree(d("base"))
+    with _LiveBar("baseline"):
+        baseline = xdvdfs_mod.hash_tree(d("base"))
     say("baseline: %d files\n" % len(baseline))
 
     # dir -> iso -> dir

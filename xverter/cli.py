@@ -47,10 +47,14 @@ class CliError(Exception):
 
 # ---------------------------------------------------------------- helpers
 
-def render_bar(label, stage, done, total, out=None):
+def render_bar(label, stage, done, total, out=None, elapsed=None):
     """One pacman-style progress line, redrawn in place on a tty:
 
-        iso->chd       god-write   [##########----------------]  42%
+        iso->chd       god-write   [##########----------------]  42%   37s
+
+    The elapsed seconds are the liveness signal: stages with no
+    progress telemetry keep the clock ticking, so "working but silent"
+    and "hung" stop looking identical.
 
     Sized to the terminal, cleared by the caller when the job ends.
     Rendering only - never called on a non-tty, so piped output and
@@ -62,6 +66,8 @@ def render_bar(label, stage, done, total, out=None):
     pct = 100 * done // max(total, 1)
     head = " %-22s %-11s" % (label[:22], stage[:11])
     tail = " %3d%%" % pct
+    if elapsed is not None:
+        tail += " %4ds" % int(elapsed)
     barw = max(10, cols - len(head) - len(tail) - 3)
     fill = barw * done // max(total, 1)
     line = "%s [%s%s]%s" % (head, "#" * fill, "-" * (barw - fill), tail)
