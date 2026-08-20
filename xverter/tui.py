@@ -190,7 +190,7 @@ class XVerterApp(App):
     #batchrow > Static { width: 12; }
     #batchrow ProgressBar { width: 1fr; }
     #progressrow { height: 1; }
-    #progressrow > Static { width: 12; }
+    #progressrow > Static { width: 20; }
     #progressrow ProgressBar { width: 1fr; }
     #progressrow Bar, #batchrow Bar {
         width: 1fr;
@@ -227,6 +227,9 @@ class XVerterApp(App):
         # Update buttons are two-step: the first press checks, the
         # second acts on what the check found. None = nothing checked
         # yet, so the next press is a check.
+        self._prog_t0 = {}          # count-up clock start, per bar row
+        self._prog_stage = {}
+        self._prog_timer = {}
         self._app_update = None     # release dict once a newer one exists
         self._dat_update = None     # {system: (data, version)} once fetched
 
@@ -802,13 +805,47 @@ class XVerterApp(App):
 
     def _set_progress(self, stage, done, total, test=False):
         pre = "test" if test else ""
+        self._prog_stage[pre] = stage
         try:
-            self.query_one("#%sprogstage" % pre, Static).update(stage)
+            self.query_one("#%sprogstage" % pre, Static).update(
+                self._stage_text(pre))
             bar = self.query_one("#%sprogbar" % pre, ProgressBar)
         except Exception:
             return                      # screen tearing down
         bar.total = max(total, 1)
         bar.progress = min(done, total)
+
+    def _stage_text(self, pre):
+        stage = self._prog_stage.get(pre, "idle")
+        t0 = self._prog_t0.get(pre)
+        if t0 is None or stage == "idle":
+            return stage
+        return "%s %ds" % (stage, int(time.monotonic() - t0))
+
+    def _prog_clock_start(self, test=False):
+        """Start (or restart) the count-up clock for a run. A ticker
+        repaints the stage label once a second so long stages show a
+        moving clock - the same liveness contract the terminal bars
+        keep, in the TUI's own widgets."""
+        pre = "test" if test else ""
+        self._prog_t0[pre] = time.monotonic()
+        if self._prog_timer.get(pre) is None:
+            def tick():
+                try:
+                    self.query_one("#%sprogstage" % pre, Static).update(
+                        self._stage_text(pre))
+                except Exception:
+                    pass
+            self._prog_timer[pre] = self.set_interval(1.0, tick)
+
+    def _prog_clock_stop(self, test=False):
+        pre = "test" if test else ""
+        self._prog_t0[pre] = None
+        self._prog_stage[pre] = "idle"
+        try:
+            self.query_one("#%sprogstage" % pre, Static).update("idle")
+        except Exception:
+            pass
 
     # ------------------------------------------------------------ workers
 
@@ -863,6 +900,7 @@ class XVerterApp(App):
         if argv[0] in ("convert", "verify"):
             argv = argv + ["--progress"]
         env = dict(os.environ, PYTHONUNBUFFERED="1")
+        self.call_from_thread(self._prog_clock_start)
         p = subprocess.Popen(_self_cmd(argv), stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True,
                              bufsize=1, env=env)
@@ -881,7 +919,9 @@ class XVerterApp(App):
                 continue
             tail = (tail + [line])[-3:]
         p.stdout.close()
-        return p.wait(), tail
+        rc = p.wait()
+        self.call_from_thread(self._prog_clock_stop)
+        return rc, tail
 
     def _out_path_for(self, path, target):
         base = os.path.basename(path)
@@ -979,6 +1019,7 @@ class XVerterApp(App):
                                    dir=self.library)
         try:
             env = dict(os.environ, PYTHONUNBUFFERED="1")
+            self.call_from_thread(self._prog_clock_start, True)
             p = subprocess.Popen(
                 _self_cmd(["test", path, "--workdir", workdir]),
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -999,10 +1040,15 @@ class XVerterApp(App):
                 self.call_from_thread(self._log, line)
                 if re.search(r"\s(PASS|FAIL|SKIP)\s", line):
                     edges += 1
+                    # The edge count varies by input kind (60 for disc
+                    # images, fewer where a check has no meaning), so
+                    # the batch bar counts up rather than pretending to
+                    # know the total.
                     self.call_from_thread(self._set_batch_progress,
-                                          "edge %d/48" % edges,
-                                          edges, 48)
+                                          "edge %d" % edges,
+                                          edges, max(edges, 1))
             rc = p.wait()
+            self.call_from_thread(self._prog_clock_stop, True)
             report = os.path.join(workdir, "matrix_report.html")
             if os.path.isfile(report):
                 stem = os.path.splitext(os.path.basename(path))[0]
