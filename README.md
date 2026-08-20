@@ -76,7 +76,7 @@ And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA
 
 ## The test record — three generations of Halo, one hash each
 
-The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 57-edge matrix (67 for STFS: it has no pressed disc to byte-compare against, so every conversion from the original package is round-tripped and content-checked instead), every edge verified one way or the other. Every first-hop conversion starts from the pressed source — optimized formats prove they strip the real disc correctly, archival formats that they preserve it — and nothing is converted from the suite's own rebuilt intermediate when the original is on hand. Three numbers per game tell the whole story:
+The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 57-edge matrix (54 for STFS: it has no pressed disc to byte-compare against, so the three byte-audits an image input earns become round-trip content checks instead), every edge verified one way or the other. Every first-hop conversion starts from the pressed source — optimized formats prove they strip the real disc correctly, archival formats that they preserve it — and nothing is converted from the suite's own rebuilt intermediate when the original is on hand. Three numbers per game tell the whole story:
 
 - **Source SHA-1** — the whole input file; matches Redump's canonical dump.
 - **Content digest** — a canonical SHA-1 over every file's path + hash inside the game. This is the *format-invariant* fingerprint: identical across all seven formats, immune to compressor versions and container layout. It even survived xVerter's own writers being replaced wholesale — the digest below for Anniversary is byte-for-byte the one measured back when output ran through delegated third-party tools.
@@ -97,18 +97,25 @@ Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, Cach
 
 | Conversion (from the pressed source) | Spartan Assault (2.3GB) | Halo CE (7.3GB) | Halo 3 (7.8GB) | Anniversary (8.7GB) |
 | ----------------------- | -----------------------:| ---------------:| --------------:| -------------------:|
-| dir → iso               | 3.2 (3.1)               | 4.3 (4.5)       | 6.6 (7.7)      | 10.0 (10.3)         |
-| dir → zar               | 6.4 (17.2)              | 6.0 (10.5)      | 11.3 (25.2)    | 15.3 (34.1)         |
-| iso → god               | 1.5 (3.3)               | 2.3 (5.1)       | 5.1 (8.4)      | 4.9 (10.9)          |
-| iso → cci               | 7.2 (11.0)              | 7.4 (15.1)      | 13.2 (26.5)    | 17.2 (34.5)         |
-| iso → cso               | 6.9 (11.4)              | 6.8 (14.8)      | 12.4 (26.4)    | 15.2 (34.2)         |
-| iso → chd               | 27.6 (56.1)             | 19.5 (48.0)     | 44.9 (84.0)    | 58.4 (123.9)        |
-| **full matrix**         | **3m12s** (5m49s, 48 edges) | **5m43s** (5m55s, 48 edges) | **9m01s** (10m47s, 48 edges) | **11m34s** (14m48s, 48 edges) |
+| dir → iso               | 3.0 (3.1)               | 4.2 (4.5)       | 6.6 (7.7)      | 10.0 (10.3)         |
+| dir → zar               | 6.3 (17.2)              | 6.0 (10.5)      | 11.4 (25.2)    | 15.5 (34.1)         |
+| iso → god               | —                       | 3.2 (5.1)       | 4.3 (8.4)      | 5.3 (10.9)          |
+| iso → zar               | —                       | 5.7 (10.5)      | 12.1 (25.2)    | 16.4 (34.1)         |
+| iso → cci               | —                       | 14.9 (15.1)     | 17.1 (26.5)    | 19.3 (34.5)         |
+| iso → cso               | —                       | 13.4 (14.8)     | 15.4 (26.4)    | 16.6 (34.2)         |
+| iso → chd               | —                       | 44.0 (48.0)     | 56.1 (84.0)    | 61.4 (123.9)        |
+| **full matrix**         | **4m40s** (5m49s, 48 edges) | **6m04s** (5m55s, 48 edges) | **8m17s** (10m47s, 48 edges) | **10m06s** (14m48s, 48 edges) |
 
-The current column runs **57 edges (67 for Spartan)** — a quarter more coverage than the launch
-column — and still comes in faster on every game: the launch quartet took 37m07s, the current
-one 29m30s (single-run figures; the suite's run-to-run noise is about ±4%). CHD went native in
-1.2.0, which is where its column's halving comes from.
+Spartan Assault is a download-era title — no pressed disc exists, so its first hops run from
+the STFS package itself: → iso 9.7s, → god 10.4s, → zar 11.3s, → cci 16.3s, → cso 16.1s,
+→ chd 36.8s. One honesty note on the parentheses: the launch suite built its containers from
+its own trimmed rebuild, while every current number converts the full pressed disc — more
+data in, and still faster everywhere.
+
+The current column runs **57 edges (54 for Spartan)** — a quarter more coverage than the launch
+column — and still comes in faster on the quartet: 37m07s at launch, 29m07s now (single-run
+figures; the suite's run-to-run noise is about ±4%). CHD went native in 1.2.0, which is where
+its column's savings come from.
 
 Compression, as a fraction of the raw ISO (content-dependent — Anniversary's assets are already compressed, Spartan's aren't): CHD 60–90%, ZAR 60–93%, CCI/CSO 70–96%, GoD ~100.5% (its SHA-1 hash tree costs half a percent).
 
@@ -269,7 +276,7 @@ xverter test "Some Game.zar"
 MATRIX: ALL PASS
 ```
 
-(67 edges for STFS input: no pressed disc to byte-compare against, so its source conversions are content-checked instead. Every container is exercised from the true source regardless of what the input is. All edges run everywhere — CHD included, natively.)
+(54 edges for STFS input: no pressed disc to byte-compare against, so the byte-audits become round-trip content checks. Every container is exercised from the true source regardless of what the input is — an STFS package streams straight into GoD, CCI, CSO and CHD without an intermediate image on disk. All edges run everywhere — CHD included, natively.)
 
 Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release test-suite runs on real XGD1, XGD2, XGD3 and STFS dumps — and it narrates itself: per-edge results stream live with within-edge progress (no binaries required). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
 
