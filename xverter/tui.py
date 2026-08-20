@@ -59,10 +59,10 @@ def _self_cmd(argv):
 
 
 class LibraryTable(DataTable):
-    """DataTable that reports double-clicks (navigation) and spacebar
-    (batch-select toggle) to the app. Clicks are consumed by DataTable
-    itself (they move the cursor and never bubble to the App), so both
-    must hook in at the widget."""
+    """DataTable that reports double-clicks and Enter (navigation) and
+    spacebar (batch-select toggle) to the app. Clicks and keys are
+    consumed by DataTable itself (they move the cursor and never bubble
+    to the App), so all three must hook in at the widget."""
 
     def on_click(self, event):
         if getattr(event, "chain", 1) >= 2:
@@ -71,6 +71,10 @@ class LibraryTable(DataTable):
     def on_key(self, event):
         if event.key == "space":
             self.app.toggle_batch()
+            event.stop()
+            event.prevent_default()
+        elif event.key == "enter":
+            self.app.enter_selected()
             event.stop()
             event.prevent_default()
 
@@ -407,8 +411,8 @@ class XVerterApp(App):
         bar.progress = min(done, total)
 
     def enter_selected(self):
-        """Double-click on the library table: enter the selected
-        directory (".." goes up); files are ignored."""
+        """Double-click or Enter on the library table: enter the
+        selected directory (".." goes up); files are ignored."""
         t = self.query_one("#table", DataTable)
         if t.cursor_row is None or t.row_count == 0:
             return
