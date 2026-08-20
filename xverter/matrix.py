@@ -685,6 +685,27 @@ def main(argv=None):
                 os.unlink(d(spent))
             except OSError:
                 pass
+    else:
+        # Non-image sources get the same rule with the strongest check
+        # they permit. There is no pressed disc to byte-compare against
+        # - the image only exists after a rebuild, and rebuild-vs-
+        # rebuild is the self-reference blind spot - but the CONVERSIONS
+        # from the true source are real user paths (STFS straight to
+        # GoD is how XBLA lands on a modded 360) and each one is
+        # round-tripped and content-checked against the baseline. No
+        # container is exempt because of what the input happened to be.
+        for tgt in ("iso", "zar", "god", "cci", "cso", "chd"):
+            if tgt == kind:
+                continue
+            out = d("s." + tgt) if tgt != "god" else d("s.god")
+            run("%s(src)->%s" % (kind, tgt),
+                ["convert", src, "-o", out])
+            back = d("from_src_%s" % tgt)
+            inp = god_header_in(out) if tgt == "god" else out
+            run("%s(src)->dir" % tgt, ["convert", inp, "-o", back + "/"])
+            check_dir("  content(src-%s)" % tgt, back, baseline)
+            shutil.rmtree(out, ignore_errors=True) if os.path.isdir(out) \
+                else os.unlink(out)
     run("god->cci", ["convert", hdr, "-o", d("g.cci")])
     run("cci->cso", ["convert", d("a.cci"), "-o", d("x.cso")])
     run("cso(x)->dir", ["convert", d("x.cso"), "-o", d("from_xcso") + "/"])

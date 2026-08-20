@@ -76,7 +76,7 @@ And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA
 
 ## The test record — three generations of Halo, one hash each
 
-The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 60-edge matrix (49 for STFS, which has no pressed disc to byte-compare against), every edge content- or byte-checked. Three numbers per game tell the whole story:
+The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 60-edge matrix (67 for STFS: it has no pressed disc to byte-compare against, so every conversion from the original package is round-tripped and content-checked instead), every edge verified one way or the other. Three numbers per game tell the whole story:
 
 - **Source SHA-1** — the whole input file; matches Redump's canonical dump.
 - **Content digest** — a canonical SHA-1 over every file's path + hash inside the game. This is the *format-invariant* fingerprint: identical across all seven formats, immune to compressor versions and container layout. It even survived xVerter's own writers being replaced wholesale — the digest below for Anniversary is byte-for-byte the one measured back when output ran through delegated third-party tools.
@@ -105,7 +105,7 @@ Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, Cach
 | iso → chd               | 27.6 (56.1)             | 19.5 (48.0)     | 44.9 (84.0)    | 58.4 (123.9)        |
 | **full matrix**         | **3m12s** (5m49s, 48 edges) | **5m43s** (5m55s, 48 edges) | **9m01s** (10m47s, 48 edges) | **11m34s** (14m48s, 48 edges) |
 
-The current column runs **60 edges (49 for Spartan)** — a quarter more coverage than the launch
+The current column runs **60 edges (67 for Spartan)** — a quarter more coverage than the launch
 column — and still comes in faster on every game: the launch quartet took 37m07s, the current
 one 29m30s (single-run figures; the suite's run-to-run noise is about ±4%). CHD went native in
 1.2.0, which is where its column's halving comes from.
@@ -269,7 +269,7 @@ xverter test "Some Game.zar"
 MATRIX: ALL PASS
 ```
 
-(49 edges for STFS input, which has no pressed disc image to byte-compare against. All edges run everywhere — CHD included, natively.)
+(67 edges for STFS input: no pressed disc to byte-compare against, so its source conversions are content-checked instead. Every container is exercised from the true source regardless of what the input is. All edges run everywhere — CHD included, natively.)
 
 Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release test-suite runs on real XGD1, XGD2, XGD3 and STFS dumps — and it narrates itself: per-edge results stream live with within-edge progress (no binaries required). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
 
