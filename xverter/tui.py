@@ -22,7 +22,7 @@ import time
 
 from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import (Button, DataTable, Header, Label,
                              ProgressBar, RichLog, Static, Switch,
                              TabbedContent, TabPane)
@@ -40,12 +40,22 @@ CONVERT_TARGETS = [
     ("to-iso", "→ ISO", "iso", "primary"),
     ("to-zar", "→ ZAR", "zar", "primary"),
     ("to-god", "→ GoD", "god", "primary"),
+    ("to-chd", "→ CHD", "chd", "primary"),
+    ("to-xiso", "→ XISO", "xiso", "default"),
     ("to-cci", "→ CCI", "cci", "default"),
     ("to-cso", "→ CSO", "cso", "default"),
-    ("to-chd", "→ CHD", "chd", "default"),
-    ("to-dir", "→ Folder", "dir", "default"),
-    ("to-7z", "→ 7z", "7z", "default"),
     ("to-zip", "→ ZIP", "zip", "default"),
+    ("to-7z", "→ 7z", "7z", "default"),
+    ("to-dir", "→ Folder", "dir", "default"),
+]
+
+# The button rows are grouped by console: Xbox 360 formats first,
+# Original Xbox formats second (xiso for xemu; CCI/CSO were only ever
+# XGD1 containers), general transport/extract third, utilities last.
+BUTTON_ROWS = [
+    ("to-iso", "to-zar", "to-god", "to-chd"),      # Xbox 360
+    ("to-xiso", "to-cci", "to-cso"),               # Original Xbox
+    ("to-zip", "to-7z", "to-dir"),                 # transport / extract
 ]
 
 
@@ -117,7 +127,7 @@ class XVerterApp(App):
         border: round $primary;
         border-title-color: $text;
     }
-    #side { width: 42; height: auto; margin-bottom: 2; }
+    #side { width: 46; height: auto; margin-bottom: 2; }
     #details {
         height: auto;
         min-height: 8;
@@ -132,36 +142,30 @@ class XVerterApp(App):
         padding: 0 1;
         height: auto;
     }
-    #buttons {
-        grid-size: 3;
-        grid-gutter: 0 1;
-        grid-rows: 3;
-        height: auto;
-    }
-    #buttons Button {
-        width: 100%;
+    .btnrow { height: 3; }
+    .btnrow Button {
+        width: 1fr;
         min-width: 0;
         height: 3;
         padding: 0;
-        margin: 0;
-    }
-    #buttons Button {
+        margin: 0 1 0 0;
         background: transparent;
         text-style: bold;
     }
-    #to-iso, #to-zar, #to-god {
+    /* rows are console families: 360 / OG Xbox / transport */
+    #to-iso, #to-zar, #to-god, #to-chd {
         border: round #2196f3;
         color: #64b5f6;
     }
-    #to-iso:hover, #to-zar:hover, #to-god:hover {
+    #to-iso:hover, #to-zar:hover, #to-god:hover, #to-chd:hover {
         background: #1565c0;
         color: #eaf4fe;
     }
-    #to-cci, #to-cso, #to-chd {
+    #to-xiso, #to-cci, #to-cso {
         border: round #12b096;
         color: #3cd0b5;
     }
-    #to-cci:hover, #to-cso:hover, #to-chd:hover {
+    #to-xiso:hover, #to-cci:hover, #to-cso:hover {
         background: #0d8f7a;
         color: #eafcf8;
     }
@@ -267,15 +271,19 @@ class XVerterApp(App):
                             yield Static("click a game to inspect it",
                                          id="details")
                             with Vertical(id="actions"):
-                                with Grid(id="buttons"):
-                                    for bid, label, _t, variant in \
-                                            CONVERT_TARGETS:
-                                        yield Button(label, id=bid,
-                                                     variant=variant)
-                                    yield Button("Verify", id="do-verify",
-                                                 variant="success")
+                                by_id = {b: (lbl, var) for b, lbl, _t, var
+                                         in CONVERT_TARGETS}
+                                for row in BUTTON_ROWS:
+                                    with Horizontal(classes="btnrow"):
+                                        for bid in row:
+                                            lbl, var = by_id[bid]
+                                            yield Button(lbl, id=bid,
+                                                         variant=var)
+                                with Horizontal(classes="btnrow"):
                                     yield Button("Test", id="run-test",
                                                  variant="warning")
+                                    yield Button("Verify", id="do-verify",
+                                                 variant="success")
                                     yield Button("Rescan", id="do-rescan")
                                 with Horizontal(classes="optrow"):
                                     yield Label("Leeroy Jenkins mode\n"
@@ -985,6 +993,20 @@ class XVerterApp(App):
                     self.call_from_thread(
                         self._log, "SKIP %s: already %s" % (name, kind))
                     continue
+                if target == "xiso" and kind == "iso":
+                    # A bare image IS an xiso; only a full redump has a
+                    # video partition to trim. Skip, never fail.
+                    try:
+                        from .formats import xdvdfs as _xd
+                        with open(path, "rb") as _f:
+                            if _xd.find_base(_f) == 0:
+                                skipped += 1
+                                self.call_from_thread(
+                                    self._log,
+                                    "SKIP %s: already a bare xiso" % name)
+                                continue
+                    except Exception:                 # noqa: BLE001
+                        pass                          # let convert decide
                 out = self._out_path_for(path, target)
                 if os.path.exists(out.rstrip(os.sep)):
                     skipped += 1

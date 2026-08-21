@@ -372,6 +372,8 @@ def _output_kind(out_path):
         return "zar"
     if ext == ".iso":
         return "iso"
+    if ext == ".xiso":
+        return "xiso"
     if ext == ".god":
         return "god"
     if ext == ".chd":
@@ -385,7 +387,78 @@ def _output_kind(out_path):
     if ext == ".cso":
         return "cso"
     raise CliError("cannot infer output format from %r "
-                   "(use .zar/.iso extension or a directory path)" % out_path)
+                   "(use .zar/.iso/.xiso extension or a directory path)"
+                   % out_path)
+
+
+def _write_xiso(kind, path, out_path, prog, verify=True):
+    """Trim an image source to a bare game-partition image (an xiso -
+    what xemu and the OG Xbox scene consume).
+
+    A byte SLICE, not a rebuild: XDVDFS offsets are partition-relative,
+    so the bytes from the partition base to the end of the image are
+    already a complete bare image with the original sector layout
+    intact. Rebuilding from the file tree would produce a valid image
+    too, but a different one - this path preserves the pressed layout,
+    which is the whole point of handing over an image rather than a
+    reconstruction of its contents.
+
+    Works through any image reader (raw ISO, GoD, CCI, CSO), so a
+    compressed container trims straight to an xiso without a pivot.
+    Verification re-reads the written file (an independent witness) and
+    compares its SHA-1 against the bytes that were sliced out, then
+    structure-checks the result as an image."""
+    if os.path.exists(out_path):
+        raise CliError("output already exists: %s" % out_path)
+    opener = _image_opener(kind, path)
+    src_sha = hashlib.sha1()
+    with opener() as img:
+        base = xdvdfs_mod.find_base(img)
+        if base == 0 and kind == "iso":
+            raise CliError(
+                "input is already a bare xiso - its game partition "
+                "starts at byte 0, there is no video partition to trim. "
+                "Rename it if you want the .xiso extension.")
+        img.seek(0, 2)
+        total = img.tell() - base
+        img.seek(base)
+        cb = prog.cb("xiso-write")
+        done = 0
+        with open(out_path, "wb") as o:
+            while True:
+                b = img.read(8 << 20)
+                if not b:
+                    break
+                src_sha.update(b)
+                o.write(b)
+                done += len(b)
+                if cb:
+                    cb(done, total)
+    if verify:
+        got = hashlib.sha1()
+        vcb = prog.cb("verify")
+        vdone = 0
+        with open(out_path, "rb") as f:
+            while True:
+                b = f.read(8 << 20)
+                if not b:
+                    break
+                got.update(b)
+                vdone += len(b)
+                if vcb:
+                    vcb(vdone, total)
+        if got.hexdigest() != src_sha.hexdigest():
+            os.unlink(out_path)
+            raise CliError("xiso readback sha1 %s != source partition "
+                           "sha1 %s" % (got.hexdigest(),
+                                        src_sha.hexdigest()))
+        with open(out_path, "rb") as f:
+            try:
+                xdvdfs_mod.validate_image(f)
+            except xdvdfs_mod.XdvdfsError as e:
+                os.unlink(out_path)
+                raise CliError("trimmed xiso failed image validation: %s"
+                               % e)
 
 
 def _stream_hashes(path, progress=None):
@@ -1395,6 +1468,28 @@ def cmd_convert(args):
                          else "verified against chd internal sha1"))
                 return 0
             kind, path = "iso", chd_iso
+        if out_kind == "xiso":
+            if kind in ("iso", "god", "cci", "cso"):
+                # Image-bearing sources hand over the pressed image, so
+                # the xiso is a byte slice of its game partition - the
+                # original layout, not a rebuild. (A CHD source was
+                # materialized to an iso just above and takes this path
+                # too.)
+                _write_xiso(kind, path, args.output, prog,
+                            verify=not args.no_verify)
+                ident.report()
+                _gil_hint()
+                print("wrote %s (%s)"
+                      % (args.output,
+                         "NO GUARANTEES - --leeroy-jenkins"
+                         if args.no_verify
+                         else "byte-identical to the source's game "
+                              "partition, readback verified"))
+                return 0
+            # No pressed image exists in a zar/STFS/folder source, so
+            # the xiso is a rebuilt bare image - exactly what the iso
+            # output already produces. Same pipeline, .xiso name.
+            out_kind = "iso"
         if out_kind == "iso" and kind == "iso":
             # Only reachable through the archive layer above - a plain
             # iso -> iso is refused before this point. The archive held

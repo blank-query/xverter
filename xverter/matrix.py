@@ -768,6 +768,26 @@ def main(argv=None):
         run("chd(src)->iso", ["convert", d("a.chd"), "-o", d("back_chd.iso")])
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
 
+    # xiso: the trimmed bare image (what xemu consumes). A byte SLICE of
+    # the source's game partition, so it only exists when the source has
+    # a video partition to trim - a bare image already IS an xiso, and a
+    # non-image source has no pressed bytes to slice. check_partition is
+    # exactly the right audit: output == src[partition_base:], byte for
+    # byte.
+    if kind == "iso":
+        from .formats.cci import xbox_image_offset as _xio
+        with open(src, "rb") as _sf:
+            _full_disc = _xio(_sf) > 0
+        if _full_disc:
+            run("iso(src)->xiso", ["convert", src, "-o", d("a.xiso")])
+            run("xiso->dir", ["convert", d("a.xiso"),
+                              "-o", d("from_xiso") + "/"])
+            check_dir("  content(xiso)", d("from_xiso"), baseline)
+            run("verify xiso", ["verify", d("a.xiso"), "--no-lookup"])
+            # Last on purpose: the byte-audit reclaims its artifact
+            # (a second copy of the game) once compared.
+            check_partition("  bytes(iso-xiso)", d("a.xiso"), src)
+
     # verify subcommand on every artifact kind
     run("verify iso", ["verify", d("a.iso"), "--no-lookup"])
     run("verify zar", ["verify", d("a.zar")])
