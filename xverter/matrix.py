@@ -585,7 +585,11 @@ def god_header_in(tree):
                 if not f.endswith(".data") and \
                         os.path.isdir(os.path.join(dirpath, f + ".data")):
                     return os.path.join(dirpath, f)
-    raise SystemExit("no GoD header found under %s" % tree)
+    # RuntimeError, not SystemExit: a partial GoD dir (left by a failed
+    # conversion the suite is meant to catch) is caught by scan_artifacts'
+    # except-Exception, so report generation still completes instead of a
+    # BaseException aborting the whole run with no report at all.
+    raise RuntimeError("no GoD header found under %s" % tree)
 
 
 def main(argv=None):
@@ -734,8 +738,10 @@ def main(argv=None):
             inp = god_header_in(out) if tgt == "god" else out
             run("%s(src)->dir" % tgt, ["convert", inp, "-o", back + "/"])
             check_dir("  content(src-%s)" % tgt, back, baseline)
-            shutil.rmtree(out, ignore_errors=True) if os.path.isdir(out) \
-                else os.unlink(out)
+            if os.path.isdir(out):
+                shutil.rmtree(out, ignore_errors=True)
+            elif os.path.exists(out):
+                os.unlink(out)         # only if the conversion produced it
     run("god->cci", ["convert", hdr, "-o", d("g.cci")])
     run("cci->cso", ["convert", d("a.cci"), "-o", d("x.cso")])
     run("cso(x)->dir", ["convert", d("x.cso"), "-o", d("from_xcso") + "/"])
