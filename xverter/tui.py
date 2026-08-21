@@ -76,11 +76,18 @@ class LibraryTable(DataTable):
 
     def on_click(self, event):
         if getattr(event, "chain", 1) >= 2:
-            # Defer: DataTable's own click handler runs after this one on
-            # the same event and would re-apply the pre-navigation row
-            # index to the rebuilt table, landing the cursor on an
-            # unrelated row. Navigating after the event drains avoids it.
-            self.app.call_after_refresh(self.app.enter_selected)
+            # Capture the row NAME now (the first click of the pair
+            # already placed the cursor), then defer the navigation:
+            # DataTable's own click handler runs after this one on the
+            # same event and would re-apply the pre-navigation row index
+            # to the rebuilt table. Deferring by name rather than by
+            # cursor also survives a background job's rescan resetting
+            # the cursor in the window before the callback runs.
+            if self.cursor_row is None or self.row_count == 0:
+                return
+            name = str(self.get_row_at(self.cursor_row)[1])
+            self.app.call_after_refresh(
+                lambda n=name: self.app.enter_selected(n))
 
     def on_key(self, event):
         if event.key == "space":
@@ -399,7 +406,8 @@ class XVerterApp(App):
             # finishes after the user has moved on must not clobber the
             # newer selection's details.
             self._probe_want = path
-            self._probe(path)
+            self._probe_gen = getattr(self, "_probe_gen", 0) + 1
+            self._probe(path, self._probe_gen)
 
     def toggle_batch(self):
         """Spacebar: toggle the highlighted row in the batch set."""
@@ -429,13 +437,16 @@ class XVerterApp(App):
         bar.total = max(total, 1)
         bar.progress = min(done, total)
 
-    def enter_selected(self):
+    def enter_selected(self, name=None):
         """Double-click or Enter on the library table: enter the
-        selected directory (".." goes up); files are ignored."""
-        t = self.query_one("#table", DataTable)
-        if t.cursor_row is None or t.row_count == 0:
-            return
-        name = t.get_row_at(t.cursor_row)[1]
+        selected directory (".." goes up); files are ignored. A caller
+        that captured the row name earlier passes it explicitly so a
+        concurrent rescan cannot redirect the navigation."""
+        if name is None:
+            t = self.query_one("#table", DataTable)
+            if t.cursor_row is None or t.row_count == 0:
+                return
+            name = t.get_row_at(t.cursor_row)[1]
         if name == "..":
             self._navigate(os.path.dirname(self.library))
             return
@@ -509,7 +520,10 @@ class XVerterApp(App):
                       % (target, len(names)))
             for k in keys:
                 self._busy.add(k)
-            self._run_batch(target, names)
+            # Pin the library HERE, on the UI thread, where the busy
+            # keys were just computed - the worker body starts later and
+            # self.library may have changed by then.
+            self._run_batch(target, names, self.library)
             return
         path = self._selected_path()
         if not path:
@@ -880,7 +894,7 @@ class XVerterApp(App):
     # ------------------------------------------------------------ workers
 
     @work(thread=True, exclusive=True, group="probe")
-    def _probe(self, path):
+    def _probe(self, path, gen=0):
         try:
             kind, real = detect_mod.detect(path)
             lines = ["%s  [%s]" % (os.path.basename(path),
@@ -891,8 +905,12 @@ class XVerterApp(App):
         except Exception as e:                        # noqa: BLE001
             kind = None
             lines = [os.path.basename(path), "detect: %s" % e]
-        if getattr(self, "_probe_want", path) != path:
-            return                      # a newer selection owns the pane now
+        if (getattr(self, "_probe_want", path) != path
+                or getattr(self, "_probe_gen", gen) != gen):
+            # A newer selection - or a newer probe of the SAME path -
+            # owns the pane now (path equality alone let a stale worker
+            # from an A-B-A bounce write over its fresher twin).
+            return
         self._details_text = "\n".join(lines)
         self.call_from_thread(
             self.query_one("#details", Static).update, self._details_text)
@@ -913,7 +931,15 @@ class XVerterApp(App):
     def _identify(self, path):
         """Hash the ISO against the bundled redump DATs: true name and
         system regardless of filename. Slow on big images, so it runs
-        after the pane is already useful, and results are cached."""
+        after the pane is already useful, and results are cached. One
+        in-flight hash per path: arrow-key bouncing must not stack a
+        second full-image pass behind the first."""
+        inflight = getattr(self, "_identify_inflight", None)
+        if inflight is None:
+            inflight = self._identify_inflight = set()
+        if path in inflight:
+            return
+        inflight.add(path)
         try:
             r = subprocess.run(_self_cmd(["info", path, "--identify"]),
                                capture_output=True, text=True,
@@ -922,6 +948,8 @@ class XVerterApp(App):
                          if ln.startswith("redump :")), None)
         except Exception:                             # noqa: BLE001
             line = None
+        finally:
+            inflight.discard(path)
         if line:
             self._identify_cache[path] = line
             self.call_from_thread(self._append_details, path, line)
@@ -963,13 +991,12 @@ class XVerterApp(App):
         return os.path.join(self.library, stem + "." + target)
 
     @work(thread=True, group="jobs")
-    def _run_batch(self, target, names):
-        done_ok = skipped = failed = 0
-        # Pin the library the batch was launched against: members are
-        # resolved and the busy keys released against this, so navigating
-        # elsewhere mid-batch neither redirects a member nor leaks a
+    def _run_batch(self, target, names, lib):
+        # `lib` is the library pinned at dispatch time - the same value
+        # the busy keys were built from - so navigating elsewhere before
+        # or during the batch neither redirects a member nor leaks a
         # busy key.
-        lib = self.library
+        done_ok = skipped = failed = 0
         try:
             m = len(names)
             for i, name in enumerate(names):
