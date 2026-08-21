@@ -441,8 +441,10 @@ class XVerterApp(App):
             self.action_rescan()
         elif bid == "run-test":
             self.do_matrix_test()
-        elif bid in ("upd-app", "upd-dat"):
-            self._on_update_button(bid)
+        elif bid == "upd-app":
+            self._update_app()
+        elif bid == "upd-dat":
+            self._update_dat()
         elif bid == "install-desktop":
             self._install_desktop_entry()
         elif bid == "remove-desktop":
@@ -475,13 +477,19 @@ class XVerterApp(App):
     def do_convert(self, target):
         if self.batch:
             names = sorted(self.batch, key=str.lower)
-            if any(n in self._busy for n in names):
+            # Key _busy on the full path, exactly as the single-file
+            # jobs do (do_verify/do_convert/do_matrix_test add `path`),
+            # so a batch in flight and a direct click on the same game
+            # actually see each other. Bare names never matched a path
+            # and let two conversions of one file run at once.
+            keys = [os.path.join(self.library, n) for n in names]
+            if any(k in self._busy for k in keys):
                 self._log("a batch member is busy - wait for it")
                 return
             self._log("batch convert -> %s: %d games, alphabetical"
                       % (target, len(names)))
-            for n in names:
-                self._busy.add(n)
+            for k in keys:
+                self._busy.add(k)
             self._run_batch(target, names)
             return
         path = self._selected_path()
@@ -573,7 +581,6 @@ class XVerterApp(App):
         import json
         import urllib.request
         from . import cli as cli_mod
-        btn = self.query_one("#upd-app", Button)
         if self._app_update is None:
             self.call_from_thread(self._deps_log,
                                   "asking GitHub for the newest xVerter "
@@ -937,13 +944,18 @@ class XVerterApp(App):
     @work(thread=True, group="jobs")
     def _run_batch(self, target, names):
         done_ok = skipped = failed = 0
+        # Pin the library the batch was launched against: members are
+        # resolved and the busy keys released against this, so navigating
+        # elsewhere mid-batch neither redirects a member nor leaks a
+        # busy key.
+        lib = self.library
         try:
             m = len(names)
             for i, name in enumerate(names):
                 self.call_from_thread(self._set_batch_progress,
                                       "%d/%d %s" % (i + 1, m, name),
                                       i, m)
-                path = os.path.join(self.library, name)
+                path = os.path.join(lib, name)
                 # pre-flight: unrecognized files and already-target
                 # members are SKIPPED, never failures
                 try:
@@ -997,7 +1009,7 @@ class XVerterApp(App):
             self.call_from_thread(self.action_rescan)
         finally:
             for name in names:
-                self._busy.discard(name)
+                self._busy.discard(os.path.join(lib, name))
 
     @work(thread=True, group="jobs")
     def _run_job(self, path, argv, label):
