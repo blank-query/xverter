@@ -66,7 +66,11 @@ class LibraryTable(DataTable):
 
     def on_click(self, event):
         if getattr(event, "chain", 1) >= 2:
-            self.app.enter_selected()
+            # Defer: DataTable's own click handler runs after this one on
+            # the same event and would re-apply the pre-navigation row
+            # index to the rebuilt table, landing the cursor on an
+            # unrelated row. Navigating after the event drains avoids it.
+            self.app.call_after_refresh(self.app.enter_selected)
 
     def on_key(self, event):
         if event.key == "space":
@@ -223,6 +227,7 @@ class XVerterApp(App):
         super().__init__()
         self.library = os.path.abspath(library)
         self._busy = set()
+        self._probe_want = None
         self.ram_scratch = False
         self.split_4gib = False
         self.leeroy = False          # checks are the point; opt out, never in
@@ -380,6 +385,12 @@ class XVerterApp(App):
     def on_data_table_row_highlighted(self, event):
         path = self._selected_path()
         if path and os.path.basename(path) != "..":
+            # Record what the pane should show. A probe's subprocess
+            # keeps running even after Textual "cancels" the worker, so
+            # the worker checks this before writing - a slow probe that
+            # finishes after the user has moved on must not clobber the
+            # newer selection's details.
+            self._probe_want = path
             self._probe(path)
 
     def toggle_batch(self):
@@ -872,6 +883,8 @@ class XVerterApp(App):
         except Exception as e:                        # noqa: BLE001
             kind = None
             lines = [os.path.basename(path), "detect: %s" % e]
+        if getattr(self, "_probe_want", path) != path:
+            return                      # a newer selection owns the pane now
         self._details_text = "\n".join(lines)
         self.call_from_thread(
             self.query_one("#details", Static).update, self._details_text)
