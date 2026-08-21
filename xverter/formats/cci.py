@@ -393,6 +393,13 @@ def build_cci(src, out_path, split=True, split_offset=SPLIT_OFFSET,
     base, ext = os.path.splitext(out_path)
     if ext.lower() != ".cci":
         raise CciError("output path must end in .cci: %s" % out_path)
+    # Refuse to touch a pre-existing output, as every other builder
+    # does. The slice writer opens "base.1.ext" in "wb" immediately, so
+    # without this a retry would truncate a prior good slice before it
+    # could fail.
+    for p in (out_path, "%s.1%s" % (base, ext)):
+        if os.path.exists(p):
+            raise CciError("output already exists: %s" % p)
 
     stream = src
     own = False
