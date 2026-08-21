@@ -111,8 +111,12 @@ def _allocation_extent(src):
         root_sector, root_size = struct.unpack("<II", f.read(8))
         extent = 33 * xdvdfs_mod.SECTOR            # volume descriptor region
         stack = [(root_sector, root_size)]
+        seen = set()
         while stack:
             sector, size = stack.pop()
+            if (sector, size) in seen:             # cycle guard: corrupt tables
+                continue
+            seen.add((sector, size))
             extent = max(extent, sector * xdvdfs_mod.SECTOR + size)
             for _name, start, sz, attr in xdvdfs_mod.walk_table(
                     xdvdfs_mod.read_table(f, base, sector, size)):

@@ -94,7 +94,17 @@ def find_slices(path):
         if not found:
             raise CciError("no slices found matching %s" % path)
         nums = [n for n, _ in found]
-        if nums != list(range(nums[0], nums[0] + len(nums))):
+        # A split set is 1-based (Game.1.cci, Game.2.cci, ...). Unlike
+        # CSO - whose index lives in part 1 and records the part count -
+        # each CCI slice is self-contained, so a set that does not start
+        # at .1 means the first slice is gone; without this check the
+        # reader would silently decode block 0 from what is really the
+        # second slice's data. (A missing LAST slice still cannot be
+        # detected from filenames alone - the format carries no total.)
+        if nums[0] != 1:
+            raise CciError("split set is missing its first slice "
+                           "(found slices %s, expected to start at 1)" % nums)
+        if nums != list(range(1, 1 + len(nums))):
             raise CciError("non-contiguous slice numbers: %s" % nums)
         return [p for _, p in found]
     if not os.path.exists(path):
@@ -241,6 +251,13 @@ class CciReader:
         local = gidx - self._cum[si]
         f = self._files[si]
         stored = offs[local + 1] - offs[local]
+        # A hostile/corrupt index can make two adjacent entries differ
+        # by gigabytes; without this bound f.read(stored) would attempt
+        # that allocation on a tiny file. A real compressed 2 KiB sector
+        # is always < BLOCK_SIZE. (CSO's reader already bounds this.)
+        if stored <= 0 or stored > BLOCK_SIZE + 16:
+            raise CciError("block %d: implausible stored size %d"
+                           % (gidx, stored))
         f.seek(offs[local])
         if flags[local] or stored != BLOCK_SIZE:
             rec = f.read(stored)

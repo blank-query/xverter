@@ -97,10 +97,7 @@ def walk_table(table):
         return entries
     seen = set()
 
-    def visit(off):
-        if off in seen:
-            die("directory table cycle at offset %d" % off)
-        seen.add(off)
+    def parse(off):
         if off + 14 > len(table):
             die("directory entry at offset %d overruns table" % off)
         left, right = struct.unpack_from("<HH", table, off)
@@ -110,13 +107,33 @@ def walk_table(table):
         name_raw = table[off + 14:off + 14 + nlen]
         if len(name_raw) != nlen:
             die("directory entry name at offset %d overruns table" % off)
-        if left not in (0, 0xFFFF):
-            visit(left * 4)
-        entries.append((name_raw.decode("cp1252", "replace"), start, size, attr))
-        if right not in (0, 0xFFFF):
-            visit(right * 4)
+        return left, right, start, size, attr, name_raw
 
-    visit(0)
+    # Iterative in-order traversal. Recursing would blow Python's stack
+    # on a deep chain - whether a hostile table crafted as one long
+    # left-spine, or simply a very large real directory - turning a bad
+    # file into an uncaught RecursionError instead of a clean refusal.
+    stack = []
+    cur = 0
+    descend = True
+    while stack or descend:
+        while descend:
+            if cur in seen:
+                die("directory table cycle at offset %d" % cur)
+            seen.add(cur)
+            stack.append(cur)
+            left = parse(cur)[0]
+            if left not in (0, 0xFFFF):
+                cur = left * 4
+            else:
+                descend = False
+        off = stack.pop()
+        _l, right, start, size, attr, name_raw = parse(off)
+        entries.append((name_raw.decode("cp1252", "replace"),
+                        start, size, attr))
+        if right not in (0, 0xFFFF):
+            cur = right * 4
+            descend = True
     return entries
 
 

@@ -135,7 +135,14 @@ def _subframe(d, dl, pos, acc, n, blocksize, bps):
         q = 0
         while True:
             if n == 0:
-                acc = (acc << 8) | (d[pos] if pos < dl else 0); pos += 1; n += 8
+                if pos >= dl:
+                    # A truncated or hostile hunk with no stop bit for
+                    # the wasted-bits unary code: without this the loop
+                    # appends zero bytes forever (bit_length stays 0) and
+                    # hangs. The sibling residual reader guards the same
+                    # way.
+                    raise FlacError("ran off the end of a FLAC hunk")
+                acc = (acc << 8) | d[pos]; pos += 1; n += 8
             bl = acc.bit_length()
             if bl == 0:
                 q += n; acc = 0; n = 0

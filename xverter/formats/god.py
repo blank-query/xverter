@@ -698,8 +698,12 @@ def _stream_allocation_extent(f, base, xd):
     root_sector, root_size = struct.unpack("<II", _read_full(f, 8))
     extent = 33 * SECTOR_SIZE
     stack = [(root_sector, root_size)]
+    seen = set()
     while stack:
         sector, size = stack.pop()
+        if (sector, size) in seen:                 # cycle guard: corrupt tables
+            continue
+        seen.add((sector, size))
         extent = max(extent, sector * SECTOR_SIZE + size)
         for _name, start, sz, attr in xd.walk_table(
                 xd.read_table(f, base, sector, size)):
