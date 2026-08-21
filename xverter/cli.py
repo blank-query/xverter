@@ -510,10 +510,19 @@ def _executable_check(path):
     otherwise write it out and call the result verified.
 
     Returns None if the executable parses, else a reason."""
+    with open(path, "rb") as f:
+        return _executable_check_stream(f)
+
+
+def _executable_check_stream(img):
+    """As _executable_check, but over an already-open image stream - so
+    the check reads through a GoD/CCI/CSO reader too, not only a raw
+    ISO. (A container built from a damaged dump decodes cleanly and is
+    exactly where an unparseable executable hides.)"""
     try:
-        with open(path, "rb") as f:
-            base = xdvdfs_mod.find_base(f)
-            god_mod._title_info(f, base, god_mod._xdvdfs())
+        img.seek(0)
+        base = xdvdfs_mod.find_base(img)
+        god_mod._title_info(img, base, god_mod._xdvdfs())
     except Exception as e:                             # noqa: BLE001
         return str(e)
     return None
@@ -1308,9 +1317,14 @@ def cmd_convert(args):
             # decompressed back to an image, came out stamped
             # "round-trip verified" while missing game data. Verified
             # and valid are different words for a reason.
+            exe = None
             try:
                 with img_open() as _img:
                     xdvdfs_mod.validate_image(_img)
+                    # Same stream, so the executable is checked through
+                    # every image kind (iso/god/cci/cso), not just raw
+                    # ISOs - the container kinds were silently skipped.
+                    exe = _executable_check_stream(_img)
             except xdvdfs_mod.XdvdfsError as e:
                 raise CliError("source is INVALID: %s" % e)
             if not args.no_verify:
@@ -1318,7 +1332,6 @@ def cmd_convert(args):
                 #   valid         - the image's own structures cohere
                 #   verified      - what came out matches what went in
                 #   authenticated - it is the genuine retail disc
-                exe = _executable_check(path) if kind == "iso" else None
                 if exe is None:
                     print("source : valid")
                 else:
