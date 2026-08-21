@@ -155,9 +155,18 @@ def _read_header(f, path):
 
 def _read_index(f, path, index_offset, nblocks):
     """Read N+1 index entries; return (offsets list, flags list)."""
+    need = (nblocks + 1) * 4
+    # nblocks derives from the header's uncompressed_size, so a hostile
+    # header can make `need` enormous - and FileIO.read(huge) really
+    # does try to allocate that buffer (MemoryError), unlike a short
+    # read. Refuse before reading anything we can't possibly have.
+    f.seek(0, 2)
+    avail = f.tell() - index_offset
+    if index_offset < 0 or need > max(0, avail):
+        raise CciError("%s: index of %d bytes exceeds the file" % (path, need))
     f.seek(index_offset)
-    raw = f.read((nblocks + 1) * 4)
-    if len(raw) != (nblocks + 1) * 4:
+    raw = f.read(need)
+    if len(raw) != need:
         raise CciError("%s: truncated index" % path)
     vals = struct.unpack("<%dI" % (nblocks + 1), raw)
     offs = [(v & 0x7FFFFFFF) << INDEX_ALIGNMENT for v in vals]

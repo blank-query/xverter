@@ -170,8 +170,19 @@ class CsoReader:
                 raise CsoError("%s: uncompressed_size %d not a multiple "
                                "of %d" % (self.slice_paths[0], usize,
                                           BLOCK_SIZE))
-            raw = f0.read((nblocks + 1) * 4)  # index follows the header
-            if len(raw) != (nblocks + 1) * 4:
+            need = (nblocks + 1) * 4          # index follows the header
+            # nblocks comes from the header's uncompressed_size, so a
+            # hostile value would make this read attempt a huge buffer
+            # (FileIO.read really allocates it - MemoryError). Refuse
+            # before reading beyond what the file can hold.
+            pos = f0.tell()
+            f0.seek(0, 2)
+            if need > max(0, f0.tell() - pos):
+                raise CsoError("%s: index of %d bytes exceeds the file"
+                               % (self.slice_paths[0], need))
+            f0.seek(pos)
+            raw = f0.read(need)
+            if len(raw) != need:
                 raise CsoError("%s: truncated index" % self.slice_paths[0])
             vals = struct.unpack("<%dI" % (nblocks + 1), raw)
             if vals[-1] & 0x80000000:
