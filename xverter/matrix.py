@@ -159,34 +159,44 @@ def run(edge, argv):
 
         ticker = _threading.Thread(target=_tick, daemon=True)
         ticker.start()
-    for raw in iter(p.stdout.readline, ""):
-        line = raw.rstrip()
-        if not line:
-            continue
-        if line.startswith("PROGRESS "):
-            # log always; forward on stdout only for a pipe (the TUI
-            # parses these) - on a tty the bar below replaces them
-            if LOG:
-                LOG.write(line + "\n")
-            if not sys.stdout.isatty():
-                print(line, flush=True)
-            if tty:
-                try:
-                    _t, stage, d, tot = line.split()
-                    state["stage"], state["done"], state["total"] = \
-                        stage, int(d), int(tot)
-                except ValueError:
-                    pass
-            continue
-        lines.append(line)
-    p.stdout.close()
-    rc = p.wait()
-    if tty:
-        state["on"] = False
-        if ticker is not None:
-            ticker.join(timeout=1)
-        from .cli import clear_bar
-        clear_bar()
+    try:
+        for raw in iter(p.stdout.readline, ""):
+            line = raw.rstrip()
+            if not line:
+                continue
+            if line.startswith("PROGRESS "):
+                # log always; forward on stdout only for a pipe (the TUI
+                # parses these) - on a tty the bar below replaces them
+                if LOG:
+                    LOG.write(line + "\n")
+                if not sys.stdout.isatty():
+                    print(line, flush=True)
+                if tty:
+                    try:
+                        _t, stage, d, tot = line.split()
+                        state["stage"], state["done"], state["total"] = \
+                            stage, int(d), int(tot)
+                    except ValueError:
+                        pass
+                continue
+            lines.append(line)
+        p.stdout.close()
+        rc = p.wait()
+    except BaseException:
+        # A signal unwinding through the harness (SIGTERM -> the CLI's
+        # KeyboardInterrupt) must not orphan the child conversion: the
+        # caller's cleanup deletes the workdir next, and an unsupervised
+        # child would keep writing into it after we reported exit 130.
+        p.kill()
+        p.wait()
+        raise
+    finally:
+        if tty:
+            state["on"] = False
+            if ticker is not None:
+                ticker.join(timeout=1)
+            from .cli import clear_bar
+            clear_bar()
     dt = time.monotonic() - t0
     ok = rc == 0
     detail = (lines or [""])[-1]

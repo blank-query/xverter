@@ -414,6 +414,11 @@ def _write_xiso(kind, path, out_path, prog, verify=True):
     src_sha = hashlib.sha1()
     with opener() as img:
         base = xdvdfs_mod.find_base(img)
+        # Load-bearing invariant: the GoD/CCI/CSO writers all strip the
+        # partition base at write time, so their readers present base 0
+        # and the slice below copies the whole (already-trimmed) image.
+        # Only a raw iso can be untrimmed, so only a raw iso is refused
+        # for having nothing to trim.
         if base == 0 and kind == "iso":
             raise CliError(
                 "input is already a bare xiso - its game partition "
@@ -424,16 +429,25 @@ def _write_xiso(kind, path, out_path, prog, verify=True):
         img.seek(base)
         cb = prog.cb("xiso-write")
         done = 0
-        with open(out_path, "wb") as o:
-            while True:
-                b = img.read(8 << 20)
-                if not b:
-                    break
-                src_sha.update(b)
-                o.write(b)
-                done += len(b)
-                if cb:
-                    cb(done, total)
+        # (Container readers self-verify and can raise mid-stream; clean
+        # up our own partial rather than leaning on the caller.)
+        try:
+            with open(out_path, "wb") as o:
+                while True:
+                    b = img.read(8 << 20)
+                    if not b:
+                        break
+                    src_sha.update(b)
+                    o.write(b)
+                    done += len(b)
+                    if cb:
+                        cb(done, total)
+        except BaseException:
+            try:
+                os.unlink(out_path)
+            except OSError:
+                pass
+            raise
     if verify:
         got = hashlib.sha1()
         vcb = prog.cb("verify")
