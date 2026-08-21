@@ -530,23 +530,39 @@ def list_xdvdfs(iso_path):
 
     entries = []
 
-    def walk(off):
-        if off + 14 > len(table):
-            return
-        left, right = struct.unpack_from("<HH", table, off)
-        if left == 0xFFFF and right == 0xFFFF:
-            return  # empty-directory sentinel
-        start, size = struct.unpack_from("<II", table, off + 4)
-        attr = table[off + 12]
-        nlen = table[off + 13]
-        name = table[off + 14:off + 14 + nlen].decode("ascii", "replace")
-        if left not in (0, 0xFFFF):
-            walk(left * 4)
-        entries.append((name, size, attr))
-        if right not in (0, 0xFFFF):
-            walk(right * 4)
-
-    walk(0)
+    # Iterative in-order traversal with a visited guard: a hostile or
+    # deep root table would otherwise recurse until RecursionError (this
+    # listing runs at the end of an otherwise successful conversion).
+    if len(table) >= 14 and not (
+            struct.unpack_from("<HH", table, 0) == (0xFFFF, 0xFFFF)):
+        seen = set()
+        stack = []
+        cur = 0
+        descend = True
+        while stack or descend:
+            while descend:
+                if cur in seen or cur + 14 > len(table):
+                    descend = False
+                    break
+                seen.add(cur)
+                stack.append(cur)
+                left = struct.unpack_from("<HH", table, cur)[0]
+                if left not in (0, 0xFFFF):
+                    cur = left * 4
+                else:
+                    descend = False
+            if not stack:
+                break
+            off = stack.pop()
+            _l, right = struct.unpack_from("<HH", table, off)
+            _start, size = struct.unpack_from("<II", table, off + 4)
+            attr = table[off + 12]
+            nlen = table[off + 13]
+            name = table[off + 14:off + 14 + nlen].decode("ascii", "replace")
+            entries.append((name, size, attr))
+            if right not in (0, 0xFFFF):
+                cur = right * 4
+                descend = True
     for name, size, attr in entries:
         kind = "<DIR>" if attr & 0x10 else "%d" % size
         print("  %-32s %12s  attr=0x%02X" % (name, kind, attr))

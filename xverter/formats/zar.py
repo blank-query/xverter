@@ -189,6 +189,14 @@ def unpack(zar_path, out_dir, manifest=None, progress=None,
                     dest = os.path.join(out_dir, rel.replace("/", os.sep))
                     os.makedirs(os.path.dirname(dest) or out_dir,
                                 exist_ok=True)
+                # Recreate directories that hold no files too - a
+                # files-only pre-pass silently dropped empty directories,
+                # a structural difference that the content-only manifest
+                # comparison could never catch.
+                for rel in zr.directories():
+                    os.makedirs(
+                        os.path.join(out_dir, rel.replace("/", os.sep)),
+                        exist_ok=True)
 
                 # Files are independent, so a couple come out at a time,
                 # each on its own reader - the same scheduling change the
