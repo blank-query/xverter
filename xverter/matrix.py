@@ -44,6 +44,13 @@ from .formats import god as god_mod
 RESULTS = []
 
 
+class MatrixError(RuntimeError):
+    """A harness-level abort (not an edge failure): something the run
+    cannot continue past, reported as a clean one-line ERROR by the
+    test subcommand rather than a traceback."""
+
+
+
 def content_digest(manifest):
     """Canonical SHA-1 over a {path: sha1} manifest: the format-invariant
     fingerprint of a game's content (stable across container types AND
@@ -595,11 +602,11 @@ def god_header_in(tree):
                 if not f.endswith(".data") and \
                         os.path.isdir(os.path.join(dirpath, f + ".data")):
                     return os.path.join(dirpath, f)
-    # RuntimeError, not SystemExit: a partial GoD dir (left by a failed
-    # conversion the suite is meant to catch) is caught by scan_artifacts'
-    # except-Exception, so report generation still completes instead of a
-    # BaseException aborting the whole run with no report at all.
-    raise RuntimeError("no GoD header found under %s" % tree)
+    # MatrixError (a RuntimeError), not SystemExit: scan_artifacts'
+    # except-Exception can catch it so report generation completes, and
+    # the test subcommand catches it by name so a mid-run abort prints a
+    # clean ERROR line instead of a traceback.
+    raise MatrixError("no GoD header found under %s" % tree)
 
 
 def main(argv=None):

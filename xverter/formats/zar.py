@@ -122,12 +122,15 @@ def iso_tree(zar_path, manifest=None, integrity=True):
     # file table). Close it on the way out.
     try:
         entries = [(rel, size, _opener(rel)) for rel, size in zr.files()]
-        guard = _IntegrityAhead(zar_path) if integrity and _NATIVE else None
         from . import xdvdfs as _xd
         tree = _xd.tree_from_entries(entries, where=zar_path)
     except BaseException:
         zr.close()
         raise
+    # Constructed only after everything fallible succeeded: the guard
+    # starts a background hashing thread of its own, and an exception
+    # above would have left it running unobserved.
+    guard = _IntegrityAhead(zar_path) if integrity and _NATIVE else None
 
     def closer():
         try:
@@ -379,8 +382,11 @@ def pack(src_dir, zar_path, roundtrip_verify=True, manifest=None,
                        len(name.encode("utf-8", "surrogateescape"))))
     # Snapshot the source manifest BEFORE writing, so a zar_path that
     # lands inside src_dir cannot appear as an "extra" file in the
-    # post-pack re-walk and fail an otherwise-correct archive.
-    if roundtrip_verify and _NATIVE and not manifest:
+    # post-pack re-walk and fail an otherwise-correct archive. Both
+    # pack paths need this: the subprocess fallback's tree comparison
+    # would otherwise re-walk the live src_dir with the new archive in
+    # it, the exact bug the native path was fixed for.
+    if roundtrip_verify and not manifest:
         from .xdvdfs import hash_tree
         manifest = hash_tree(src_dir)
     if _NATIVE:

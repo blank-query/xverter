@@ -893,20 +893,25 @@ def _build(f, out_dir, trim, game_title, progress):
                         # path produces.
                         batch.append((pool.submit(_subtable, data), data))
                         if len(batch) >= HASH_BATCH:
-                            for fut, buf_ in batch:
+                            # Consume from the front so anything not yet
+                            # resolved stays in `batch` for the finally
+                            # to reap if a put is abandoned mid-drain.
+                            while batch:
+                                fut, buf_ = batch[0]
                                 st = fut.result()
+                                del batch[0]
                                 if not _put((st, buf_)):
                                     break
                                 mht += sha1(st)
-                            del batch[:]
                     if progress:
                         progress(data_size - remaining, data_size)
-                for fut, buf_ in batch:            # tail of the last batch
+                while batch:                       # tail of the last batch
+                    fut, buf_ = batch[0]
                     st = fut.result()
+                    del batch[0]
                     if not _put((st, buf_)):
                         break
                     mht += sha1(st)
-                del batch[:]
             finally:
                 for fut, _buf in batch:            # never leave futures running
                     try:

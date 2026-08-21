@@ -1268,7 +1268,11 @@ def cmd_test(args):
             margv.append("--leeroy-jenkins")
         if getattr(args, "log", None):
             margv += ["--log", args.log]
-        rc = matrix.main(margv)
+        try:
+            rc = matrix.main(margv)
+        except matrix.MatrixError as e:
+            print("ERROR: %s" % e, file=sys.stderr)
+            rc = 1
         report = os.path.join(w, "matrix_report.html")
         if not os.path.isfile(report):
             # Promised and not delivered: say so rather than fall through.
