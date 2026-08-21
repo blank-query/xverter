@@ -848,6 +848,20 @@ def _build(f, out_dir, trim, game_title, progress):
 
             wt = threading.Thread(target=_drain, daemon=True)
             wt.start()
+
+            def _put(item):
+                """Queue a write, but abandon it if the writer thread has
+                died. The queue is bounded, so without this a dead
+                consumer (a mid-part write failure - disk full) would
+                block the producer forever on a full queue."""
+                while not werr:
+                    try:
+                        wq.put(item, timeout=0.25)
+                        return True
+                    except queue.Full:
+                        continue
+                return False
+
             batch = []
             try:
                 for _si in range(SUBPARTS_PER_PART):
@@ -869,7 +883,8 @@ def _build(f, out_dir, trim, game_title, progress):
                     if pool is None:
                         # neither buffer is touched again after queueing
                         subtable = _subtable(data)
-                        wq.put((subtable, data))
+                        if not _put((subtable, data)):
+                            break
                         mht += sha1(subtable)
                     else:
                         # Whole subparts hash in parallel and are emitted
@@ -880,14 +895,16 @@ def _build(f, out_dir, trim, game_title, progress):
                         if len(batch) >= HASH_BATCH:
                             for fut, buf_ in batch:
                                 st = fut.result()
-                                wq.put((st, buf_))
+                                if not _put((st, buf_)):
+                                    break
                                 mht += sha1(st)
                             del batch[:]
                     if progress:
                         progress(data_size - remaining, data_size)
                 for fut, buf_ in batch:            # tail of the last batch
                     st = fut.result()
-                    wq.put((st, buf_))
+                    if not _put((st, buf_)):
+                        break
                     mht += sha1(st)
                 del batch[:]
             finally:

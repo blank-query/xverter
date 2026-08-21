@@ -339,13 +339,17 @@ def pack_entries(entries, zar_path, roundtrip_verify=True, manifest=None,
         # case with genuinely nothing to check.
         raise ZarError("streamed pack cannot be verified without a manifest")
     got = hash_walk(zar_path, progress=verify_progress)
-    if got != manifest:
+    # An empty streamed pack (entries=[], no manifest) reaches here past
+    # the guard above with manifest None; an empty archive is correct,
+    # so compare against {} rather than crashing on set(None).
+    want = manifest or {}
+    if got != want:
         raise ZarError(
             "packed zar manifest mismatch: missing=%s extra=%s diff=%s"
-            % (sorted(set(manifest) - set(got))[:3],
-               sorted(set(got) - set(manifest))[:3],
-               sorted(k for k in set(got) & set(manifest)
-                      if got[k] != manifest[k])[:3]))
+            % (sorted(set(want) - set(got))[:3],
+               sorted(set(got) - set(want))[:3],
+               sorted(k for k in set(got) & set(want)
+                      if got[k] != want[k])[:3]))
 
 
 def pack(src_dir, zar_path, roundtrip_verify=True, manifest=None,
