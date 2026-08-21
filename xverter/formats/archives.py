@@ -34,6 +34,7 @@ import os
 import sys
 import contextlib
 import zipfile
+import zlib
 
 MAGIC_ZIP = b"PK\x03\x04"
 MAGIC_7Z = b"7z\xbc\xaf\x27\x1c"
@@ -155,13 +156,24 @@ def _open_zip(path):
         raise ArchiveError("damaged zip archive: %s (%s)" % (path, e))
 
 
+def _zip_damage(path, exc):
+    """Translate mid-read corruption into the same clean refusal a bad
+    open gets. _open_zip only covers the central directory; a flipped
+    bit inside a member's deflate stream or CRC surfaces later, as
+    zlib.error or BadZipFile, from any read."""
+    return ArchiveError("damaged zip archive: %s (%s)" % (path, exc))
+
+
 def list_entries(path):
     """[(name, size)] for the archive's files (no extraction)."""
     kind = sniff(path)
     if kind == "zip":
-        with _open_zip(path) as z:
-            return [(i.filename, i.file_size) for i in z.infolist()
-                    if not i.is_dir()]
+        try:
+            with _open_zip(path) as z:
+                return [(i.filename, i.file_size) for i in z.infolist()
+                        if not i.is_dir()]
+        except (zipfile.BadZipFile, zlib.error) as e:
+            raise _zip_damage(path, e)
     if kind == "7z":
         return _list_7z(path)
     raise ArchiveError("not a zip/7z archive: %s" % path)
@@ -206,29 +218,32 @@ def extract(path, out_dir, progress=None):
     kind = sniff(path)
     os.makedirs(out_dir, exist_ok=True)
     if kind == "zip":
-        with _open_zip(path) as z:
-            infos = [i for i in z.infolist() if not i.is_dir()]
-            for i in z.infolist():
-                _safe(i.filename)
-            total = sum(i.file_size for i in infos) or 1
-            done = 0
-            for i in z.infolist():
-                dest = os.path.join(out_dir,
-                                    i.filename.replace("/", os.sep))
-                if i.is_dir():
-                    os.makedirs(dest, exist_ok=True)
-                    continue
-                os.makedirs(os.path.dirname(dest) or out_dir,
-                            exist_ok=True)
-                with z.open(i) as f, open(dest, "wb") as o:
-                    while True:
-                        b = f.read(_CHUNK)
-                        if not b:
-                            break
-                        o.write(b)
-                        done += len(b)
-                        if progress:
-                            progress(done, total)
+        try:
+            with _open_zip(path) as z:
+                infos = [i for i in z.infolist() if not i.is_dir()]
+                for i in z.infolist():
+                    _safe(i.filename)
+                total = sum(i.file_size for i in infos) or 1
+                done = 0
+                for i in z.infolist():
+                    dest = os.path.join(out_dir,
+                                        i.filename.replace("/", os.sep))
+                    if i.is_dir():
+                        os.makedirs(dest, exist_ok=True)
+                        continue
+                    os.makedirs(os.path.dirname(dest) or out_dir,
+                                exist_ok=True)
+                    with z.open(i) as f, open(dest, "wb") as o:
+                        while True:
+                            b = f.read(_CHUNK)
+                            if not b:
+                                break
+                            o.write(b)
+                            done += len(b)
+                            if progress:
+                                progress(done, total)
+        except (zipfile.BadZipFile, zlib.error) as e:
+            raise _zip_damage(path, e)
         return
     if kind == "7z":
         exe = _need_7z()
