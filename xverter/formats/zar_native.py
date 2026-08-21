@@ -987,14 +987,21 @@ def pack(src_dir, zar_path, progress=None) -> int:
     src_dir = os.fspath(src_dir)
     if not os.path.isdir(src_dir):
         raise ZarNativeError("not a directory: %s" % src_dir)
+    # The writer creates zar_path before the tree walk begins; when the
+    # output lands inside src_dir the walk would otherwise pack the
+    # archive into itself. Never pack our own output file.
+    skip = os.path.abspath(zar_path)
     grand = 0
     for _dp, _dn, _fs in os.walk(src_dir):
         for _f in _fs:
-            grand += os.path.getsize(os.path.join(_dp, _f))
+            p = os.path.join(_dp, _f)
+            if os.path.abspath(p) == skip:
+                continue
+            grand += os.path.getsize(p)
     state = [0]
     with ZarWriter(zar_path) as zw:
         count = _pack_tree(zw, src_dir, "", progress=progress,
-                           grand=grand, state=state)
+                           grand=grand, state=state, skip=skip)
         zw.finalize()
     return count
 
@@ -1076,7 +1083,7 @@ def _pack_nodes(zw: ZarWriter, node: dict, arc_prefix: str,
 
 
 def _pack_tree(zw: ZarWriter, dir_path: str, arc_prefix: str,
-               progress=None, grand=0, state=None) -> int:
+               progress=None, grand=0, state=None, skip=None) -> int:
     def sort_key(entry):
         raw = entry.name.encode("utf-8", "surrogateescape")
         return (_fold_bytes(raw), raw)
@@ -1085,6 +1092,8 @@ def _pack_tree(zw: ZarWriter, dir_path: str, arc_prefix: str,
         entries = sorted(it, key=sort_key)
     count = 0
     for entry in entries:
+        if skip is not None and os.path.abspath(entry.path) == skip:
+            continue                    # never pack our own output file
         if "\\" in entry.name:
             raise ZarNativeError(
                 "cannot pack %r: ZArchive treats '\\' as a path separator"
@@ -1094,7 +1103,7 @@ def _pack_tree(zw: ZarWriter, dir_path: str, arc_prefix: str,
         if entry.is_dir(follow_symlinks=True):
             zw.make_dir(arc)
             count += _pack_tree(zw, entry.path, arc, progress=progress,
-                                grand=grand, state=state)
+                                grand=grand, state=state, skip=skip)
         elif entry.is_file(follow_symlinks=True):
             zw.start_file(arc)
             with open(entry.path, "rb") as f:

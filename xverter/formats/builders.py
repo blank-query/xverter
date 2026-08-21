@@ -12,7 +12,6 @@ result verified by xverter's own readers before being reported as success.
 
 import filecmp
 import os
-import tempfile
 
 from . import god as god_mod
 from . import xdvdfs as xdvdfs_mod
@@ -69,14 +68,20 @@ def build_iso(gamedir, out_iso, verify=True, manifest=None,
     trees; see the layout contract in formats/xdvdfs.py)."""
     if os.path.exists(out_iso):
         raise BuildError("output already exists: %s" % out_iso)
+    # Snapshot the source manifest BEFORE writing. pack() scans the tree
+    # before it creates out_iso, so the ISO never contains the output
+    # file - but a post-write re-walk would, and comparing that against
+    # the ISO flagged the user's own just-built output as a missing file
+    # and deleted it. Hashing first (when no manifest was supplied) keeps
+    # the two sides describing the same set even when the output path
+    # lands inside the source gamedir.
+    want = manifest if manifest else (
+        xdvdfs_mod.hash_tree(gamedir) if verify else None)
     try:
         xdvdfs_mod.pack(gamedir, out_iso, progress=progress)
     except xdvdfs_mod.XdvdfsError as e:
         raise BuildError("XDVDFS pack failed: %s" % e)
     if verify:
-        # Manifest verification: hash the source tree once, then stream-hash
-        # every file inside the built ISO without writing anything.
-        want = manifest if manifest else xdvdfs_mod.hash_tree(gamedir)
         got = xdvdfs_mod.hash_walk(out_iso, progress=verify_progress)
         if want != got:
             missing = sorted(set(want) - set(got))[:3]

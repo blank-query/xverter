@@ -357,6 +357,12 @@ def pack(src_dir, zar_path, roundtrip_verify=True, manifest=None,
                     "characters - rename it first"
                     % (name, os.path.relpath(dirpath, src_dir),
                        len(name.encode("utf-8", "surrogateescape"))))
+    # Snapshot the source manifest BEFORE writing, so a zar_path that
+    # lands inside src_dir cannot appear as an "extra" file in the
+    # post-pack re-walk and fail an otherwise-correct archive.
+    if roundtrip_verify and _NATIVE and not manifest:
+        from .xdvdfs import hash_tree
+        manifest = hash_tree(src_dir)
     if _NATIVE:
         try:
             zar_native.pack(src_dir, zar_path, progress=progress)
@@ -371,8 +377,7 @@ def pack(src_dir, zar_path, roundtrip_verify=True, manifest=None,
     if roundtrip_verify:
         if _NATIVE:
             # no temp extraction: stream-hash the packed archive in place
-            from .xdvdfs import hash_tree
-            want = manifest if manifest else hash_tree(src_dir)
+            want = manifest
             got = hash_walk(zar_path, progress=verify_progress)
             if got != want:
                 raise ZarError(
