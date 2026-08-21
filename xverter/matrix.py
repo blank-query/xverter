@@ -728,7 +728,12 @@ def main(argv=None):
         # themselves); everything else in the family now descends from
         # the source directly, so only these two need a separate
         # from-the-source conversion.
-        for tgt in ("iso", "zar"):
+        # iso and zar prove the dir pairing; xiso proves the non-image
+        # .xiso dispatch arm - a source with no pressed image rebuilds a
+        # bare image under the .xiso name, and that arm deserves an edge
+        # of its own (no input exemptions, even when the output is a 360
+        # title wearing an OG extension).
+        for tgt in ("iso", "zar", "xiso"):
             if tgt == kind:
                 continue
             out = d("s." + tgt) if tgt != "god" else d("s.god")

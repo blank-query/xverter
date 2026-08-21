@@ -76,7 +76,7 @@ And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA
 
 ## The test record — three generations of Halo, one hash each
 
-The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 62-edge matrix (54 for STFS: it has no pressed disc to byte-compare against, so the byte-audits an image input earns - including the xiso slice, which only exists where there is a video partition to trim - become round-trip content checks instead), every edge verified one way or the other. Every first-hop conversion starts from the pressed source — optimized formats prove they strip the real disc correctly, archival formats that they preserve it — and nothing is converted from the suite's own rebuilt intermediate when the original is on hand. Three numbers per game tell the whole story:
+The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 62-edge matrix (57 for STFS: it has no pressed disc to byte-compare against, so the byte-audits an image input earns - including the xiso slice, which only exists where there is a video partition to trim - become round-trip content checks instead), every edge verified one way or the other. Every first-hop conversion starts from the pressed source — optimized formats prove they strip the real disc correctly, archival formats that they preserve it — and nothing is converted from the suite's own rebuilt intermediate when the original is on hand. Three numbers per game tell the whole story:
 
 - **Source SHA-1** — the whole input file; matches Redump's canonical dump.
 - **Content digest** — a canonical SHA-1 over every file's path + hash inside the game. This is the *format-invariant* fingerprint: identical across all seven formats, immune to compressor versions and container layout. It even survived xVerter's own writers being replaced wholesale — the digest below for Anniversary is byte-for-byte the one measured back when output ran through delegated third-party tools.
@@ -112,7 +112,7 @@ the STFS package itself: → iso 9.7s, → god 10.4s, → zar 11.3s, → cci 16.
 its own trimmed rebuild, while every current number converts the full pressed disc — more
 data in, and still faster everywhere.
 
-The current column runs **62 edges (54 for Spartan)** — a quarter more coverage than the launch
+The current column runs **62 edges (57 for Spartan)** — a quarter more coverage than the launch
 column — and still comes in faster on the quartet: 37m07s at launch, 29m07s now (single-run
 figures; the suite's run-to-run noise is about ±4%). CHD went native in 1.2.0, which is where
 its column's savings come from.
@@ -276,7 +276,7 @@ xverter test "Some Game.zar"
 MATRIX: ALL PASS
 ```
 
-(54 edges for STFS input: no pressed disc to byte-compare against, so the byte-audits become round-trip content checks. Every container is exercised from the true source regardless of what the input is — an STFS package streams straight into GoD, CCI, CSO and CHD without an intermediate image on disk. All edges run everywhere — CHD included, natively.)
+(57 edges for STFS input: no pressed disc to byte-compare against, so the byte-audits become round-trip content checks. Every container is exercised from the true source regardless of what the input is — an STFS package streams straight into GoD, CCI, CSO and CHD without an intermediate image on disk. All edges run everywhere — CHD included, natively.)
 
 Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release test-suite runs on real XGD1, XGD2, XGD3 and STFS dumps — and it narrates itself: per-edge results stream live with within-edge progress (no binaries required). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
 
