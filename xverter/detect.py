@@ -26,6 +26,11 @@ class DetectError(Exception):
     pass
 
 
+# Lower-cased names an OS scatters into any directory it browses; they
+# are never part of a GoD/STFS package.
+_DIR_JUNK = frozenset(("thumbs.db", "desktop.ini", ".ds_store"))
+
+
 def detect(path):
     if os.path.isdir(path):
         return _detect_dir(path)
@@ -55,12 +60,19 @@ def _detect_dir(path):
             dirs[:] = []
             continue
         base = os.path.basename(root)
-        if base in ("00007000", "00005000") and files:
-            for f in files:
+        # Filesystem litter that co-habits real content folders on the
+        # machines these trees get copied between - never part of the
+        # package, and (unfiltered) enough to fake a second "package"
+        # or shadow the real one under an order-dependent files[0].
+        real = sorted(f for f in files
+                      if not f.startswith(".")
+                      and f.lower() not in _DIR_JUNK)
+        if base in ("00007000", "00005000") and real:
+            for f in real:
                 if not f.endswith(".data"):
                     hits.append(("god", os.path.join(root, f)))
-        elif base in ("000D0000", "000B0000", "00000002") and files:
-            hits.append(("stfs", os.path.join(root, files[0])))
+        elif base in ("000D0000", "000B0000", "00000002") and real:
+            hits.append(("stfs", os.path.join(root, real[0])))
     if len(hits) == 1:
         return hits[0]
     if len(hits) > 1:
@@ -85,7 +97,13 @@ def _detect_file(path):
             return "cso", path
         if head in stfs_mod.STFS_MAGICS:
             f.seek(stfs_mod.CONTENT_TYPE_OFFSET)
-            ctype = struct.unpack(">I", f.read(4))[0]
+            ctbuf = f.read(4)
+            if len(ctbuf) < 4:
+                # A real package header is kilobytes long; a file that
+                # carries the magic but ends before the content-type
+                # field is a truncated/corrupt download, not a crash.
+                raise DetectError("truncated STFS/GoD header: %s" % path)
+            ctype = struct.unpack(">I", ctbuf)[0]
             if ctype in (stfs_mod.CONTENT_TYPE_GOD_GAME,
                          stfs_mod.CONTENT_TYPE_GOD_XBOXORIG):
                 return "god", path

@@ -29,6 +29,7 @@ CRC-checked).
 """
 
 import hashlib
+import ntpath
 import os
 import sys
 import contextlib
@@ -133,16 +134,32 @@ def sniff(path):
 
 def _safe(name):
     parts = name.replace("\\", "/").split("/")
-    if name.startswith(("/", "\\")) or ".." in parts or "" == parts[0]:
+    # A Windows drive spec ("C:\...", or drive-relative "C:evil") makes
+    # os.path.join on Windows discard out_dir entirely and write to an
+    # absolute location - so it must be refused alongside leading-slash
+    # absolutes and ".." escapes. ntpath answers this the same on every
+    # platform, so the check protects the archives we make on Linux for
+    # a user who later unpacks them on Windows too.
+    if (name.startswith(("/", "\\")) or ".." in parts or "" == parts[0]
+            or ntpath.splitdrive(name)[0] or ntpath.isabs(name)):
         raise ArchiveError("refusing unsafe archive path %r" % name)
     return name
+
+
+def _open_zip(path):
+    """zipfile.ZipFile, but a structurally broken archive that merely
+    starts with the ZIP magic is a bad input, not a crash."""
+    try:
+        return zipfile.ZipFile(path)
+    except zipfile.BadZipFile as e:
+        raise ArchiveError("damaged zip archive: %s (%s)" % (path, e))
 
 
 def list_entries(path):
     """[(name, size)] for the archive's files (no extraction)."""
     kind = sniff(path)
     if kind == "zip":
-        with zipfile.ZipFile(path) as z:
+        with _open_zip(path) as z:
             return [(i.filename, i.file_size) for i in z.infolist()
                     if not i.is_dir()]
     if kind == "7z":
@@ -189,7 +206,7 @@ def extract(path, out_dir, progress=None):
     kind = sniff(path)
     os.makedirs(out_dir, exist_ok=True)
     if kind == "zip":
-        with zipfile.ZipFile(path) as z:
+        with _open_zip(path) as z:
             infos = [i for i in z.infolist() if not i.is_dir()]
             for i in z.infolist():
                 _safe(i.filename)
@@ -422,7 +439,9 @@ def _build_zip(src, out_path, verify=True, progress=None):
                     if h.hexdigest() != _sha1(path):
                         raise ArchiveError(
                             "zip round-trip mismatch on %s" % arc)
-    except Exception:
+    except BaseException:
+        # BaseException, not Exception: a Ctrl-C or SIGTERM mid-write
+        # must still delete the partial archive at the user's path.
         if os.path.exists(out_path):
             os.unlink(out_path)
         raise
@@ -456,7 +475,9 @@ def build_7z(src, out_path, verify=True, progress=None):
         if verify:
             _run_7z([exe, "t", "-bsp1", os.path.abspath(out_path)],
                     progress=progress, total=_grand)
-    except Exception:
+    except BaseException:
+        # BaseException, not Exception: a Ctrl-C or SIGTERM mid-write
+        # must still delete the partial archive at the user's path.
         if os.path.exists(out_path):
             os.unlink(out_path)
         raise

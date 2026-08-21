@@ -16,6 +16,7 @@ import os
 import platform
 import queue
 import shutil
+import signal
 import sys
 import threading
 import tempfile
@@ -1877,8 +1878,32 @@ def main(argv=None):
     p.set_defaults(fn=cmd_convert)
 
     args = ap.parse_args(argv)
+    # A kill signal must run the same cleanup a Ctrl-C does: turn
+    # SIGTERM into the KeyboardInterrupt the write paths already catch
+    # in their finally/except-BaseException blocks, so a terminated
+    # conversion never leaves a plausible-looking partial output behind.
+    try:
+        signal.signal(signal.SIGTERM,
+                      lambda *_a: (_ for _ in ()).throw(KeyboardInterrupt()))
+    except (ValueError, OSError):
+        pass                            # not the main thread; best effort
     try:
         return args.fn(args)
+    except KeyboardInterrupt:
+        # Failed outputs were cleaned up on the way here by each command's
+        # own finally/except-BaseException handler.
+        print("\nERROR: interrupted", file=sys.stderr)
+        return 130
+    except BrokenPipeError:
+        # A downstream `| head` closed the pipe. Silence Python's
+        # interpreter-shutdown flush so it doesn't print a second
+        # traceback, and exit quietly.
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, sys.stdout.fileno())
+        except OSError:
+            pass
+        return 1
     except (CliError, detect_mod.DetectError, god_mod.GodError,
             xdvdfs_mod.XdvdfsError, zar_mod.ZarError, stfs_mod.StfsError,
             builders_mod.BuildError, datcache.DatCacheError,
