@@ -117,8 +117,17 @@ def iso_tree(zar_path, manifest=None, integrity=True):
             return _HashingStream(zr.read_iter(rel), rel, manifest)
         return go
 
-    entries = [(rel, size, _opener(rel)) for rel, size in zr.files()]
-    guard = _IntegrityAhead(zar_path) if integrity and _NATIVE else None
+    # Anything that raises before we return the closer must not leak the
+    # open reader (a name collision in tree_from_entries, an unreadable
+    # file table). Close it on the way out.
+    try:
+        entries = [(rel, size, _opener(rel)) for rel, size in zr.files()]
+        guard = _IntegrityAhead(zar_path) if integrity and _NATIVE else None
+        from . import xdvdfs as _xd
+        tree = _xd.tree_from_entries(entries, where=zar_path)
+    except BaseException:
+        zr.close()
+        raise
 
     def closer():
         try:
@@ -127,8 +136,7 @@ def iso_tree(zar_path, manifest=None, integrity=True):
             if guard is not None:
                 guard.check()
 
-    from . import xdvdfs as _xd
-    return _xd.tree_from_entries(entries, where=zar_path), closer
+    return tree, closer
 
 
 class _HashingStream:

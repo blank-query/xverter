@@ -58,8 +58,13 @@ def bundled(system="xbox360"):
         return None
     out = os.path.join(cache_dir(), "bundled_%s.dat" % system)
     if not os.path.isfile(out) or os.path.getsize(out) != len(data):
-        with open(out, "wb") as f:
+        # Atomic write, as save() does: a process killed mid-write must
+        # not leave a truncated DAT that the next run (or a concurrent
+        # reader) trusts by its mere presence.
+        tmp = "%s.tmp.%d" % (out, os.getpid())
+        with open(tmp, "wb") as f:
             f.write(data)
+        os.replace(tmp, out)
     return out
 
 
