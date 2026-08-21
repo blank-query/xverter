@@ -76,10 +76,15 @@ class _Package:
         self.magic = magic
 
         f.seek(HEADER_SIZE_OFFSET)
-        header_size = struct.unpack(">I", f.read(4))[0]
+        hsz = f.read(4)
+        if len(hsz) < 4:
+            raise StfsError("truncated STFS header (no header-size field)")
+        header_size = struct.unpack(">I", hsz)[0]
 
         f.seek(DESCRIPTOR_OFFSET)
         d = f.read(0x24)
+        if len(d) < 0x24:
+            raise StfsError("truncated STFS header (no volume descriptor)")
         if len(d) != 0x24 or d[0] != 0x24:
             raise StfsError("bad STFS volume descriptor (size byte %r)"
                             % (d[:1],))
@@ -219,6 +224,7 @@ class _Package:
                        for c in self.chain(self.ft_start,
                                            max(self.ft_blocks, 1)))
         paths = {0xFFFF: ""}
+        seen = set()
         out = []
         for i in range(len(raw) // FT_ENTRY):
             e = raw[i * FT_ENTRY:(i + 1) * FT_ENTRY]
@@ -234,7 +240,17 @@ class _Package:
             parent = struct.unpack(">H", e[0x32:0x34])[0]
             size = struct.unpack(">I", e[0x34:0x38])[0]
             is_dir = bool(flags & 0x80)
+            # A parent id must name a directory already defined earlier;
+            # a forward or dangling reference silently re-roots the entry
+            # (parent -> "") and can collide two files onto one path,
+            # where extraction overwrites one with the other and still
+            # counts both as success. Refuse the collision outright.
             path = paths.get(parent, "") + name
+            if path in seen:
+                raise StfsError(
+                    "package file table maps two entries to %r "
+                    "(damaged or hostile table)" % path)
+            seen.add(path)
             if is_dir:
                 paths[i] = path + "/"
             out.append({"id": i, "name": name,

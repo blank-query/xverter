@@ -373,6 +373,11 @@ class ZarReader:
         """Yield (path, entry_index, is_file) depth-first in stored order."""
         tree = self._tree
         stack = [("", 0)]
+        # A crafted tree whose directory child-range includes itself or
+        # an ancestor would otherwise re-push that directory forever -
+        # an infinite loop with unbounded path growth, no exception. A
+        # directory is entered at most once.
+        seen = {0}
         while stack:
             prefix, idx = stack.pop()
             entry = tree[idx]
@@ -393,6 +398,10 @@ class ZarReader:
                 if self._entry_is_file(child):
                     yield child_path, child_idx, True
                 else:
+                    if child_idx in seen:
+                        raise ZarNativeError(
+                            "directory tree cycle at entry %d" % child_idx)
+                    seen.add(child_idx)
                     yield child_path, child_idx, False
                     pending.append((child_path, child_idx))
             for item in reversed(pending):
