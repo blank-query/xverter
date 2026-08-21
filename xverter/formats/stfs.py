@@ -363,24 +363,27 @@ def file_entries(stfs_path, manifest=None):
     read, and each file hashes itself into `manifest` as it is
     consumed."""
     pkg = _open(stfs_path)
+    # One guard over everything that can raise before we hand back the
+    # closer: load, table parse, the empty check, AND the entry
+    # comprehension - _safe_relpath rejects a hostile path here, and
+    # that used to leak the open file. On any failure the fd is closed.
     try:
         pkg.load_tables()
         raw = pkg.entries()
+        if not any(not e["is_dir"] for e in raw):
+            raise StfsError("empty STFS file table")
+
+        def make(entry):
+            def go():
+                return _FileStream(pkg, entry, manifest)
+            return go
+
+        entries = [(_safe_relpath(e["path"]).replace(os.sep, "/"),
+                    e["size"], make(e))
+                   for e in raw if not e["is_dir"]]
     except BaseException:
         pkg.f.close()
         raise
-    if not any(not e["is_dir"] for e in raw):
-        pkg.f.close()
-        raise StfsError("empty STFS file table")
-
-    def make(entry):
-        def go():
-            return _FileStream(pkg, entry, manifest)
-        return go
-
-    entries = [(_safe_relpath(e["path"]).replace(os.sep, "/"), e["size"],
-                make(e))
-               for e in raw if not e["is_dir"]]
     return entries, pkg.f.close
 
 

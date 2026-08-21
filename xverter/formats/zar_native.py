@@ -698,6 +698,18 @@ class ZarWriter:
     # -------------------------------------------------------------- lifecycle
 
     def close(self) -> None:
+        # Stop the digest thread even when the pack was aborted (an
+        # exception before finalize()). It otherwise parks on its queue
+        # forever; in a long-lived process running many conversions (the
+        # TUI, a batch) those leaked threads accumulate without bound.
+        if self._shaq is not None:
+            try:
+                self._shaq.put(None)
+                if self._shat is not None:
+                    self._shat.join()
+            except Exception:
+                pass
+            self._shaq = None
         if self._fh is not None:
             self._fh.close()
             self._fh = None
