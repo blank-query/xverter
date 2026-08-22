@@ -81,13 +81,23 @@ try:
     # bytes. Safe here only because the block size is fixed at 64 KiB.
     _zstd_tls = threading.local()
 
+    # Not every libzstd is built with multithreading: the CPython
+    # Android build's _zstd accepts only nb_workers=0 (bounds [0, 0]),
+    # and asking for more is a ValueError, not a clamp. Ask the build
+    # what it allows. Output bytes are identical either way - 64 KiB
+    # blocks are below the job-split threshold (see above).
+    try:
+        _NB_WORKERS = min(8, os.cpu_count() or 1,
+                          _zstd.CompressionParameter.nb_workers.bounds()[1])
+    except Exception:                              # noqa: BLE001
+        _NB_WORKERS = 0
+
     def _zstd_compress(raw):
         c = getattr(_zstd_tls, "c", None)
         if c is None:
             c = _zstd_tls.c = _zstd.ZstdCompressor(options={
                 _zstd.CompressionParameter.compression_level: _ZSTD_LEVEL,
-                _zstd.CompressionParameter.nb_workers:
-                    min(8, (os.cpu_count() or 1)),
+                _zstd.CompressionParameter.nb_workers: _NB_WORKERS,
             })
         return c.compress(raw, _zstd.ZstdCompressor.FLUSH_FRAME)
 
