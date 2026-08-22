@@ -97,25 +97,28 @@ Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, Cach
 
 | Conversion (from the pressed source) | Spartan Assault (2.3GB) | Halo CE (7.3GB) | Halo 3 (7.8GB) | Anniversary (8.7GB) |
 | ----------------------- | -----------------------:| ---------------:| --------------:| -------------------:|
-| dir → iso               | 3.0 (3.1)               | 4.2 (4.5)       | 6.6 (7.7)      | 10.0 (10.3)         |
-| dir → zar               | 6.3 (17.2)              | 6.0 (10.5)      | 11.4 (25.2)    | 15.5 (34.1)         |
-| iso → god               | —                       | 3.2 (5.1)       | 4.3 (8.4)      | 5.3 (10.9)          |
-| iso → zar               | —                       | 5.7 (10.5)      | 12.1 (25.2)    | 16.4 (34.1)         |
-| iso → cci               | —                       | 14.9 (15.1)     | 17.1 (26.5)    | 19.3 (34.5)         |
-| iso → cso               | —                       | 13.4 (14.8)     | 15.4 (26.4)    | 16.6 (34.2)         |
-| iso → chd               | —                       | 44.0 (48.0)     | 56.1 (84.0)    | 61.4 (123.9)        |
-| **full matrix**         | **4m40s** (5m49s, 48 edges) | **6m04s** (5m55s, 48 edges) | **8m17s** (10m47s, 48 edges) | **10m06s** (14m48s, 48 edges) |
+| dir → iso               | 3.1 (3.1)               | 4.2 (4.5)       | 6.6 (7.7)      | 10.7 (10.3)         |
+| dir → zar               | 6.3 (17.2)              | 5.8 (10.5)      | 11.3 (25.2)    | 15.6 (34.1)         |
+| iso → god               | —                       | 3.2 (5.1)       | 5.3 (8.4)      | 5.0 (10.9)          |
+| iso → zar               | —                       | 5.6 (10.5)      | 11.0 (25.2)    | 15.7 (34.1)         |
+| iso → cci               | —                       | 15.4 (15.1)     | 16.6 (26.5)    | 18.2 (34.5)         |
+| iso → cso               | —                       | 13.5 (14.8)     | 15.2 (26.4)    | 16.6 (34.2)         |
+| iso → chd               | —                       | 43.6 (48.0)     | 55.0 (84.0)    | 61.4 (123.9)        |
+| iso → xiso              | —                       | 9.5             | 9.9            | 11.3                |
+| **full matrix**         | **4m49s** (5m49s, 48 edges) | **6m21s** (5m55s, 48 edges) | **8m39s** (10m47s, 48 edges) | **10m36s** (14m48s, 48 edges) |
 
 Spartan Assault is a download-era title — no pressed disc exists, so its first hops run from
-the STFS package itself: → iso 9.7s, → god 10.4s, → zar 11.3s, → cci 16.3s, → cso 16.1s,
-→ chd 36.8s. One honesty note on the parentheses: the launch suite built its containers from
-its own trimmed rebuild, while every current number converts the full pressed disc — more
-data in, and still faster everywhere.
+the STFS package itself: → iso 9.4s, → xiso 9.3s, → god 10.4s, → zar 11.3s, → cci 16.3s,
+→ cso 16.0s, → chd 36.3s. The xiso row has no launch figure because the format is new in this
+release; its time includes the byte-for-byte readback of the whole sliced partition. One
+honesty note on the parentheses: the launch suite built its containers from its own trimmed
+rebuild, while every current number converts the full pressed disc — more data in, and still
+faster nearly everywhere.
 
-The current column runs **62 edges (57 for Spartan)** — a quarter more coverage than the launch
-column — and still comes in faster on the quartet: 37m07s at launch, 29m07s now (single-run
-figures; the suite's run-to-run noise is about ±4%). CHD went native in 1.2.0, which is where
-its column's savings come from.
+The current column runs **62 edges (57 for Spartan)** — a third more coverage than the launch
+column — and still beats it on the quartet: 37m07s at launch, 30m25s now, 238 edges against
+192 (single uncontended runs; the suite's run-to-run noise is about ±4%). CHD went native in
+1.2.0, which is where its column's savings come from.
 
 Compression, as a fraction of the raw ISO (content-dependent — Anniversary's assets are already compressed, Spartan's aren't): CHD 60–90%, ZAR 60–93%, CCI/CSO 70–96%, GoD ~100.5% (its SHA-1 hash tree costs half a percent).
 
