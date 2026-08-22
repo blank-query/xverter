@@ -38,7 +38,8 @@ SENDFILE_CHUNK = 1 << 24
 #: In-kernel copy paths, best first. copy_file_range can reflink on
 #: btrfs/XFS; sendfile always copies. Both beat moving bytes through
 #: Python, and the plain loop remains the fallback.
-_KCOPY = tuple(fn for fn in (getattr(os, "copy_file_range", None),
+_COPY_FILE_RANGE = getattr(os, "copy_file_range", None)
+_KCOPY = tuple(fn for fn in (_COPY_FILE_RANGE,
                              getattr(os, "sendfile", None))
                if fn is not None) if sys.platform != "win32" else ()
 
@@ -869,7 +870,9 @@ def pack_tree(root, out_iso, progress=None):
                                 while copied < e["size"]:
                                     want = min(SENDFILE_CHUNK,
                                                e["size"] - copied)
-                                    if how is os.copy_file_range:
+                                    # guarded ref: the attribute
+                                    # itself is absent on Android
+                                    if how is _COPY_FILE_RANGE:
                                         n = how(ifd, ofd, want, copied)
                                     else:
                                         n = how(ofd, ifd, None, want)
