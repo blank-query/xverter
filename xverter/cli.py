@@ -101,8 +101,11 @@ def clear_bar(out=None):
 class _Progress:
     """Progress sink. mode 'lines' prints machine-readable
     'PROGRESS <stage> <done> <total>' lines (the TUI parses these);
-    mode 'tty' redraws a percent in place; None is silent. Throttled to
-    ~4 updates/second, always emitting the terminal 100%."""
+    mode 'json' emits the same events as NDJSON on stderr (a formal
+    contract for programs driving xverter); mode 'tty' redraws a
+    percent in place; None
+    is silent. Throttled to ~4 updates/second, always emitting the
+    terminal 100%."""
 
     def __init__(self, mode):
         self.mode = mode
@@ -168,6 +171,14 @@ class _Progress:
             if self.mode == "lines":
                 sys.stderr.write("PROGRESS %s %d %d\n"
                                  % (stage, done, max(total, 1)))
+            elif self.mode == "json":
+                # The machine contract: one JSON object per line on
+                # stderr. Same throttling and stages as the text
+                # protocol - a different rendering of the same events,
+                # never a different set of events.
+                sys.stderr.write(json.dumps(
+                    {"event": "progress", "stage": stage,
+                     "done": done, "total": max(total, 1)}) + "\n")
             else:
                 self._state["stage"] = stage
                 self._state["done"] = done
@@ -1002,8 +1013,7 @@ def cmd_info(args):
     print("path   : %s" % path)
     if getattr(args, "identify", False):
         if kind == "iso":
-            prog = _Progress("lines" if getattr(args, "progress", False)
-                             else None)
+            prog = _Progress(getattr(args, "progress", None) or None)
             crc, sha1 = _stream_hashes(path, progress=prog.cb("hash"))
             size = os.path.getsize(path)
             hit = None
@@ -1106,8 +1116,8 @@ def cmd_info(args):
 
 
 def cmd_verify(args):
-    prog = _Progress("lines" if getattr(args, "progress", False)
-                     else "tty" if sys.stderr.isatty() else None)
+    prog = _Progress(getattr(args, "progress", None)
+                     or ("tty" if sys.stderr.isatty() else None))
     kind, path = detect_mod.detect(args.input)
     print("format: %s" % kind)
     if kind == "god":
@@ -1367,8 +1377,8 @@ def cmd_convert(args):
         except OSError:
             in_size = 0
         scratch_base = _ram_scratch_dir(in_size)
-    prog = _Progress("lines" if getattr(args, "progress", False)
-                     else "tty" if sys.stderr.isatty() else None)
+    prog = _Progress(getattr(args, "progress", None)
+                     or ("tty" if sys.stderr.isatty() else None))
     w = _tempdir(scratch_base)
     # Anything bearing the output's name that already exists is the
     # user's and is never touched; anything that appears while we work
@@ -1922,8 +1932,10 @@ def main(argv=None):
                    help="also hash the file against the bundled redump "
                         "databases: true game name + system, regardless "
                         "of filename (ISOs only; reads the whole file)")
-    p.add_argument("--progress", action="store_true",
-                   help="emit PROGRESS lines during the --identify hash")
+    p.add_argument("--progress", nargs="?", const="lines", default=None,
+                   choices=("lines", "json"),
+                   help="emit PROGRESS lines during the --identify hash "
+                        "(--progress=json for NDJSON events)")
     p.set_defaults(fn=cmd_info)
 
     p = sub.add_parser("verify", help="verify integrity (hash trees, structure, DAT)")
@@ -1932,8 +1944,10 @@ def main(argv=None):
                    help="fully read all data, not just structure")
     p.add_argument("--dat", help="logiqx .dat file (e.g. from redump) to "
                                  "authenticate an ISO against offline")
-    p.add_argument("--progress", action="store_true",
-                   help="emit machine-readable PROGRESS lines on stderr")
+    p.add_argument("--progress", nargs="?", const="lines", default=None,
+                   choices=("lines", "json"),
+                   help="emit machine-readable PROGRESS lines on stderr "
+                        "(--progress=json for NDJSON events)")
     p.add_argument("--no-lookup", action="store_true",
                    help="skip redump authentication entirely, including "
                         "the whole-image hashing it needs")
@@ -1991,10 +2005,13 @@ def main(argv=None):
                         "uses a tmpfs (/dev/shm) and needs ~2.2x the game "
                         "size in AVAILABLE memory; Linux only - on other "
                         "platforms create a RAM drive and use --workdir")
-    p.add_argument("--progress", action="store_true",
+    p.add_argument("--progress", nargs="?", const="lines", default=None,
+                   choices=("lines", "json"),
                    help="emit machine-readable PROGRESS lines on stderr "
-                        "(the TUI uses this; humans get an automatic "
-                        "percent display on a tty)")
+                        "(the TUI uses this; --progress=json emits the "
+                        "same events as NDJSON, for programs that "
+                        "drive xverter; humans "
+                        "get an automatic percent display on a tty)")
     p.add_argument("--split", action="store_true",
                    help="split .cci/.cso output into Name.1/.2 slices at "
                         "4GiB (the console convention: FATX storage caps "
@@ -2013,12 +2030,26 @@ def main(argv=None):
                       lambda *_a: (_ for _ in ()).throw(KeyboardInterrupt()))
     except (ValueError, OSError):
         pass                            # not the main thread; best effort
+    def _json_mode():
+        return getattr(args, "progress", None) == "json"
+
+    def _emit(obj):
+        sys.stderr.write(json.dumps(obj) + "\n")
+        sys.stderr.flush()
+
     try:
-        return args.fn(args)
+        rc = args.fn(args)
+        if _json_mode():
+            _emit({"event": "exit", "code": rc or 0})
+        return rc
     except KeyboardInterrupt:
         # Failed outputs were cleaned up on the way here by each command's
         # own finally/except-BaseException handler.
-        print("\nERROR: interrupted", file=sys.stderr)
+        if _json_mode():
+            _emit({"event": "error", "message": "interrupted"})
+            _emit({"event": "exit", "code": 130})
+        else:
+            print("\nERROR: interrupted", file=sys.stderr)
         return 130
     except BrokenPipeError:
         # A downstream `| head` closed the pipe. Silence Python's
@@ -2042,14 +2073,22 @@ def main(argv=None):
             cci_mod.CciError, cso_mod.CsoError, chd_mod.ChdError,
             archives_mod.ArchiveError, zar_native_mod.ZarNativeError,
             lz4compat_mod.Lz4Error, lz4compat_mod.Lz4Missing) as e:
-        print("ERROR: %s" % e, file=sys.stderr)
+        if _json_mode():
+            _emit({"event": "error", "message": str(e)})
+            _emit({"event": "exit", "code": 1})
+        else:
+            print("ERROR: %s" % e, file=sys.stderr)
         return 1
     except OSError as e:
         # The environment said no - permissions, a missing directory, a
         # full disk. The user can fix all of these and none of them are
         # our bug, so they get a sentence, not a stack trace. (Failed
         # outputs were already cleaned up on the way here.)
-        print("ERROR: %s" % e, file=sys.stderr)
+        if _json_mode():
+            _emit({"event": "error", "message": str(e)})
+            _emit({"event": "exit", "code": 1})
+        else:
+            print("ERROR: %s" % e, file=sys.stderr)
         return 1
 
 
