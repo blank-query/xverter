@@ -2,31 +2,40 @@
 
 ## Unreleased
 
-**New writer: STFS (`.stfs`) output — the download-era container, faithfully
-rebuilt.** STFS was the one format xVerter read but could not write. It can
-now, held to the same standard as every other writer: `xverter convert
-package.stfs -o rebuilt.stfs` re-packs a LIVE/CON/PIRS package — rebuilding
-the interleaved SHA-1 hash tables at every level, the file table, and the
-volume descriptor's sealed root — then re-reads its own output and verifies
-the entire hash chain to the descriptor root before reporting success.
-Content is byte-equal to the source, proven at all three hash-tree levels.
+**New writer: STFS (`.stfs`) output — write LIVE packages from any input.**
+STFS was the one format xVerter read but could not write. Now every input
+writes it, held to the same standard as every other writer: the package is
+re-read by xVerter's own reader and its entire interleaved SHA-1 hash chain
+re-verified block-by-block to the volume descriptor's root before success is
+reported. Content is byte-equal to source, proven at all three hash-tree
+levels — including a full-scale run on the real 2.34 GB Halo: Spartan Assault
+retail package.
 
-The writer is scoped to a **faithful rebuild** (`stfs → stfs`): an STFS
-package carries its own content type — XBLA `0x000D0000`, DLC `0x00000002`,
-title update `0x000B0000` — and the writer preserves that type from the
-source rather than inventing one. Converting a non-STFS source into STFS
-would mean choosing a content type on the game's behalf, which the tool
-refuses to do silently (a clear error points the user at an STFS source);
-that path awaits an explicit content-type flag. The junk RSA signature bytes
-are the same convention xVerter's GoD output — and iso2god's, which the whole
-scene runs on — already ships; modded consoles and emulators do not check
-them.
+**Content type is chosen, never guessed.** A LIVE package carries its type
+(XBLA `0x000D0000`, DLC `0x00000002`, title update `0x000B0000`, Xbox Original
+`0x00005000`) in its header. An STFS **source** already has one, so
+`stfs → stfs` is a faithful rebuild that preserves it. Any **other** source
+has none to carry, so you name it with `--content-type
+xbla|dlc|title-update|xbox-original` (or a raw value). Without it, a non-STFS
+source is a clear error — never a silent XBLA stamp. The junk RSA signature
+bytes are the same convention xVerter's GoD output (and iso2god's) already
+ships.
 
-**The suite grew for STFS input: 61 edges (was 57).** STFS input now runs the
-four-edge rebuild family — `stfs → stfs`, the rebuild back to a directory,
-its content check against the baseline, and a `verify` walking the rebuilt
-package's own hash chain to root — the only edges that exercise the new
-writer. `61 = 62 − 5 image-only byte-audits + 4 rebuild edges`.
+**TUI: a content-type picker.** Clicking **→ STFS** on a non-STFS game pops a
+modal to choose the type; an STFS source skips it and preserves its own. The
+`→ STFS` button joins the Xbox 360 row.
+
+**Matrix: STFS is a normal output column for every input.** Each input now
+runs the STFS output family — write, round-trip to a directory, content-check
+against the baseline, and `verify` to the descriptor root. Image input **66
+edges** (was 62); STFS input **61** (it lacks the five pressed-byte audits an
+image earns: `66 − 5 = 61`).
+
+**Fixed: the TUI RAM-scratch and 4GiB-split toggles did nothing.** Their
+handler sat inside `on_button_pressed` guarded by `event.switch`, which a
+button press never carries — so the switches were dead and an unrecognized
+button id crashed. Moved to a proper `on_switch_changed`; the toggles now
+take effect.
 
 ## 1.3.0 — the missing conversion, and three sweeps deeper
 
