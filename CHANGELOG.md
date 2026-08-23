@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+**New writer: STFS (`.stfs`) output — the download-era container, faithfully
+rebuilt.** STFS was the one format xVerter read but could not write. It can
+now, held to the same standard as every other writer: `xverter convert
+package.stfs -o rebuilt.stfs` re-packs a LIVE/CON/PIRS package — rebuilding
+the interleaved SHA-1 hash tables at every level, the file table, and the
+volume descriptor's sealed root — then re-reads its own output and verifies
+the entire hash chain to the descriptor root before reporting success.
+Content is byte-equal to the source, proven at all three hash-tree levels.
+
+The writer is scoped to a **faithful rebuild** (`stfs → stfs`): an STFS
+package carries its own content type — XBLA `0x000D0000`, DLC `0x00000002`,
+title update `0x000B0000` — and the writer preserves that type from the
+source rather than inventing one. Converting a non-STFS source into STFS
+would mean choosing a content type on the game's behalf, which the tool
+refuses to do silently (a clear error points the user at an STFS source);
+that path awaits an explicit content-type flag. The junk RSA signature bytes
+are the same convention xVerter's GoD output — and iso2god's, which the whole
+scene runs on — already ships; modded consoles and emulators do not check
+them.
+
+**The suite grew for STFS input: 61 edges (was 57).** STFS input now runs the
+four-edge rebuild family — `stfs → stfs`, the rebuild back to a directory,
+its content check against the baseline, and a `verify` walking the rebuilt
+package's own hash chain to root — the only edges that exercise the new
+writer. `61 = 62 − 5 image-only byte-audits + 4 rebuild edges`.
+
 ## 1.3.0 — the missing conversion, and three sweeps deeper
 
 **New format: `.xiso` output — the trimmed bare image emulators actually want.**
