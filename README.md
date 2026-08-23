@@ -374,7 +374,18 @@ Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clan
 
 ![xVerter running in Termux on a Galaxy Z Fold 4](docs/termux-zfold4.jpg)
 
-**Tested on a real device.** Galaxy Z Fold 4, Termux, library on shared storage — the full TUI renders on the inner display, and `Battlefield: Bad Company (USA) (En,Fr)` converted from a 4.5 GB `.zar` back to a 4.9 GB `.iso` in **26.9 s**, manifest verified. A phone with a folding keyboard is a complete xVerter workstation.
+**Tested on a real device.** Galaxy Z Fold 4, Termux, library on shared storage — the full TUI renders on the inner display, and `Battlefield: Bad Company (USA) (En,Fr)` converted from a 4.5 GB `.zar` back to a 4.9 GB `.iso` in **26.9 s** at launch, manifest verified; the current release does that same conversion in **10.5 s** on a free-threaded interpreter. A phone with a folding keyboard is a complete xVerter workstation.
+
+**The full release test suite passes on the phone.** The identical matrix from the desktop record — every edge, every byte-audit — run in Termux on the Fold 4 (plugged in, screen on, Termux in the foreground), single clean pass, zero failures:
+
+| title | format | result | time |
+| --- | --- | --- | ---: |
+| Spartan Assault | STFS | 57 edges, 0 failed | 16m21s |
+| Halo: CE | XGD1 | 62 edges, 0 failed | 26m28s |
+| Halo 3 | XGD2 | 62 edges, 0 failed | 36m32s |
+| CE Anniversary | XGD3 | 62 edges, 0 failed | 45m46s |
+
+One Android scheduling fact worth knowing for long runs: with the screen off or the terminal in the background, Android parks work on the efficiency cores at roughly a third of the speed — the jobs still finish correctly, just slower. For numbers like the table above, keep the screen on and Termux in front.
 
 ### Scratch space (and doing it all in RAM)
 
