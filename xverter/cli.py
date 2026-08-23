@@ -326,22 +326,26 @@ def _stfs_source_entries(kind, path, w, manifest, prog):
     return entries, (lambda: None)          # pivot cleaned up with w
 
 
-def _derive_xex_info(entries):
-    """Exec-info (title/media id, disc, platform) from the payload's
-    default.xex, or None. Same source GoD reads its ids from - so an STFS
+def _derive_exe_info(entries):
+    """Identity (title/media id, disc, platform, and for an XBE a display
+    name) from the payload executable - default.xex (360) or default.xbe
+    (OG Xbox) - or None. The same source GoD reads its ids from, so an STFS
     package synthesized from a game carries the game's real identity, not
     zeros."""
     for rel, _sz, opener in entries:
-        if rel.lower().lstrip("/") == "default.xex":
-            f = opener()
-            try:
-                return god_mod._parse_xex(f, 0)
-            except Exception:                        # noqa: BLE001
-                return None
-            finally:
-                cl = getattr(f, "close", None)
-                if cl:
-                    cl()
+        low = rel.lower().lstrip("/")
+        if low not in ("default.xex", "default.xbe"):
+            continue
+        f = opener()
+        try:
+            return (god_mod._parse_xex(f, 0) if low == "default.xex"
+                    else god_mod._parse_xbe(f, 0))
+        except Exception:                            # noqa: BLE001
+            return None
+        finally:
+            cl = getattr(f, "close", None)
+            if cl:
+                cl()
     return None
 
 
@@ -1787,14 +1791,18 @@ def cmd_convert(args):
                             "value like 0x000D0000)." % kind)
                     # Derive identity from the payload default.xex (as GoD
                     # does); name from --title or the source filename.
-                    info = _derive_xex_info(entries)
+                    info = _derive_exe_info(entries)
                     if title is not None:
                         name = title
                     else:
-                        # canonical name from the redump DAT (free unless the
-                        # source is actually a known redump), else filename
-                        name = (_redump_name(path) or os.path.splitext(
-                            os.path.basename(path.rstrip(os.sep)))[0])
+                        # name priority: redump DAT canonical name (free
+                        # unless the source really is a known dump) > the XBE
+                        # cert's own title (XEX has none) > source filename.
+                        name = (_redump_name(path)
+                                or (info.get("title") if info and
+                                    info.get("title") else None)
+                                or os.path.splitext(os.path.basename(
+                                    path.rstrip(os.sep)))[0])
                     header = stfs_mod.synth_header(ctype, display_name=name,
                                                    info=info)
                     if tid is not None or mid is not None:
