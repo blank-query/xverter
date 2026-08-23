@@ -822,23 +822,43 @@ def main(argv=None):
     # so the writer stamps a chosen one (--content-type). Either way the
     # package is round-tripped, content-checked against the baseline, and
     # `verify` walks our own output's hash tree to the descriptor root.
-    if kind == "stfs":
-        # Preserve: the rebuilt package must carry the SOURCE's own type,
-        # not a default - read it off the source and assert it survives.
-        want_ct = _read_content_type(src)
-        run("stfs(src)->stfs", ["convert", src, "-o", d("a.stfs")])
+    # Precondition: STFS file-table names are a hard 40 bytes of ASCII. A
+    # tree with a longer or non-ASCII name genuinely cannot be packed as
+    # STFS (the writer refuses rather than corrupt), so skip the edge with
+    # a note - a real limitation, not a failure. Same posture as the xiso
+    # precondition. STFS-source names are reader-produced (always fit), so
+    # a rebuild never trips this.
+    _stfs_offender = None
+    for _p in baseline:
+        for _c in _p.split("/"):
+            _e = _c.encode("ascii", "replace")
+            if len(_e) > 0x28 or _e.decode("ascii") != _c:
+                _stfs_offender = _c
+                break
+        if _stfs_offender:
+            break
+    if _stfs_offender is not None:
+        say("  stfs: SKIP - a name is too long or non-ASCII for STFS "
+            "(%r, %d bytes); this tree cannot be packed as STFS\n"
+            % (_stfs_offender, len(_stfs_offender.encode("ascii", "replace"))))
     else:
-        # A non-default type on purpose (DLC, not the XBLA a lazy writer
-        # might fall back to): proves --content-type is actually honoured,
-        # not merely accepted.
-        want_ct = 0x00000002                         # dlc
-        run("%s(src)->stfs" % kind,
-            ["convert", src, "-o", d("a.stfs"), "--content-type", "dlc"])
-    check_content_type("  stfs content-type", d("a.stfs"), want_ct)
-    run("stfs(r)->dir", ["convert", d("a.stfs"), "-o", d("from_stfs") + "/"])
-    check_dir("  content(stfs)", d("from_stfs"), baseline)
-    run("verify stfs", ["verify", d("a.stfs")])
-    os.unlink(d("a.stfs"))
+        if kind == "stfs":
+            # Preserve: the rebuilt package must carry the SOURCE's own
+            # type - read it off the source and assert it survives.
+            want_ct = _read_content_type(src)
+            run("stfs(src)->stfs", ["convert", src, "-o", d("a.stfs")])
+        else:
+            # A non-default type on purpose (DLC, not the XBLA a lazy
+            # writer might fall back to): proves --content-type is
+            # actually honoured, not merely accepted.
+            want_ct = 0x00000002                     # dlc
+            run("%s(src)->stfs" % kind,
+                ["convert", src, "-o", d("a.stfs"), "--content-type", "dlc"])
+        check_content_type("  stfs content-type", d("a.stfs"), want_ct)
+        run("stfs(r)->dir", ["convert", d("a.stfs"), "-o", d("from_stfs") + "/"])
+        check_dir("  content(stfs)", d("from_stfs"), baseline)
+        run("verify stfs", ["verify", d("a.stfs")])
+        os.unlink(d("a.stfs"))
 
     # xiso: the trimmed bare image (what xemu consumes). A byte SLICE of
     # the source's game partition, so it only exists when the source has

@@ -390,6 +390,24 @@ def build(entries, out_path, header, progress=None):
     not hold the whole payload in memory. Returns (nblocks, record_count)."""
     if len(header) < 0x344 + 4:
         raise StfsError("header template too small")
+    # STFS file-table names are a hard 40 bytes (0x28) of ASCII. A longer
+    # or non-ASCII XDVDFS name cannot be stored: truncating it renames the
+    # file (transparent_..._m.vsh -> ...m.vs) and can collide two files
+    # onto one. Refuse loudly BEFORE writing anything rather than corrupt
+    # silently - some game trees simply cannot be packed as STFS.
+    _bad = []
+    for _rel, _sz, _op in entries:
+        for _comp in _rel.replace(os.sep, "/").strip("/").split("/"):
+            _enc = _comp.encode("ascii", "replace")
+            if len(_enc) > 0x28 or _enc.decode("ascii") != _comp:
+                _bad.append(_comp)
+    if _bad:
+        _ex = _bad[0]
+        raise StfsError(
+            "%d name(s) cannot be stored in STFS (file-table names are "
+            "limited to 40 bytes of ASCII): e.g. %r (%d bytes). This tree "
+            "cannot be packed as STFS without corrupting names."
+            % (len(_bad), _ex, len(_ex.encode("ascii", "replace"))))
     base = _hdr_base(header)
     recs, ft_blocks, nblocks, idx_of = _plan(entries)
     ft = _ft_bytes(recs, idx_of, ft_blocks)
