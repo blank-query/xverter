@@ -34,10 +34,14 @@ image earns: `67 − 5 = 62`).
 **STFS packages carry real, derived metadata (and you can override it).**
 A synthesized STFS package used to be a title_id=0 shell a console can't
 index. Now `X -> stfs` derives the game's identity from the source: the
-title id / media id / disc number come from the payload `default.xex` (the
-same exec-info GoD reads), and the display name comes from the **redump
-DAT** (matched by the source's hash - the canonical game name), falling back
-to the source filename. `--content-type`, `--title`, `--title-id` and
+title id / media id / disc number come from the payload executable -
+`default.xex` (360) or `default.xbe` (OG Xbox), the same exec-info GoD reads.
+The display name is resolved from the **title id** against a bundled Xbox 360
+title database (distilled from xenia-manager/x360db, ~6500 titles) - so a 360
+game names itself even from a stripped ZAR, since a XEX carries no name of its
+own. OG Xbox games take their name from the XBE certificate; a full retail iso
+can also fall back to the redump DAT; and the source filename is the last
+resort. `--content-type`, `--title`, `--title-id` and
 `--media-id` fill or override any of it. On an `stfs -> stfs` rebuild those
 flags *edit* the preserved header - rename a package or re-stamp an id by
 converting with a flag, no metadata editor needed. (Deriving from the source
