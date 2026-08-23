@@ -306,6 +306,26 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
     return out
 
 
+def _stfs_source_entries(kind, path, w, manifest, prog):
+    """(entries, closer) of a source's files for the STFS writer.
+    An STFS source streams block-verified (no scratch copy); every other
+    kind is materialised to the game directory pivot and walked. CHD and
+    zip/7z inputs have already been turned into an image/kind upstream."""
+    if kind == "stfs":
+        return stfs_mod.file_entries(path, manifest=manifest)
+    gd = _to_gamedir(kind, path, w, manifest=manifest,
+                     progress=prog.cb("extract"))
+    entries = []
+    for dp, _dn, fns in os.walk(gd):
+        for fn in fns:
+            full = os.path.join(dp, fn)
+            rel = os.path.relpath(full, gd).replace(os.sep, "/")
+            entries.append((rel, os.path.getsize(full),
+                            (lambda f=full: open(f, "rb"))))
+    entries.sort(key=lambda e: e[0])
+    return entries, (lambda: None)          # pivot cleaned up with w
+
+
 def _output_siblings(out_path):
     """Every path a writer might have created for this output: the one
     it was given, plus the Name.N.ext slices the split writers emit.
@@ -1698,21 +1718,33 @@ def cmd_convert(args):
                      else "round-trip verified"))
             return 0
         if out_kind == "stfs":
-            # Faithful rebuild: an STFS package carries its content type
-            # (XBLA/DLC/TU/...) in the header, and we never invent one -
-            # so writing STFS requires an STFS source whose header we
-            # preserve verbatim. Other inputs would need a content type
-            # chosen for them, which we will not guess.
-            if kind != "stfs":
-                raise CliError(
-                    "writing STFS needs an STFS source: the package's "
-                    "content type (XBLA/DLC/title-update/...) is carried "
-                    "from the source header and never invented. Convert "
-                    "an STFS package to .stfs to rebuild it.")
-            with open(path, "rb") as _hf:
-                header = _hf.read(0xB000)
+            # STFS carries its content type (XBLA/DLC/TU/...) in the
+            # header, and the tool never GUESSES one. An STFS source keeps
+            # its own type (rebuild); --content-type overrides it. A
+            # non-STFS source has no type to carry, so --content-type is
+            # required there - the one decision only the user can make,
+            # surfaced rather than guessed.
+            ctype = None
+            if getattr(args, "content_type", None) is not None:
+                ctype = stfs_mod.parse_content_type(args.content_type)
+            if kind == "stfs":
+                with open(path, "rb") as _hf:
+                    header = bytearray(_hf.read(0xB000))
+                if ctype is not None:
+                    struct.pack_into(">I", header,
+                                     stfs_mod.CONTENT_TYPE_OFFSET, ctype)
+                header = bytes(header)
+            else:
+                if ctype is None:
+                    raise CliError(
+                        "writing STFS from a %s source needs a content "
+                        "type - it is never guessed. Add --content-type "
+                        "xbla|dlc|title-update|xbox-original (or a raw "
+                        "value like 0x000D0000)." % kind)
+                stem = os.path.splitext(os.path.basename(args.output))[0]
+                header = stfs_mod.synth_header(ctype, display_name=stem)
             man = {}
-            entries, closer = stfs_mod.file_entries(path, manifest=man)
+            entries, closer = _stfs_source_entries(kind, path, w, man, prog)
             try:
                 stfs_mod.build(entries, args.output, header,
                                progress=prog.cb("stfs-write"))
@@ -2053,6 +2085,13 @@ def main(argv=None):
                         "files at 4GiB). Default writes one file, which "
                         "PC emulators read fine but console drives can't "
                         "hold")
+    p.add_argument("--content-type", metavar="TYPE", default=None,
+                   help="for .stfs output from a NON-STFS source, the "
+                        "content type to stamp: xbla, dlc, title-update, "
+                        "xbox-original, god, or a raw value like 0x000D0000. "
+                        "Required for such sources (the type is never "
+                        "guessed); an STFS source preserves its own type "
+                        "unless this overrides it")
     p.set_defaults(fn=cmd_convert)
 
     args = ap.parse_args(argv)

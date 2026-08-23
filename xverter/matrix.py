@@ -790,20 +790,21 @@ def main(argv=None):
         run("chd(src)->iso", ["convert", d("a.chd"), "-o", d("back_chd.iso")])
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
 
-    # stfs: the STFS writer's one and only exercise. A faithful rebuild
-    # carries the source package's content type (XBLA/DLC/title-update)
-    # verbatim - we never invent one - so it runs ONLY for an STFS
-    # source. That is not an input exemption: the source here is a real
-    # retail package, so content-vs-baseline is a true audit and not the
-    # rebuild-vs-rebuild blind spot, and `verify` walks our own output's
-    # hash tree to the descriptor root.
+    # stfs: a normal output column for every input kind - no container is
+    # exempt because of what the input was. An STFS source rebuilds and
+    # preserves its own content type; any other source has none to carry,
+    # so the writer stamps a chosen one (--content-type). Either way the
+    # package is round-tripped, content-checked against the baseline, and
+    # `verify` walks our own output's hash tree to the descriptor root.
     if kind == "stfs":
         run("stfs(src)->stfs", ["convert", src, "-o", d("a.stfs")])
-        run("stfs(r)->dir", ["convert", d("a.stfs"),
-                             "-o", d("from_stfs") + "/"])
-        check_dir("  content(stfs-rebuild)", d("from_stfs"), baseline)
-        run("verify stfs", ["verify", d("a.stfs")])
-        os.unlink(d("a.stfs"))
+    else:
+        run("%s(src)->stfs" % kind,
+            ["convert", src, "-o", d("a.stfs"), "--content-type", "xbla"])
+    run("stfs(r)->dir", ["convert", d("a.stfs"), "-o", d("from_stfs") + "/"])
+    check_dir("  content(stfs)", d("from_stfs"), baseline)
+    run("verify stfs", ["verify", d("a.stfs")])
+    os.unlink(d("a.stfs"))
 
     # xiso: the trimmed bare image (what xemu consumes). A byte SLICE of
     # the source's game partition, so it only exists when the source has

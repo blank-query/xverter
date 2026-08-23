@@ -54,6 +54,54 @@ DESCRIPTOR_OFFSET = 0x379
 TITLE_OFFSET = 0x411
 
 
+# Named content types for the writer's --content-type flag. The full 32-bit
+# value lives at CONTENT_TYPE_OFFSET; these are the ones a user actually
+# packages. A raw hex value is accepted too (parse_content_type).
+CONTENT_TYPES = {
+    "xbla": 0x000D0000,          # Arcade / XBLA downloadable title
+    "arcade": 0x000D0000,        # alias
+    "dlc": 0x00000002,           # Marketplace downloadable content
+    "marketplace": 0x00000002,   # alias
+    "title-update": 0x000B0000,  # Title update (patch)
+    "tu": 0x000B0000,            # alias
+    "xbox-original": 0x00005000, # Xbox Original (OG back-compat)
+    "god": 0x00007000,           # Games on Demand
+}
+
+
+def parse_content_type(text):
+    """A --content-type value: a known name (case-insensitive) or a raw
+    32-bit integer (0x-hex or decimal). Returns the int, or raises."""
+    key = str(text).strip().lower()
+    if key in CONTENT_TYPES:
+        return CONTENT_TYPES[key]
+    try:
+        return int(key, 0)
+    except ValueError:
+        raise StfsError(
+            "unknown content type %r - use one of {%s} or a raw value "
+            "like 0x000D0000" % (text, ", ".join(sorted(CONTENT_TYPES))))
+
+
+def synth_header(content_type, display_name=""):
+    """Build a minimal but valid LIVE package header (0xB000 bytes) for a
+    source that carries no STFS header of its own. Only the fields our
+    reader needs are set - magic, header size, content type, metadata
+    version, and a best-effort display title; build() fills the volume
+    descriptor and the header self-hash. Everything else is zero, which is
+    exactly the ecosystem-standard 'junk where it does not matter' posture
+    the signature bytes already take."""
+    h = bytearray(0xB000)
+    h[0:4] = b"LIVE"
+    struct.pack_into(">I", h, HEADER_SIZE_OFFSET, 0xB000)   # base -> 0xB000
+    struct.pack_into(">I", h, CONTENT_TYPE_OFFSET, int(content_type) & 0xFFFFFFFF)
+    struct.pack_into(">I", h, 0x348, 2)                     # metadata version
+    if display_name:
+        name = display_name.encode("utf-16-be")[:0xFE]
+        h[TITLE_OFFSET:TITLE_OFFSET + len(name)] = name
+    return bytes(h)
+
+
 class StfsError(Exception):
     pass
 
@@ -421,7 +469,7 @@ def build(entries, out_path, header, progress=None):
         # Header self-hash covers [0x344:0xB000] with the NEW descriptor in
         # place; build that region in memory (the file is write-only) and
         # seal the digest at 0x32C.
-        region = bytearray(header[0x344:0xB000])
+        region = bytearray(header[0x344:base])
         region[DESCRIPTOR_OFFSET - 0x344:DESCRIPTOR_OFFSET - 0x344 + 0x24] = desc
         o.seek(0x32C); o.write(hashlib.sha1(bytes(region)).digest())
     return nblocks, len(recs)
