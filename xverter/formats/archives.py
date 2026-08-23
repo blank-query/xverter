@@ -29,9 +29,12 @@ CRC-checked).
 """
 
 import hashlib
+import ntpath
 import os
 import sys
+import contextlib
 import zipfile
+import zlib
 
 MAGIC_ZIP = b"PK\x03\x04"
 MAGIC_7Z = b"7z\xbc\xaf\x27\x1c"
@@ -132,18 +135,45 @@ def sniff(path):
 
 def _safe(name):
     parts = name.replace("\\", "/").split("/")
-    if name.startswith(("/", "\\")) or ".." in parts or "" == parts[0]:
+    # A Windows drive spec ("C:\...", or drive-relative "C:evil") makes
+    # os.path.join on Windows discard out_dir entirely and write to an
+    # absolute location - so it must be refused alongside leading-slash
+    # absolutes and ".." escapes. ntpath answers this the same on every
+    # platform, so the check protects the archives we make on Linux for
+    # a user who later unpacks them on Windows too.
+    if (name.startswith(("/", "\\")) or ".." in parts or "" == parts[0]
+            or ntpath.splitdrive(name)[0] or ntpath.isabs(name)):
         raise ArchiveError("refusing unsafe archive path %r" % name)
     return name
+
+
+def _open_zip(path):
+    """zipfile.ZipFile, but a structurally broken archive that merely
+    starts with the ZIP magic is a bad input, not a crash."""
+    try:
+        return zipfile.ZipFile(path)
+    except zipfile.BadZipFile as e:
+        raise ArchiveError("damaged zip archive: %s (%s)" % (path, e))
+
+
+def _zip_damage(path, exc):
+    """Translate mid-read corruption into the same clean refusal a bad
+    open gets. _open_zip only covers the central directory; a flipped
+    bit inside a member's deflate stream or CRC surfaces later, as
+    zlib.error or BadZipFile, from any read."""
+    return ArchiveError("damaged zip archive: %s (%s)" % (path, exc))
 
 
 def list_entries(path):
     """[(name, size)] for the archive's files (no extraction)."""
     kind = sniff(path)
     if kind == "zip":
-        with zipfile.ZipFile(path) as z:
-            return [(i.filename, i.file_size) for i in z.infolist()
-                    if not i.is_dir()]
+        try:
+            with _open_zip(path) as z:
+                return [(i.filename, i.file_size) for i in z.infolist()
+                        if not i.is_dir()]
+        except (zipfile.BadZipFile, zlib.error) as e:
+            raise _zip_damage(path, e)
     if kind == "7z":
         return _list_7z(path)
     raise ArchiveError("not a zip/7z archive: %s" % path)
@@ -188,29 +218,32 @@ def extract(path, out_dir, progress=None):
     kind = sniff(path)
     os.makedirs(out_dir, exist_ok=True)
     if kind == "zip":
-        with zipfile.ZipFile(path) as z:
-            infos = [i for i in z.infolist() if not i.is_dir()]
-            for i in z.infolist():
-                _safe(i.filename)
-            total = sum(i.file_size for i in infos) or 1
-            done = 0
-            for i in z.infolist():
-                dest = os.path.join(out_dir,
-                                    i.filename.replace("/", os.sep))
-                if i.is_dir():
-                    os.makedirs(dest, exist_ok=True)
-                    continue
-                os.makedirs(os.path.dirname(dest) or out_dir,
-                            exist_ok=True)
-                with z.open(i) as f, open(dest, "wb") as o:
-                    while True:
-                        b = f.read(_CHUNK)
-                        if not b:
-                            break
-                        o.write(b)
-                        done += len(b)
-                        if progress:
-                            progress(done, total)
+        try:
+            with _open_zip(path) as z:
+                infos = [i for i in z.infolist() if not i.is_dir()]
+                for i in z.infolist():
+                    _safe(i.filename)
+                total = sum(i.file_size for i in infos) or 1
+                done = 0
+                for i in z.infolist():
+                    dest = os.path.join(out_dir,
+                                        i.filename.replace("/", os.sep))
+                    if i.is_dir():
+                        os.makedirs(dest, exist_ok=True)
+                        continue
+                    os.makedirs(os.path.dirname(dest) or out_dir,
+                                exist_ok=True)
+                    with z.open(i) as f, open(dest, "wb") as o:
+                        while True:
+                            b = f.read(_CHUNK)
+                            if not b:
+                                break
+                            o.write(b)
+                            done += len(b)
+                            if progress:
+                                progress(done, total)
+        except (zipfile.BadZipFile, zlib.error) as e:
+            raise _zip_damage(path, e)
         return
     if kind == "7z":
         exe = _need_7z()
@@ -298,7 +331,90 @@ def _sha1(path):
     return h.hexdigest()
 
 
+#: ISA-L's deflate level for ZIP output. Measured against zlib level 6
+#: on both extremes of compressibility, same 7.8 GB image:
+#:
+#:   zero/video region   204 MB/s -> 4384 MB/s   26.34% vs 26.34%
+#:   game data            76 MB/s -> 2121 MB/s   96.91% vs 96.89%
+#:
+#: 21-28x faster for the same bytes-out, which is not a trade so much as
+#: zlib spending its time hunting matches that are not there. Level 3 is
+#: both slower and slightly worse than 2, so 2 it is.
+_ISAL_LEVEL = 2
+
+#: 7-Zip compression level for .7z output - see build_7z.
+_SEVENZ_LEVEL = 1
+
+
+@contextlib.contextmanager
+def _isal_zip():
+    """Have zipfile deflate and inflate with ISA-L for the duration.
+
+    Deflate only, and the trade is worth stating plainly. Measured on a
+    7.8 GB image, same extraction code reading both archives:
+
+      made by zlib 6    write 99.0s   read back  6.7s
+      made by ISA-L 2   write 10.2s   read back 10.6s   +0.04% size
+
+    Writing is 9.7x faster; reading what it wrote is 1.58x slower,
+    because the fast encoder emits a stream that is cheaper to produce
+    and slightly costlier to decode. For an archive format - written
+    once, read rarely - that is the right end of the trade: you would
+    have to re-read the same archive around twenty times before the
+    write saving is spent.
+
+    ISA-L's inflate is not used. It is faster in isolation (2506 ->
+    3300 MB/s) but slower through zipfile, which reads via
+    `decompress(data, max_length)` in bounded chunks. zlib keeps the
+    read path.
+
+    Nor is the bundled 7-Zip engine, which was measured for the same
+    job and lost - decode only, no writing, two reps each:
+
+      zlib-made zip    7-Zip 7.6s    zipfile 6.7s
+      ISA-L-made zip   7-Zip 13.2s   zipfile 10.5s
+
+    stdlib is already the fastest reader available here. Note both
+    readers slow by the same factor on the ISA-L archive, so the read
+    cost above is a property of the stream, not of Python.
+
+    zipfile has no public hook for choosing a codec, so the private ones
+    are swapped and put back. Every attribute and the import are
+    checked: without any of them the block is a no-op and stdlib zlib
+    does the work as before. What ISA-L emits is ordinary deflate -
+    stdlib inflates it, and every entry is re-read and hashed by the
+    verify pass either way."""
+    try:
+        from isal import isal_zlib
+    except ImportError:
+        yield False
+        return
+    o_comp = getattr(zipfile, "_get_compressor", None)
+    if o_comp is None:                  # stdlib moved it: leave well alone
+        yield False
+        return
+
+    def _comp(compress_type, compresslevel=None):
+        if compress_type == zipfile.ZIP_DEFLATED:
+            return isal_zlib.compressobj(_ISAL_LEVEL, isal_zlib.DEFLATED, -15)
+        return o_comp(compress_type, compresslevel)
+
+    zipfile._get_compressor = _comp
+    try:
+        yield True
+    finally:
+        zipfile._get_compressor = o_comp
+
+
 def build_zip(src, out_path, verify=True, progress=None):
+    """Archive a file or directory tree as .zip, deflating with ISA-L
+    where it is available. Wraps _build_zip so the codec swap covers the
+    write and the verify re-read alike."""
+    with _isal_zip():
+        return _build_zip(src, out_path, verify=verify, progress=progress)
+
+
+def _build_zip(src, out_path, verify=True, progress=None):
     """Archive a file or directory tree as .zip. Canonical output:
     sorted entries, fixed timestamps - same input, same bytes. verify
     re-reads every entry from the finished archive and stream-hashes it
@@ -338,7 +454,9 @@ def build_zip(src, out_path, verify=True, progress=None):
                     if h.hexdigest() != _sha1(path):
                         raise ArchiveError(
                             "zip round-trip mismatch on %s" % arc)
-    except Exception:
+    except BaseException:
+        # BaseException, not Exception: a Ctrl-C or SIGTERM mid-write
+        # must still delete the partial archive at the user's path.
         if os.path.exists(out_path):
             os.unlink(out_path)
         raise
@@ -356,7 +474,13 @@ def build_7z(src, out_path, verify=True, progress=None):
     _grand = sum(os.path.getsize(p) for p, _a in sources) or 1
     try:
         src_abs = os.path.abspath(src)
-        _run_7z([exe, "a", "-t7z", "-y", "-bsp1",
+        # -mx1 rather than the engine default of -mx5. Game images are
+        # already compressed, so the higher levels spend a long time
+        # finding matches that are not there. Measured on a 7.8 GB
+        # redump: -mx1 20s/87.99%, -mx5 69s/87.86%, -mx9 82s/87.78% -
+        # 3.45x the speed for 0.13% more bytes, which is 9 MB on a
+        # 6.87 GB archive. Raise this constant if size matters more.
+        _run_7z([exe, "a", "-t7z", "-y", "-bsp1", "-mx" + str(_SEVENZ_LEVEL),
                  os.path.abspath(out_path),
                  os.path.basename(src_abs)],
                 progress=progress, total=_grand,
@@ -366,7 +490,9 @@ def build_7z(src, out_path, verify=True, progress=None):
         if verify:
             _run_7z([exe, "t", "-bsp1", os.path.abspath(out_path)],
                     progress=progress, total=_grand)
-    except Exception:
+    except BaseException:
+        # BaseException, not Exception: a Ctrl-C or SIGTERM mid-write
+        # must still delete the partial archive at the user's path.
         if os.path.exists(out_path):
             os.unlink(out_path)
         raise

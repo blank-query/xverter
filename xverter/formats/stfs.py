@@ -76,10 +76,15 @@ class _Package:
         self.magic = magic
 
         f.seek(HEADER_SIZE_OFFSET)
-        header_size = struct.unpack(">I", f.read(4))[0]
+        hsz = f.read(4)
+        if len(hsz) < 4:
+            raise StfsError("truncated STFS header (no header-size field)")
+        header_size = struct.unpack(">I", hsz)[0]
 
         f.seek(DESCRIPTOR_OFFSET)
         d = f.read(0x24)
+        if len(d) < 0x24:
+            raise StfsError("truncated STFS header (no volume descriptor)")
         if len(d) != 0x24 or d[0] != 0x24:
             raise StfsError("bad STFS volume descriptor (size byte %r)"
                             % (d[:1],))
@@ -219,6 +224,7 @@ class _Package:
                        for c in self.chain(self.ft_start,
                                            max(self.ft_blocks, 1)))
         paths = {0xFFFF: ""}
+        seen = set()
         out = []
         for i in range(len(raw) // FT_ENTRY):
             e = raw[i * FT_ENTRY:(i + 1) * FT_ENTRY]
@@ -234,7 +240,17 @@ class _Package:
             parent = struct.unpack(">H", e[0x32:0x34])[0]
             size = struct.unpack(">I", e[0x34:0x38])[0]
             is_dir = bool(flags & 0x80)
+            # A parent id must name a directory already defined earlier;
+            # a forward or dangling reference silently re-roots the entry
+            # (parent -> "") and can collide two files onto one path,
+            # where extraction overwrites one with the other and still
+            # counts both as success. Refuse the collision outright.
             path = paths.get(parent, "") + name
+            if path in seen:
+                raise StfsError(
+                    "package file table maps two entries to %r "
+                    "(damaged or hostile table)" % path)
+            seen.add(path)
             if is_dir:
                 paths[i] = path + "/"
             out.append({"id": i, "name": name,
@@ -291,6 +307,84 @@ def _safe_relpath(p):
         if x in (".", "..") or "\\" in x or "\x00" in x:
             raise StfsError("refusing unsafe entry path %r" % p)
     return os.path.join(*parts) if parts else ""
+
+
+class _FileStream:
+    """Read-only stream over one file inside a package, block-verified
+    as it goes. The manifest entry is recorded only when the file was
+    read to its end: a partially consumed stream records nothing, so a
+    consumer that skips bytes fails verification loudly instead of
+    certifying a short read."""
+
+    def __init__(self, pkg, entry, manifest):
+        self._pkg = pkg
+        self._rel = entry["path"]
+        self._left = entry["size"]
+        nblocks = (entry["size"] + BLOCK - 1) // BLOCK
+        self._chain = pkg.chain(entry["startclust"], nblocks)
+        self._buf = b""
+        self._manifest = manifest
+        self._h = hashlib.sha1() if manifest is not None else None
+
+    def read(self, n=-1):
+        if n is None or n < 0:
+            n = self._left + len(self._buf)
+        while len(self._buf) < n and self._left > 0:
+            c = next(self._chain)
+            b = self._pkg.verified_block(c)
+            chunk = b[:self._left] if self._left < BLOCK else b
+            self._left -= len(chunk)
+            if self._h is not None:
+                self._h.update(chunk)
+            self._buf += chunk
+        out, self._buf = self._buf[:n], self._buf[n:]
+        return out
+
+    def close(self):
+        if (self._h is not None and self._left == 0
+                and not self._buf):
+            self._manifest[self._rel.replace(os.sep, "/")] = \
+                self._h.hexdigest()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+def file_entries(stfs_path, manifest=None):
+    """(entries, closer) for feeding this package straight into a
+    writer: entries is [(relpath, size, opener)], opener returning a
+    verified stream over that file's blocks. The same shape zar and the
+    image readers expose, so STFS converts without being unpacked to a
+    scratch directory first. The hash chain is loaded and verified up
+    front, every data block is checked against its L0 entry as it is
+    read, and each file hashes itself into `manifest` as it is
+    consumed."""
+    pkg = _open(stfs_path)
+    # One guard over everything that can raise before we hand back the
+    # closer: load, table parse, the empty check, AND the entry
+    # comprehension - _safe_relpath rejects a hostile path here, and
+    # that used to leak the open file. On any failure the fd is closed.
+    try:
+        pkg.load_tables()
+        raw = pkg.entries()
+        if not any(not e["is_dir"] for e in raw):
+            raise StfsError("empty STFS file table")
+
+        def make(entry):
+            def go():
+                return _FileStream(pkg, entry, manifest)
+            return go
+
+        entries = [(_safe_relpath(e["path"]).replace(os.sep, "/"),
+                    e["size"], make(e))
+                   for e in raw if not e["is_dir"]]
+    except BaseException:
+        pkg.f.close()
+        raise
+    return entries, pkg.f.close
 
 
 def extract(stfs_path, out_dir, manifest=None, verify=True,

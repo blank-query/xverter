@@ -12,7 +12,6 @@ result verified by xverter's own readers before being reported as success.
 
 import filecmp
 import os
-import tempfile
 
 from . import god as god_mod
 from . import xdvdfs as xdvdfs_mod
@@ -30,6 +29,38 @@ def _trees_identical(a, b):
     return walk(filecmp.dircmp(a, b, shallow=False))
 
 
+def build_iso_from_tree(tree, out_iso, verify=True, manifest=None,
+                        progress=None, verify_progress=None):
+    """Pack a prebuilt node tree - files supplied by openers rather than
+    by a directory on disk - into a bare XDVDFS ISO.
+
+    Identical output to build_iso() given the same files: the layout
+    depends on names and sizes, not on where the bytes come from. This
+    is what lets a zar go straight to an ISO without being unpacked to
+    a scratch directory first."""
+    if os.path.exists(out_iso):
+        raise BuildError("output already exists: %s" % out_iso)
+    try:
+        xdvdfs_mod.pack_tree(tree, out_iso, progress=progress)
+    except xdvdfs_mod.XdvdfsError as e:
+        raise BuildError("XDVDFS pack failed: %s" % e)
+    if verify:
+        if not manifest:
+            raise BuildError("a streamed pack cannot be verified without "
+                             "the source manifest")
+        got = xdvdfs_mod.hash_walk(out_iso, progress=verify_progress)
+        if manifest != got:
+            missing = sorted(set(manifest) - set(got))[:3]
+            extra = sorted(set(got) - set(manifest))[:3]
+            diff = sorted(k for k in set(manifest) & set(got)
+                          if manifest[k] != got[k])[:3]
+            os.unlink(out_iso)
+            raise BuildError("built ISO failed manifest verification "
+                             "(missing=%s extra=%s content-diff=%s)"
+                             % (missing, extra, diff))
+    return out_iso
+
+
 def build_iso(gamedir, out_iso, verify=True, manifest=None,
               progress=None, verify_progress=None):
     """Pack an extracted game dir into a bare XDVDFS ISO with xverter's
@@ -37,14 +68,20 @@ def build_iso(gamedir, out_iso, verify=True, manifest=None,
     trees; see the layout contract in formats/xdvdfs.py)."""
     if os.path.exists(out_iso):
         raise BuildError("output already exists: %s" % out_iso)
+    # Snapshot the source manifest BEFORE writing. pack() scans the tree
+    # before it creates out_iso, so the ISO never contains the output
+    # file - but a post-write re-walk would, and comparing that against
+    # the ISO flagged the user's own just-built output as a missing file
+    # and deleted it. Hashing first (when no manifest was supplied) keeps
+    # the two sides describing the same set even when the output path
+    # lands inside the source gamedir.
+    want = manifest if manifest else (
+        xdvdfs_mod.hash_tree(gamedir) if verify else None)
     try:
         xdvdfs_mod.pack(gamedir, out_iso, progress=progress)
     except xdvdfs_mod.XdvdfsError as e:
         raise BuildError("XDVDFS pack failed: %s" % e)
     if verify:
-        # Manifest verification: hash the source tree once, then stream-hash
-        # every file inside the built ISO without writing anything.
-        want = manifest if manifest else xdvdfs_mod.hash_tree(gamedir)
         got = xdvdfs_mod.hash_walk(out_iso, progress=verify_progress)
         if want != got:
             missing = sorted(set(want) - set(got))[:3]
@@ -57,19 +94,29 @@ def build_iso(gamedir, out_iso, verify=True, manifest=None,
                              % (missing, extra, diff))
 
 
-def _allocation_extent(iso_path):
+def _allocation_extent(src):
     """Last allocated byte inside the image's game partition, relative to
     the partition base: max end of every file extent and directory table.
-    This is the minimum data size a lossless GoD container must hold."""
+    This is the minimum data size a lossless GoD container must hold.
+
+    Takes a path or an already-open seekable stream, so a source that is
+    an image without being a file - a compressed container - can be
+    measured without being written out first."""
     import struct
-    with open(iso_path, "rb") as f:
+    own = isinstance(src, (str, bytes, os.PathLike))
+    f = open(src, "rb") if own else src
+    try:
         base = xdvdfs_mod.find_base(f)
         f.seek(base + 32 * xdvdfs_mod.SECTOR + len(xdvdfs_mod.MAGIC))
         root_sector, root_size = struct.unpack("<II", f.read(8))
         extent = 33 * xdvdfs_mod.SECTOR            # volume descriptor region
         stack = [(root_sector, root_size)]
+        seen = set()
         while stack:
             sector, size = stack.pop()
+            if (sector, size) in seen:             # cycle guard: corrupt tables
+                continue
+            seen.add((sector, size))
             extent = max(extent, sector * xdvdfs_mod.SECTOR + size)
             for _name, start, sz, attr in xdvdfs_mod.walk_table(
                     xdvdfs_mod.read_table(f, base, sector, size)):
@@ -77,6 +124,9 @@ def _allocation_extent(iso_path):
                     stack.append((start, sz))
                 else:
                     extent = max(extent, start * xdvdfs_mod.SECTOR + sz)
+    finally:
+        if own:
+            f.close()
     return extent
 
 
@@ -84,7 +134,7 @@ def build_god(iso_path, out_dir, verify=True, progress=None,
               verify_progress=None):
     """Convert an ISO into a GoD container tree with xverter's native
     writer (formats/god.py build); returns the path of the created GoD
-    header file.
+    header file. Takes a path or a seekable stream over an image.
 
     Trimming writes only up to the source's true allocation extent -
     volume descriptor, every directory table, every file - computed by

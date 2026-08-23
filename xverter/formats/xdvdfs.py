@@ -34,6 +34,14 @@ MAGIC = b"MICROSOFT*XBOX*MEDIA"
 PARTITION_BASES = (0x0, 0x2080000, 0xFD90000, 0x18300000)  # bare, XGD3, XGD2, XGD1
 ATTR_DIR = 0x10
 CHUNK = 1 << 20
+SENDFILE_CHUNK = 1 << 24
+#: In-kernel copy paths, best first. copy_file_range can reflink on
+#: btrfs/XFS; sendfile always copies. Both beat moving bytes through
+#: Python, and the plain loop remains the fallback.
+_COPY_FILE_RANGE = getattr(os, "copy_file_range", None)
+_KCOPY = tuple(fn for fn in (_COPY_FILE_RANGE,
+                             getattr(os, "sendfile", None))
+               if fn is not None) if sys.platform != "win32" else ()
 
 
 class XdvdfsError(Exception):
@@ -90,10 +98,7 @@ def walk_table(table):
         return entries
     seen = set()
 
-    def visit(off):
-        if off in seen:
-            die("directory table cycle at offset %d" % off)
-        seen.add(off)
+    def parse(off):
         if off + 14 > len(table):
             die("directory entry at offset %d overruns table" % off)
         left, right = struct.unpack_from("<HH", table, off)
@@ -103,14 +108,102 @@ def walk_table(table):
         name_raw = table[off + 14:off + 14 + nlen]
         if len(name_raw) != nlen:
             die("directory entry name at offset %d overruns table" % off)
-        if left not in (0, 0xFFFF):
-            visit(left * 4)
-        entries.append((name_raw.decode("cp1252", "replace"), start, size, attr))
-        if right not in (0, 0xFFFF):
-            visit(right * 4)
+        return left, right, start, size, attr, name_raw
 
-    visit(0)
+    # Iterative in-order traversal. Recursing would blow Python's stack
+    # on a deep chain - whether a hostile table crafted as one long
+    # left-spine, or simply a very large real directory - turning a bad
+    # file into an uncaught RecursionError instead of a clean refusal.
+    stack = []
+    cur = 0
+    descend = True
+    while stack or descend:
+        while descend:
+            if cur in seen:
+                die("directory table cycle at offset %d" % cur)
+            seen.add(cur)
+            stack.append(cur)
+            left = parse(cur)[0]
+            if left not in (0, 0xFFFF):
+                cur = left * 4
+            else:
+                descend = False
+        off = stack.pop()
+        _l, right, start, size, attr, name_raw = parse(off)
+        entries.append((name_raw.decode("cp1252", "replace"),
+                        start, size, attr))
+        if right not in (0, 0xFFFF):
+            cur = right * 4
+            descend = True
     return entries
+
+
+def allocation_extent(f, base):
+    """Last allocated byte inside the game partition, relative to base:
+    the volume-descriptor region, every directory table, every file
+    extent. The smallest size a complete image can have.
+
+    (builders._allocation_extent computes the same thing from a path,
+    and god._stream_allocation_extent from a mid-build stream.)"""
+    f.seek(base + 32 * SECTOR + len(MAGIC))
+    root_sector, root_size = struct.unpack("<II", f.read(8))
+    extent = 33 * SECTOR                       # volume-descriptor region
+    stack = [(root_sector, root_size)]
+    seen = set()
+    while stack:
+        sector, size = stack.pop()
+        if (sector, size) in seen:             # cycle guard: corrupt tables
+            continue
+        seen.add((sector, size))
+        extent = max(extent, sector * SECTOR + size)
+        for _name, start, sz, attr in walk_table(
+                read_table(f, base, sector, size)):
+            if attr & ATTR_DIR:
+                stack.append((start, sz))
+            else:
+                extent = max(extent, start * SECTOR + sz)
+    return extent
+
+
+def validate_image(iso_path):
+    """Refuse an image whose own directory tables describe more data than
+    the file actually contains.
+
+    A raw ISO carries no internal checksum, so nothing else catches a
+    truncated one: the block-level wrappers (CCI/CSO) are deliberately
+    content-agnostic and will compress whatever bytes exist, producing a
+    container that round-trips perfectly and is silently missing game
+    data - which is why this runs over CCI and CSO sources too, and not
+    only over raw images. They carry no integrity of their own at all.
+
+    GoD, zar and STFS do carry their own (hash tree, SHA-256, hash
+    chain), but those prove the storage is intact, not that the image
+    inside it coheres: a container built faithfully from a truncated
+    dump passes its own checks. So this runs over every source that is
+    an image, and the self-checking formats simply pass it quickly.
+
+    Takes a path or an open seekable image, so a source that is an
+    image without being a file - a compressed container, a GoD - can be
+    checked without being written out first.
+
+    Returns the allocation extent. Raises XdvdfsError if the image is
+    not XDVDFS or is short."""
+    with _as_file(iso_path) as f:
+        size = getattr(f, "size", None)
+        if size is None:
+            pos = f.tell()
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(pos)
+        base = find_base(f)
+        extent = allocation_extent(f, base)
+    need = base + extent
+    if need > size:
+        die("truncated image: its directory tables describe %d bytes "
+            "(partition base 0x%X plus %d of content) but the file holds "
+            "%d - %d bytes are missing"
+            % (need, base, extent, size, need - size))
+    return extent
 
 
 def safe_name(name):
@@ -119,10 +212,102 @@ def safe_name(name):
     return name
 
 
-def extract(iso_path, out_dir, quiet=False, manifest=None, progress=None):
+def _extract_parallel(f, base, root_sector, root_size, out_dir, quiet,
+                      manifest, progress, opener, grand):
+    """Same extraction, a few files at a time on their own readers."""
+    import concurrent.futures
+    import hashlib
+    import threading
+
+    jobs = []
+    dirs = 0
+    stack = [(read_table(f, base, root_sector, root_size), out_dir)]
+    while stack:
+        table, path = stack.pop()
+        for name, start, size, attr in walk_table(table):
+            name = safe_name(name)
+            dest = os.path.join(path, name)
+            if attr & ATTR_DIR:
+                os.makedirs(dest, exist_ok=True)
+                dirs += 1
+                stack.append((read_table(f, base, start, size), dest))
+            else:
+                jobs.append((start, size, dest))
+
+    lock = threading.Lock()
+    done = [0]
+    local = threading.local()
+
+    def reader():
+        r = getattr(local, "r", None)
+        if r is None:
+            r = local.r = opener()
+        return r
+
+    def one(job):
+        start, size, dest = job
+        r = reader()
+        r.seek(base + start * SECTOR)
+        h = hashlib.sha1() if manifest is not None else None
+        remaining = size
+        with open(dest, "wb") as o:
+            while remaining > 0:
+                chunk = r.read(min(CHUNK, remaining))
+                if not chunk:
+                    die("unexpected EOF extracting %s (missing %d of %d "
+                        "bytes) - truncated image?" % (dest, remaining, size))
+                o.write(chunk)
+                if h is not None:
+                    h.update(chunk)
+                remaining -= len(chunk)
+                if progress:
+                    with lock:
+                        done[0] += len(chunk)
+                        progress(done[0], grand)
+        return dest, (h.hexdigest() if h is not None else None), size
+
+    opened = []
+    try:
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=EXTRACT_WORKERS,
+                thread_name_prefix="xiso") as ex:
+            results = list(ex.map(one, jobs))
+    finally:
+        for r in opened:
+            try:
+                r.close()
+            except Exception:                         # noqa: BLE001
+                pass
+
+    total = 0
+    for dest, digest, size in results:
+        if manifest is not None:
+            manifest[os.path.relpath(dest, out_dir).replace(os.sep, "/")] = digest
+        total += size
+        if not quiet:
+            print("  %s (%d bytes)" % (os.path.relpath(dest, out_dir), size))
+    print("extracted %d files, %d dirs, %d bytes total"
+          % (len(jobs), dirs, total))
+    return len(jobs), total
+
+
+#: Files extracted at once when a second reader can be opened. Measured
+#: on NVMe: 2 workers is 1.35-1.65x over serial on both interpreters,
+#: and every count above 2 is slower again - past that the limit is the
+#: storage, not the CPU.
+EXTRACT_WORKERS = 2
+
+
+def extract(iso_path, out_dir, quiet=False, manifest=None, progress=None,
+            opener=None):
     """Extract to out_dir, streaming each file in 1MiB chunks (memory
     stays O(chunk) regardless of file size). If manifest is a dict,
-    per-file SHA-1 hashes are computed inline during the same pass."""
+    per-file SHA-1 hashes are computed inline during the same pass.
+
+    `opener` is a zero-argument callable returning a fresh reader for
+    the same source. Given one, a couple of files are extracted at a
+    time on separate readers. The files are independent, so this is a
+    scheduling change only: same bytes out, same manifest."""
     import hashlib
     files = dirs = 0
     total = 0
@@ -144,8 +329,12 @@ def extract(iso_path, out_dir, quiet=False, manifest=None, progress=None):
                         tstack.append(read_table(f, base, st, sz))
                     else:
                         grand += sz
-        stack = [(read_table(f, base, root_sector, root_size), out_dir)]
         os.makedirs(out_dir, exist_ok=True)
+        if opener is not None and EXTRACT_WORKERS > 1:
+            return _extract_parallel(f, base, root_sector, root_size,
+                                     out_dir, quiet, manifest, progress,
+                                     opener, grand)
+        stack = [(read_table(f, base, root_sector, root_size), out_dir)]
         while stack:
             table, path = stack.pop()
             for name, start, size, attr in walk_table(table):
@@ -180,6 +369,150 @@ def extract(iso_path, out_dir, quiet=False, manifest=None, progress=None):
                         print("  %s (%d bytes)" % (os.path.relpath(dest, out_dir), size))
     print("extracted %d files, %d dirs, %d bytes total" % (files, dirs, total))
     return files, total
+
+
+class _Window:
+    """Read-only view of one file inside an image, hashing as it goes.
+
+    Owns the reader it is given and closes it. The manifest entry is
+    only written if the file was read to its end: a partially consumed
+    window records nothing, so a caller that skips bytes fails
+    verification loudly instead of certifying a short read."""
+
+    def __init__(self, f, offset, size, rel=None, manifest=None):
+        import hashlib
+        self._f = f
+        self._left = size
+        self._rel = rel
+        self._manifest = manifest
+        self._h = hashlib.sha1() if manifest is not None else None
+        if size:
+            f.seek(offset)
+
+    def read(self, n=-1):
+        if self._left <= 0:
+            return b""
+        if n is None or n < 0:
+            n = self._left
+        data = self._f.read(min(n, self._left))
+        if not data:
+            die("unexpected EOF reading %s (missing %d bytes) - "
+                "truncated image?" % (self._rel, self._left))
+        self._left -= len(data)
+        if self._h is not None:
+            self._h.update(data)
+        return data
+
+    def close(self):
+        try:
+            self._f.close()
+        finally:
+            if self._h is not None and self._left == 0:
+                self._manifest[self._rel] = self._h.hexdigest()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+class _NoClose:
+    """A reader whose close() does nothing, so it can outlive a window."""
+
+    def __init__(self, f):
+        self._f = f
+
+    def read(self, n=-1):
+        return self._f.read(n)
+
+    def seek(self, *a):
+        return self._f.seek(*a)
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
+
+
+def shared_opener(opener):
+    """Turn an opener into one that hands out views of a single reader,
+    plus the closer for it.
+
+    Opening a fresh reader per file is right when files are fetched
+    concurrently and wasteful when they are not: a GoD or compressed
+    reader re-reads its index every time it is constructed, which on a
+    many-file image costs more than the reads themselves. A consumer
+    that takes one file at a time, in order, to its end - which the
+    archive writers do - can safely share one reader between them,
+    because the windows never overlap. Do not use it for anything
+    concurrent."""
+    box = []
+
+    def go():
+        if not box:
+            box.append(opener())
+        return _NoClose(box[0])
+
+    def close():
+        if box:
+            try:
+                box[0].close()
+            finally:
+                del box[:]
+
+    return go, close
+
+
+def file_entries(iso_path, opener=None, manifest=None):
+    """List an image's files as (relpath, size, open) without extracting
+    it - `open` being a zero-argument callable returning a stream over
+    just that file's bytes.
+
+    This is the same walk `extract` does, stopping short of writing
+    anything: the tables are read once up front, then each file is
+    fetched on demand from its own reader. `opener` supplies those
+    readers for sources that are not plain files (a GoD container, a
+    compressed image); with none, the path is opened directly. Given a
+    manifest dict, each stream fills in its own SHA-1 as it is consumed,
+    so a caller that streams every file ends up with exactly the
+    manifest a full extraction would have produced.
+    """
+    if opener is None:
+        if not isinstance(iso_path, (str, bytes, os.PathLike)):
+            raise XdvdfsError("file_entries needs an opener for a "
+                              "non-path source")
+        _p = iso_path
+
+        def opener():
+            return open(_p, "rb")
+
+    found = []
+    with _as_file(iso_path) as f:
+        base = find_base(f)
+        f.seek(base + 32 * SECTOR + len(MAGIC))
+        root_sector, root_size = struct.unpack("<II", f.read(8))
+        stack = [(read_table(f, base, root_sector, root_size), "")]
+        while stack:
+            table, prefix = stack.pop()
+            for name, start, size, attr in walk_table(table):
+                name = safe_name(name)
+                rel = prefix + "/" + name if prefix else name
+                if attr & ATTR_DIR:
+                    stack.append((read_table(f, base, start, size), rel))
+                else:
+                    found.append((rel, size, base + start * SECTOR))
+
+    def make(rel, size, off):
+        def go():
+            return _Window(opener(), off, size, rel, manifest)
+        return go
+
+    return [(rel, size, make(rel, size, off)) for rel, size, off in found]
 
 
 def main():
@@ -412,7 +745,60 @@ def pack(src_dir, out_iso, progress=None):
     Returns (file_count, total_data_bytes)."""
     if not os.path.isdir(src_dir):
         die("not a directory: %s" % src_dir)
-    root = _scan_dir(src_dir)
+    return pack_tree(_scan_dir(src_dir), out_iso, progress=progress)
+
+
+def tree_from_entries(entries, where="<stream>"):
+    """Build the same node tree _scan_dir produces, from files that are
+    not on disk.
+
+    `entries` is an iterable of (relpath, size, opener) - opener being a
+    zero-argument callable returning a readable stream positioned at the
+    start of that file. The resulting tree is sorted and folded exactly
+    as a directory scan would be, so an image packed from it is
+    byte-identical to one packed from the same files unpacked to disk.
+    That equivalence is the whole point and is checked in the tests."""
+    root = {"entries": []}
+    dirs = {(): root}
+
+    def _dir(parts):
+        node = dirs.get(parts)
+        if node is not None:
+            return node
+        parent = _dir(parts[:-1])
+        node = {"entries": []}
+        parent["entries"].append({"raw": _encode_name(parts[-1], where),
+                                  "dir": True, "node": node, "start": 0})
+        dirs[parts] = node
+        return node
+
+    for rel, size, opener in entries:
+        parts = tuple(p for p in rel.replace("\\", "/").split("/") if p)
+        if not parts:
+            die("empty entry name in %s" % where)
+        if size > 0xFFFFFFFF:
+            die("%s is %d bytes; XDVDFS file sizes are 32-bit" % (rel, size))
+        _dir(parts[:-1])["entries"].append(
+            {"raw": _encode_name(parts[-1], where), "dir": False,
+             "size": size, "open": opener, "start": 0, "src": rel})
+
+    def _sort(node):
+        entries = node["entries"]
+        entries.sort(key=lambda e: _fold(e["raw"]))
+        for i in range(1, len(entries)):
+            if _fold(entries[i]["raw"]) == _fold(entries[i - 1]["raw"]):
+                die("names collide under XDVDFS case folding: %r vs %r"
+                    % (entries[i - 1]["raw"], entries[i]["raw"]))
+        for e in entries:
+            if e["dir"]:
+                _sort(e["node"])
+    _sort(root)
+    return root
+
+
+def pack_tree(root, out_iso, progress=None):
+    """Pack an already-built node tree. See pack() and
+    tree_from_entries() for the two ways to get one."""
 
     tables = []
     file_runs = []
@@ -457,18 +843,62 @@ def pack(src_dir, out_iso, progress=None):
                 if o.tell() != e["start"] * SECTOR:
                     die("internal error: file allocation drift")
                 copied = 0
-                with open(e["src"], "rb") as f:
-                    while copied < e["size"]:
-                        chunk = f.read(min(CHUNK, e["size"] - copied))
-                        if not chunk:
-                            break
-                        o.write(chunk)
-                        copied += len(chunk)
-                        if progress:
-                            progress(total + copied, grand_total)
+                with (e["open"]() if e.get("open") else
+                      open(e["src"], "rb")) as f:
+                    # os.sendfile moves the bytes inside the kernel: no
+                    # read into Python, no write back out. Falls back to
+                    # the portable chunk loop anywhere it is unavailable
+                    # or refuses the descriptors.
+                    ifd = None
+                    if _KCOPY:
+                        try:
+                            ifd = f.fileno()
+                        except (AttributeError, OSError, ValueError):
+                            ifd = None   # a stream, not a file: copy in Python
+                    if ifd is not None:
+                        o.flush()
+                        ofd = o.fileno()
+                        # copy_file_range first, the way CPython's own
+                        # shutil orders it: on a copy-on-write filesystem
+                        # the kernel shares the extents instead of
+                        # copying them, which is not a faster copy so
+                        # much as no copy at all - measured 17.5 GB/s on
+                        # btrfs against 1.2 GB/s for sendfile. Elsewhere
+                        # it is an in-kernel copy like sendfile.
+                        for how in _KCOPY:
+                            try:
+                                while copied < e["size"]:
+                                    want = min(SENDFILE_CHUNK,
+                                               e["size"] - copied)
+                                    # guarded ref: the attribute
+                                    # itself is absent on Android
+                                    if how is _COPY_FILE_RANGE:
+                                        n = how(ifd, ofd, want, copied)
+                                    else:
+                                        n = how(ofd, ifd, None, want)
+                                    if not n:
+                                        break
+                                    copied += n
+                                    if progress:
+                                        progress(total + copied, grand_total)
+                                break
+                            except OSError:
+                                # this kernel or this pairing refuses it;
+                                # try the next, then the portable loop
+                                f.seek(copied)
+                                continue
+                    if copied < e["size"]:
+                        while copied < e["size"]:
+                            chunk = f.read(min(CHUNK, e["size"] - copied))
+                            if not chunk:
+                                break
+                            o.write(chunk)
+                            copied += len(chunk)
+                            if progress:
+                                progress(total + copied, grand_total)
                 if copied != e["size"]:
                     die("%s changed size during pack (%d != %d)"
-                        % (e["src"], copied, e["size"]))
+                        % (e.get("src", e["raw"]), copied, e["size"]))
                 pad = -e["size"] % SECTOR
                 if pad:
                     o.write(b"\x00" * pad)

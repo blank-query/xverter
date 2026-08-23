@@ -72,8 +72,34 @@ try:
     def _zstd_decompress(raw):
         return _zstd.decompress(raw)
 
+    # libzstd's own worker threads, which live below the GIL. Measured
+    # on 4096 real 64 KiB blocks: 1517 MB/s -> 2470 MB/s, and the output
+    # is byte-identical because a 64 KiB input is smaller than a job, so
+    # nothing gets split. That last part is load-bearing - this writer
+    # is byte-identical to the reference ZArchive implementation, and on
+    # inputs large enough to split, multi-threaded zstd does change the
+    # bytes. Safe here only because the block size is fixed at 64 KiB.
+    _zstd_tls = threading.local()
+
+    # Not every libzstd is built with multithreading: the CPython
+    # Android build's _zstd accepts only nb_workers=0 (bounds [0, 0]),
+    # and asking for more is a ValueError, not a clamp. Ask the build
+    # what it allows. Output bytes are identical either way - 64 KiB
+    # blocks are below the job-split threshold (see above).
+    try:
+        _NB_WORKERS = min(8, os.cpu_count() or 1,
+                          _zstd.CompressionParameter.nb_workers.bounds()[1])
+    except Exception:                              # noqa: BLE001
+        _NB_WORKERS = 0
+
     def _zstd_compress(raw):
-        return _zstd.compress(raw, _ZSTD_LEVEL)
+        c = getattr(_zstd_tls, "c", None)
+        if c is None:
+            c = _zstd_tls.c = _zstd.ZstdCompressor(options={
+                _zstd.CompressionParameter.compression_level: _ZSTD_LEVEL,
+                _zstd.CompressionParameter.nb_workers: _NB_WORKERS,
+            })
+        return c.compress(raw, _zstd.ZstdCompressor.FLUSH_FRAME)
 
     HAVE_ZSTD = True
 except ImportError:  # pragma: no cover - depends on interpreter version
@@ -357,6 +383,11 @@ class ZarReader:
         """Yield (path, entry_index, is_file) depth-first in stored order."""
         tree = self._tree
         stack = [("", 0)]
+        # A crafted tree whose directory child-range includes itself or
+        # an ancestor would otherwise re-push that directory forever -
+        # an infinite loop with unbounded path growth, no exception. A
+        # directory is entered at most once.
+        seen = {0}
         while stack:
             prefix, idx = stack.pop()
             entry = tree[idx]
@@ -377,6 +408,10 @@ class ZarReader:
                 if self._entry_is_file(child):
                     yield child_path, child_idx, True
                 else:
+                    if child_idx in seen:
+                        raise ZarNativeError(
+                            "directory tree cycle at entry %d" % child_idx)
+                    seen.add(child_idx)
                     yield child_path, child_idx, False
                     pending.append((child_path, child_idx))
             for item in reversed(pending):
@@ -657,6 +692,9 @@ class ZarWriter:
         self._out_offset = 0
         self._input_offset = 0
         self._sha = hashlib.sha256()
+        self._shaq = None      # set while the digest thread runs
+        self._shat = None
+        self._shaerr = []
         self._pending: deque = deque()
         self._finalized = False
         try:
@@ -665,10 +703,23 @@ class ZarWriter:
             raise ZarNativeError(
                 "output already exists: %s" % self._path
             ) from None
+        self._start_hasher()
 
     # -------------------------------------------------------------- lifecycle
 
     def close(self) -> None:
+        # Stop the digest thread even when the pack was aborted (an
+        # exception before finalize()). It otherwise parks on its queue
+        # forever; in a long-lived process running many conversions (the
+        # TUI, a batch) those leaked threads accumulate without bound.
+        if self._shaq is not None:
+            try:
+                self._shaq.put(None)
+                if self._shat is not None:
+                    self._shat.join()
+            except Exception:
+                pass
+            self._shaq = None
         if self._fh is not None:
             self._fh.close()
             self._fh = None
@@ -765,9 +816,51 @@ class ZarWriter:
     # ------------------------------------------------------------ block layer
 
     def _write(self, data) -> None:
+        # The footer's SHA-256 covers every byte written, and hashing it
+        # inline was the single biggest cost of packing - 3.3s of a 6.2s
+        # archive, more than the compression and the writes together.
+        # It runs on its own thread instead, fed in order, and is joined
+        # before the footer needs the digest. Same bytes hashed in the
+        # same order; only the waiting goes away.
         self._fh.write(data)
-        self._sha.update(data)
+        if self._shaq is not None:
+            self._shaq.put(data)
+        else:
+            self._sha.update(data)
         self._out_offset += len(data)
+
+    def _start_hasher(self):
+        """Spawn the digest thread. Bytes queued from _write are hashed
+        in the order they were queued, which is the order they are
+        written - the digest is identical to hashing inline."""
+        import queue as _queue
+        self._shaq = _queue.Queue(64)
+        err = self._shaerr = []
+
+        def _run(q=self._shaq, h=self._sha, e=err):
+            while True:
+                item = q.get()
+                if item is None:
+                    return
+                try:
+                    h.update(item)
+                except BaseException as exc:          # noqa: BLE001
+                    e.append(exc)
+                    return
+
+        self._shat = threading.Thread(target=_run, daemon=True)
+        self._shat.start()
+
+    def _finish_hasher(self):
+        """Drain and stop the digest thread; after this _sha is complete
+        up to everything written so far."""
+        if self._shaq is None:
+            return
+        self._shaq.put(None)
+        self._shat.join()
+        self._shaq = None
+        if self._shaerr:
+            raise self._shaerr[0]
 
     def _store_block(self, block: bytes) -> None:
         # Compression runs on a bounded thread pool; blocks are written
@@ -859,6 +952,7 @@ class ZarWriter:
         )
         # Integrity hash: every preceding byte plus the footer with its
         # hash field zeroed; the written footer then carries the digest.
+        self._finish_hasher()
         self._sha.update(footer)
         digest = self._sha.digest()
         self._fh.write(footer[:96] + digest + footer[128:])
@@ -924,20 +1018,103 @@ def pack(src_dir, zar_path, progress=None) -> int:
     src_dir = os.fspath(src_dir)
     if not os.path.isdir(src_dir):
         raise ZarNativeError("not a directory: %s" % src_dir)
+    # The writer creates zar_path before the tree walk begins; when the
+    # output lands inside src_dir the walk would otherwise pack the
+    # archive into itself. Never pack our own output file.
+    skip = os.path.abspath(zar_path)
     grand = 0
     for _dp, _dn, _fs in os.walk(src_dir):
         for _f in _fs:
-            grand += os.path.getsize(os.path.join(_dp, _f))
+            p = os.path.join(_dp, _f)
+            if os.path.abspath(p) == skip:
+                continue
+            grand += os.path.getsize(p)
     state = [0]
     with ZarWriter(zar_path) as zw:
         count = _pack_tree(zw, src_dir, "", progress=progress,
-                           grand=grand, state=state)
+                           grand=grand, state=state, skip=skip)
         zw.finalize()
     return count
 
 
+def pack_entries(entries, zar_path, progress=None) -> int:
+    """Pack files that are not on disk into a new .zar file.
+
+    `entries` is an iterable of (relpath, size, opener), opener being a
+    zero-argument callable returning a readable stream over that file.
+    Lets a source image feed the archive writer directly instead of
+    being unpacked to a scratch directory first.
+
+    Byte-identical to pack() over the same tree written out to disk: the
+    archive's canonical order is a function of the names alone, and the
+    block layout of the names, so where the bytes came from cannot
+    change the output. The tests check that equivalence directly.
+    """
+    root = {}
+    grand = 0
+    for rel, size, opener in entries:
+        if "\\" in rel:
+            raise ZarNativeError(
+                "cannot pack %r: ZArchive treats '\\' as a path separator"
+                % rel)
+        parts = [p for p in rel.split("/") if p]
+        if not parts:
+            raise ZarNativeError("empty entry name")
+        node = root
+        walked = []
+        for part in parts[:-1]:
+            walked.append(part)
+            nxt = node.setdefault(part, {})
+            if not isinstance(nxt, dict):
+                raise ZarNativeError("%s is both a file and a directory"
+                                     % "/".join(walked))
+            node = nxt
+        if parts[-1] in node:
+            raise ZarNativeError("duplicate entry: %s" % rel)
+        node[parts[-1]] = (size, opener)
+        grand += size
+    state = [0]
+    with ZarWriter(zar_path) as zw:
+        count = _pack_nodes(zw, root, "", progress=progress,
+                            grand=grand, state=state)
+        zw.finalize()
+    return count
+
+
+def _pack_nodes(zw: ZarWriter, node: dict, arc_prefix: str,
+                progress=None, grand=0, state=None) -> int:
+    """The same walk _pack_tree does, over an in-memory tree rather than
+    a directory - identical ordering rule, so identical output."""
+    def sort_key(name):
+        raw = name.encode("utf-8", "surrogateescape")
+        return (_fold_bytes(raw), raw)
+
+    count = 0
+    for name in sorted(node, key=sort_key):
+        arc = arc_prefix + "/" + name if arc_prefix else name
+        child = node[name]
+        if isinstance(child, dict):
+            zw.make_dir(arc)
+            count += _pack_nodes(zw, child, arc, progress=progress,
+                                 grand=grand, state=state)
+            continue
+        _size, opener = child
+        zw.start_file(arc)
+        with opener() as f:
+            while True:
+                chunk = f.read(_PACK_CHUNK)
+                if not chunk:
+                    break
+                zw.append(chunk)
+                if progress and state is not None:
+                    state[0] += len(chunk)
+                    progress(state[0], grand)
+        count += 1
+    return count
+
+
 def _pack_tree(zw: ZarWriter, dir_path: str, arc_prefix: str,
-               progress=None, grand=0, state=None) -> int:
+               progress=None, grand=0, state=None, skip=None) -> int:
     def sort_key(entry):
         raw = entry.name.encode("utf-8", "surrogateescape")
         return (_fold_bytes(raw), raw)
@@ -946,6 +1123,8 @@ def _pack_tree(zw: ZarWriter, dir_path: str, arc_prefix: str,
         entries = sorted(it, key=sort_key)
     count = 0
     for entry in entries:
+        if skip is not None and os.path.abspath(entry.path) == skip:
+            continue                    # never pack our own output file
         if "\\" in entry.name:
             raise ZarNativeError(
                 "cannot pack %r: ZArchive treats '\\' as a path separator"
@@ -955,7 +1134,7 @@ def _pack_tree(zw: ZarWriter, dir_path: str, arc_prefix: str,
         if entry.is_dir(follow_symlinks=True):
             zw.make_dir(arc)
             count += _pack_tree(zw, entry.path, arc, progress=progress,
-                                grand=grand, state=state)
+                                grand=grand, state=state, skip=skip)
         elif entry.is_file(follow_symlinks=True):
             zw.start_file(arc)
             with open(entry.path, "rb") as f:

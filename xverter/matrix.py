@@ -44,6 +44,13 @@ from .formats import god as god_mod
 RESULTS = []
 
 
+class MatrixError(RuntimeError):
+    """A harness-level abort (not an edge failure): something the run
+    cannot continue past, reported as a clean one-line ERROR by the
+    test subcommand rather than a traceback."""
+
+
+
 def content_digest(manifest):
     """Canonical SHA-1 over a {path: sha1} manifest: the format-invariant
     fingerprint of a game's content (stable across container types AND
@@ -65,6 +72,64 @@ def sha1_file(path):
     return h.hexdigest()
 
 
+#: When True every convert in the matrix runs with the checks off. The
+#: matrix still compares content itself, so a corrupted edge is still
+#: caught - what goes away is xverter's own internal verification, which
+#: is the point: it measures what those checks cost.
+LEEROY = False
+
+#: Open file handle for --log: the run's full record (results and
+#: machine-readable PROGRESS lines) written by the suite itself. This
+#: exists so nobody pipes a live run through tee again: two streams
+#: racing through different buffering was how a progress bar got
+#: orphaned mid-screen with a result line welded to it.
+LOG = None
+
+
+class _LiveBar:
+    """Elapsed-ticking bar for the matrix's own in-process work - the
+    content and byte checks hash gigabytes with no telemetry, and on a
+    phone that silence lasts long enough to look like a hang."""
+
+    def __init__(self, label, stage="sha1"):
+        self._on = sys.stderr.isatty()
+        self._label = label
+        self._stage = stage
+
+    def __enter__(self):
+        if not self._on:
+            return self
+        import threading
+        from .cli import render_bar
+        self._live = True
+        t0 = time.monotonic()
+
+        def tick():
+            while self._live:
+                render_bar(self._label, self._stage, 0, 1,
+                           elapsed=time.monotonic() - t0)
+                time.sleep(0.5)
+
+        self._t = threading.Thread(target=tick, daemon=True)
+        self._t.start()
+        return self
+
+    def __exit__(self, *exc):
+        if self._on:
+            self._live = False
+            self._t.join(timeout=1)
+            from .cli import clear_bar
+            clear_bar()
+
+
+def say(line, **_kw):
+    """A human-facing line: to stdout, and into the log if one is open.
+    Accepts and ignores print()'s keyword arguments so every existing
+    call site works unchanged; say always flushes."""
+    print(line, flush=True)
+    if LOG:
+        LOG.write(line + "\n")
+        LOG.flush()
 def run(edge, argv):
     t0 = time.monotonic()
     env = dict(os.environ)
@@ -73,6 +138,8 @@ def run(edge, argv):
     env["PYTHONUNBUFFERED"] = "1"
     if argv[0] in ("convert", "verify"):
         argv = argv + ["--progress"]
+    if LEEROY and argv[0] == "convert":
+        argv = argv + ["--leeroy-jenkins"]
     frozen = getattr(sys, "frozen", False)
     cmd = ([sys.executable] if frozen
            else [sys.executable, "-m", "xverter"]) + argv
@@ -81,51 +148,85 @@ def run(edge, argv):
                          env=env)
     lines = []
     tty = sys.stderr.isatty()
-    for raw in iter(p.stdout.readline, ""):
-        line = raw.rstrip()
-        if not line:
-            continue
-        if line.startswith("PROGRESS "):
-            # forward for the TUI; render in place for humans
-            print(line, flush=True)
-            if tty:
-                try:
-                    _t, stage, d, tot = line.split()
-                    sys.stderr.write("\r  %-24s %-10s %3d%%"
-                                     % (edge, stage,
-                                        100 * int(d) // max(int(tot), 1)))
-                    sys.stderr.flush()
-                except ValueError:
-                    pass
-            continue
-        lines.append(line)
-    p.stdout.close()
-    rc = p.wait()
+    # Liveness ticker: redraw twice a second with elapsed time, so a
+    # stage that emits no progress telemetry still shows a moving
+    # clock. A frozen fill with ticking seconds is a silent worker; a
+    # frozen everything is a hang - the two used to look identical.
+    state = {"stage": "...", "done": 0, "total": 1, "on": tty}
+    ticker = None
     if tty:
-        sys.stderr.write("\r" + " " * 60 + "\r")
+        import threading as _threading
+        from .cli import render_bar
+
+        def _tick():
+            while state["on"]:
+                render_bar(edge, state["stage"], state["done"],
+                           state["total"], elapsed=time.monotonic() - t0)
+                time.sleep(0.5)
+
+        ticker = _threading.Thread(target=_tick, daemon=True)
+        ticker.start()
+    try:
+        for raw in iter(p.stdout.readline, ""):
+            line = raw.rstrip()
+            if not line:
+                continue
+            if line.startswith("PROGRESS "):
+                # log always; forward on stdout only for a pipe (the TUI
+                # parses these) - on a tty the bar below replaces them
+                if LOG:
+                    LOG.write(line + "\n")
+                if not sys.stdout.isatty():
+                    print(line, flush=True)
+                if tty:
+                    try:
+                        _t, stage, d, tot = line.split()
+                        state["stage"], state["done"], state["total"] = \
+                            stage, int(d), int(tot)
+                    except ValueError:
+                        pass
+                continue
+            lines.append(line)
+        p.stdout.close()
+        rc = p.wait()
+    except BaseException:
+        # A signal unwinding through the harness (SIGTERM -> the CLI's
+        # KeyboardInterrupt) must not orphan the child conversion: the
+        # caller's cleanup deletes the workdir next, and an unsupervised
+        # child would keep writing into it after we reported exit 130.
+        p.kill()
+        p.wait()
+        raise
+    finally:
+        if tty:
+            state["on"] = False
+            if ticker is not None:
+                ticker.join(timeout=1)
+            from .cli import clear_bar
+            clear_bar()
     dt = time.monotonic() - t0
     ok = rc == 0
     detail = (lines or [""])[-1]
     RESULTS.append({"edge": edge, "type": "convert", "ok": ok,
                     "seconds": round(dt, 1), "argv": argv, "detail": detail})
     del lines
-    print("%-24s %s  %7.1fs" % (edge, "PASS" if ok else "FAIL", dt),
-          flush=True)
+    say("%-24s %s  %7.1fs" % (edge, "PASS" if ok else "FAIL", dt))
     if not ok:
-        print("    " + detail)
+        say("    " + detail)
     return ok
 
 
 def check_dir(edge, path, baseline):
     t0 = time.monotonic()
-    got = xdvdfs_mod.hash_tree(path)
+    with _LiveBar(edge):
+        got = xdvdfs_mod.hash_tree(path)
     dt = time.monotonic() - t0
     ok = got == baseline
     RESULTS.append({"edge": edge, "type": "content-check", "ok": ok,
                     "seconds": round(dt, 1),
                     "content_digest": content_digest(got),
                     "matches_baseline": ok})
-    print("%-24s %s  %7.1fs"
+    say("%-24s %s  %7.1fs"
           % (edge, "PASS" if ok else "FAIL (content mismatch)", dt),
           flush=True)
     # The digest is recorded - the extracted tree is dead weight from
@@ -134,13 +235,144 @@ def check_dir(edge, path, baseline):
     return ok
 
 
-def _first_line(argv):
+def check_partition(edge, got_path, src_path):
+    """A decompressed image must be the source's game partition, byte
+    for byte.
+
+    This is a stronger claim than the content check next to it and the
+    reason both exist: two images can hold identical files and still be
+    different images. CCI and CSO are lossless compressors of an image,
+    not archives of its contents, so the only correct output is the
+    bytes that went in - the whole file when the source was a bare game
+    partition, and the partition alone when it was a full redump image,
+    because the video partition is not in the container to return."""
+    from .formats.cci import xbox_image_offset
+    t0 = time.monotonic()
+    with open(src_path, "rb") as f:
+        off = xbox_image_offset(f)
+    _lbp = _LiveBar(edge, "compare")
+    _lbp.__enter__()
+    ok = True
+    detail = ""
+    want = os.path.getsize(src_path) - off
+    got = os.path.getsize(got_path)
+    if want != got:
+        ok = False
+        detail = " (%d bytes, expected %d)" % (got, want)
+    else:
+        with open(src_path, "rb") as a, open(got_path, "rb") as b:
+            a.seek(off)
+            at = 0
+            while True:
+                x = a.read(1 << 22)
+                y = b.read(1 << 22)
+                if x != y:
+                    ok = False
+                    detail = " (first difference near byte %d)" % at
+                    break
+                if not x:
+                    break
+                at += len(x)
+    _lbp.__exit__()
+    dt = time.monotonic() - t0
+    RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
+                    "seconds": round(dt, 1), "partition_offset": off,
+                    "bytes": got})
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt))
+    # A second copy of the game is not worth keeping once compared.
     try:
-        r = subprocess.run(argv, capture_output=True, text=True, timeout=10)
-        out = (r.stdout or r.stderr).strip().splitlines()
-        return out[0] if out else "unknown"
-    except Exception:
-        return "not found"
+        os.unlink(got_path)
+    except OSError:
+        pass
+    return ok
+
+
+def check_identical(edge, got_path, want_path):
+    """Two files must be the same file.
+
+    For a container that wraps an image whole - a zip, a 7z - the only
+    correct output is the input, so this asks for exactly that rather
+    than for a partition slice or a set of matching files."""
+    t0 = time.monotonic()
+    _lb = _LiveBar(edge, "compare")
+    _lb.__enter__()
+    ok = os.path.getsize(got_path) == os.path.getsize(want_path)
+    detail = ""
+    if not ok:
+        detail = " (%d bytes, expected %d)" % (os.path.getsize(got_path),
+                                               os.path.getsize(want_path))
+    else:
+        at = 0
+        with open(got_path, "rb") as a, open(want_path, "rb") as b:
+            while True:
+                x = a.read(1 << 22)
+                y = b.read(1 << 22)
+                if x != y:
+                    ok = False
+                    detail = " (first difference near byte %d)" % at
+                    break
+                if not x:
+                    break
+                at += len(x)
+    _lb.__exit__()
+    dt = time.monotonic() - t0
+    RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
+                    "seconds": round(dt, 1)})
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt))
+    try:
+        os.unlink(got_path)
+    except OSError:
+        pass
+    return ok
+
+
+def check_god_data(edge, header, src_path):
+    """A GoD built from an image must hold that image's own bytes.
+
+    The container is trimmed to its allocation extent, so the claim
+    checked here is that its data region is a *prefix* of the source's
+    game partition, not the whole of it. That is still enough to tell a
+    passthrough from a rebuild, which is exactly the distinction a
+    content check cannot make: a GoD is verified against its own hash
+    tree, and that tree is built over whichever bytes the writer was
+    handed, so a container full of rebuilt data verifies perfectly and
+    is still not the disc."""
+    from .formats import god as _god
+    t0 = time.monotonic()
+    # The GoD writer starts at the game partition as xdvdfs finds it,
+    # which is not the offset the CCI writer uses: that one deliberately
+    # skips only the OG-Xbox video region and takes everything else
+    # whole. Two different questions, two different answers, and using
+    # the wrong one here reports a false failure on XGD2 and XGD3.
+    with open(src_path, "rb") as f:
+        off = xdvdfs_mod.find_base(f)
+    ok = True
+    detail = ""
+    at = 0
+    _lbg = _LiveBar(edge, "compare")
+    _lbg.__enter__()
+    with _god.GodStream(header) as g, open(src_path, "rb") as f:
+        f.seek(off)
+        while True:
+            x = g.read(1 << 22)
+            if not x:
+                break
+            y = f.read(len(x))
+            if x != y:
+                ok = False
+                detail = " (first difference near byte %d of %d)" % (at, g.size)
+                break
+            at += len(x)
+    _lbg.__exit__()
+    dt = time.monotonic() - t0
+    RESULTS.append({"edge": edge, "type": "byte-check", "ok": ok,
+                    "seconds": round(dt, 1), "partition_offset": off,
+                    "bytes": at})
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL" + detail, dt))
+    return ok
 
 
 def machine_info():
@@ -163,11 +395,10 @@ def machine_info():
 
 
 def tool_versions():
-    # ISO/GoD/ZAR/CCI/CSO writers are xverter-native; chdman is the one
     # delegated tool.
     from . import cli as cli_mod
     v = {"xverter (native ISO/GoD/ZAR/CCI/CSO writers)": cli_mod.__version__,
-         "chdman": _first_line(["chdman", "help"])}
+         }
     try:
         from importlib.metadata import version
         v["python-lz4"] = version("lz4")
@@ -214,7 +445,7 @@ def scan_artifacts(w, decoded_ref_size):
             elif name.endswith(".chd") and os.path.isfile(p):
                 add(name, os.path.getsize(p),
                     chd_mod.read_header(p)["raw_sha1"],
-                    note="sha1 from CHD header, confirmed by chdman verify")
+                    note="sha1 from CHD header, confirmed by full native decode")
             elif (name.endswith(".cci") or name.endswith(".cso")) \
                     and os.path.isfile(p) and name.count(".") == 1:
                 mod = cci_mod if name.endswith(".cci") else cso_mod
@@ -264,7 +495,7 @@ def write_report(w, src, kind, baseline, total_seconds, exit_code):
     path = os.path.join(w, "matrix_report.html")
     with open(path, "w") as f:
         f.write(_render_html(report))
-    print("report: %s" % path)
+    say("report: %s" % path)
 
 
 def _render_html(report):
@@ -371,25 +602,65 @@ def god_header_in(tree):
                 if not f.endswith(".data") and \
                         os.path.isdir(os.path.join(dirpath, f + ".data")):
                     return os.path.join(dirpath, f)
-    raise SystemExit("no GoD header found under %s" % tree)
+    # MatrixError (a RuntimeError), not SystemExit: scan_artifacts'
+    # except-Exception can catch it so report generation completes, and
+    # the test subcommand catches it by name so a mid-run abort prints a
+    # clean ERROR line instead of a traceback.
+    raise MatrixError("no GoD header found under %s" % tree)
 
 
 def main(argv=None):
+    global LEEROY
     argv = sys.argv[1:] if argv is None else argv
+    argv = list(argv)
+    global LOG
+    if "--leeroy-jenkins" in argv:
+        argv.remove("--leeroy-jenkins")
+        LEEROY = True
+    if "--log" in argv:
+        i = argv.index("--log")
+        LOG = open(argv[i + 1], "w")
+        del argv[i:i + 2]
     if len(argv) != 2:
         raise SystemExit(__doc__)
     src, w = argv
     os.makedirs(w, exist_ok=True)
     t_start = time.monotonic()
     kind, _ = detect_mod.detect(src)
-    print("matrix check: input kind=%s\n" % kind)
+    say("matrix check: input kind=%s\n" % kind)
+    if LEEROY:
+        say("!!! LEEROY JENKINS MODE: every convert runs with xverter's "
+              "own checks OFF !!!\n    edges are still content-compared by "
+              "the matrix itself, but nothing here proves the tool "
+              "verifies its own output.\n")
 
     d = lambda *p: os.path.join(w, *p)
 
+    # For ISO input, every first-hop conversion starts from the pressed
+    # source: optimized formats must prove they strip the real disc
+    # correctly, archival formats that they preserve it - and building
+    # wrappers from our own trimmed rebuild *as well* was redundancy
+    # that bought nothing. For other inputs a.iso is the only image in
+    # the room, so it stays the substrate and no duplication exists.
+    # ALWAYS the true source, for every input kind: an STFS package
+    # pivots straight into its wrappers, a zar streams into them - the
+    # machinery exists, so building the family from a.iso as well was
+    # the same conversion twice with different provenance labels.
+    def hop(tgt):
+        """Source and label for a first-hop conversion to `tgt`: the
+        true original, except when the target IS the input's own kind -
+        X -> X is refused by the tool, so that one pairing (an iso
+        reader feeding X's writer) comes from a.iso, which is exactly
+        the iso the suite built to prove dir->iso."""
+        if tgt == kind:
+            return d("a.iso"), "iso"
+        return src, "%s(src)" % kind
+
     # baseline: input -> dir
     run("%s->dir" % kind, ["convert", src, "-o", d("base") + "/"])
-    baseline = xdvdfs_mod.hash_tree(d("base"))
-    print("baseline: %d files\n" % len(baseline))
+    with _LiveBar("baseline"):
+        baseline = xdvdfs_mod.hash_tree(d("base"))
+    say("baseline: %d files\n" % len(baseline))
 
     # dir -> iso -> dir
     run("dir->iso", ["convert", d("base"), "-o", d("a.iso")])
@@ -402,8 +673,15 @@ def main(argv=None):
     check_dir("  content(zar)", d("from_zar"), baseline)
 
     # iso -> god -> dir
-    run("iso->god", ["convert", d("a.iso"), "-o", d("a.god")])
+    _s, _l = hop("god")
+    run("%s->god" % _l, ["convert", _s, "-o", d("a.god")])
     hdr = god_header_in(d("a.god"))
+    if kind == "iso":
+        # Byte-compare the GoD's data region against the pressed
+        # source. Only an image source has pressed bytes to compare
+        # against; other kinds audit their GoD through god->dir's
+        # content check instead.
+        check_god_data("  bytes(iso-god)", hdr, src)
     run("god->dir", ["convert", hdr, "-o", d("from_god") + "/"])
     check_dir("  content(god)", d("from_god"), baseline)
 
@@ -418,44 +696,119 @@ def main(argv=None):
     # zar -> iso ; zar -> god ; iso -> zar
     run("zar->iso", ["convert", d("a.zar"), "-o", d("c.iso")])
     run("zar->god", ["convert", d("a.zar"), "-o", d("c.god")])
-    run("iso->zar", ["convert", d("a.iso"), "-o", d("c.zar")])
+    _s, _l = hop("zar")
+    run("%s->zar" % _l, ["convert", _s, "-o", d("c.zar")])
     run("zar(c)->dir", ["convert", d("c.zar"), "-o", d("from_czar") + "/"])
     check_dir("  content(iso-zar)", d("from_czar"), baseline)
 
     # wrapper formats: CCI / CSO (content-agnostic block-compressed ISO)
-    run("iso->cci", ["convert", d("a.iso"), "-o", d("a.cci")])
+    _s, _l = hop("cci")
+    run("%s->cci" % _l, ["convert", _s, "-o", d("a.cci")])
     run("cci->dir", ["convert", d("a.cci"), "-o", d("from_cci") + "/"])
     check_dir("  content(cci)", d("from_cci"), baseline)
-    run("iso->cso", ["convert", d("a.iso"), "-o", d("a.cso")])
+    _s, _l = hop("cso")
+    run("%s->cso" % _l, ["convert", _s, "-o", d("a.cso")])
     run("cso->dir", ["convert", d("a.cso"), "-o", d("from_cso") + "/"])
     check_dir("  content(cso)", d("from_cso"), baseline)
+    # Back to an image: the one direction where the content check is not
+    # enough, because decompressing has to return the pressed bytes and
+    # not merely an image holding the same files.
+    #
+    # These start from the original input rather than a.iso, and that is
+    # the whole point. a.iso is an image xverter packed itself, so
+    # rebuilding it produces the same bytes again and a rebuild is
+    # indistinguishable from a decompression. Only a real pressed image
+    # can tell the two apart - which is exactly why this direction went
+    # unchecked while it was wrong.
+    if kind == "iso":
+        # a.cci / a.cso are built from the pressed source now, so the
+        # decompress-and-compare round trips run against them directly:
+        # one build per wrapper, from reality, byte-audited both ways.
+        run("cci(src)->iso", ["convert", d("a.cci"), "-o", d("back_cci.iso")])
+        check_partition("  bytes(cci-iso)", d("back_cci.iso"), src)
+        run("cso(src)->iso", ["convert", d("a.cso"), "-o", d("back_cso.iso")])
+        check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
+        run("cci(src)->god", ["convert", d("a.cci"), "-o", d("s.god")])
+        check_god_data("  bytes(cci-god)", god_header_in(d("s.god")), src)
+        shutil.rmtree(d("s.god"), ignore_errors=True)
+    else:
+        # Non-image sources get the same rule with the strongest check
+        # they permit. There is no pressed disc to byte-compare against
+        # - the image only exists after a rebuild, and rebuild-vs-
+        # rebuild is the self-reference blind spot - but the CONVERSIONS
+        # from the true source are real user paths (STFS straight to
+        # GoD is how XBLA lands on a modded 360) and each one is
+        # round-tripped and content-checked against the baseline. No
+        # container is exempt because of what the input happened to be.
+        # iso and zar are the two targets whose family artifacts come
+        # from the dir pairing (dir->iso / dir->zar must prove
+        # themselves); everything else in the family now descends from
+        # the source directly, so only these two need a separate
+        # from-the-source conversion.
+        # iso and zar prove the dir pairing; xiso proves the non-image
+        # .xiso dispatch arm - a source with no pressed image rebuilds a
+        # bare image under the .xiso name, and that arm deserves an edge
+        # of its own (no input exemptions, even when the output is a 360
+        # title wearing an OG extension).
+        for tgt in ("iso", "zar", "xiso"):
+            if tgt == kind:
+                continue
+            out = d("s." + tgt) if tgt != "god" else d("s.god")
+            run("%s(src)->%s" % (kind, tgt),
+                ["convert", src, "-o", out])
+            back = d("from_src_%s" % tgt)
+            inp = god_header_in(out) if tgt == "god" else out
+            run("%s(src)->dir" % tgt, ["convert", inp, "-o", back + "/"])
+            check_dir("  content(src-%s)" % tgt, back, baseline)
+            if os.path.isdir(out):
+                shutil.rmtree(out, ignore_errors=True)
+            elif os.path.exists(out):
+                os.unlink(out)         # only if the conversion produced it
     run("god->cci", ["convert", hdr, "-o", d("g.cci")])
     run("cci->cso", ["convert", d("a.cci"), "-o", d("x.cso")])
     run("cso(x)->dir", ["convert", d("x.cso"), "-o", d("from_xcso") + "/"])
     check_dir("  content(cci-cso)", d("from_xcso"), baseline)
 
     # split wrappers: opt-in 4GiB console slices (--split)
-    run("iso->cci(split)", ["convert", d("a.iso"), "-o", d("u.cci"),
+    _s, _l = hop("cci")
+    run("%s->cci(split)" % _l, ["convert", _s, "-o", d("u.cci"),
                             "--split"])
     run("cci(split)->dir", ["convert", d("u.cci"), "-o", d("from_ucci") + "/"])
     check_dir("  content(cci-split)", d("from_ucci"), baseline)
-    run("iso->cso(split)", ["convert", d("a.iso"), "-o", d("u.cso"),
+    _s, _l = hop("cso")
+    run("%s->cso(split)" % _l, ["convert", _s, "-o", d("u.cso"),
                             "--split"])
     run("cso(split)->dir", ["convert", d("u.cso"), "-o", d("from_ucso") + "/"])
     check_dir("  content(cso-split)", d("from_ucso"), baseline)
 
-    # chd: chdman-delegated wrapper (createdvd/extractdvd) - the one
-    # optional binary; without it the CHD edges are skipped, not failed
-    from . import deps as _deps
-    have_chdman = _deps.find("chdman") is not None
-    if have_chdman:
-        run("iso->chd", ["convert", d("a.iso"), "-o", d("a.chd")])
-        run("chd->dir", ["convert", d("a.chd"), "-o", d("from_chd") + "/"])
-        check_dir("  content(chd)", d("from_chd"), baseline)
-    else:
-        for edge in ("iso->chd", "chd->dir", "  content(chd)"):
-            print("%-24s SKIP   (chdman not installed - optional)" % edge,
-                  flush=True)
+    # chd: native reader and writer, no external tool involved.
+    _s, _l = hop("chd")
+    run("%s->chd" % _l, ["convert", _s, "-o", d("a.chd")])
+    run("chd->dir", ["convert", d("a.chd"), "-o", d("from_chd") + "/"])
+    check_dir("  content(chd)", d("from_chd"), baseline)
+    if kind == "iso":
+        run("chd(src)->iso", ["convert", d("a.chd"), "-o", d("back_chd.iso")])
+        check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
+
+    # xiso: the trimmed bare image (what xemu consumes). A byte SLICE of
+    # the source's game partition, so it only exists when the source has
+    # a video partition to trim - a bare image already IS an xiso, and a
+    # non-image source has no pressed bytes to slice. check_partition is
+    # exactly the right audit: output == src[partition_base:], byte for
+    # byte.
+    if kind == "iso":
+        from .formats.cci import xbox_image_offset as _xio
+        with open(src, "rb") as _sf:
+            _full_disc = _xio(_sf) > 0
+        if _full_disc:
+            run("iso(src)->xiso", ["convert", src, "-o", d("a.xiso")])
+            run("xiso->dir", ["convert", d("a.xiso"),
+                              "-o", d("from_xiso") + "/"])
+            check_dir("  content(xiso)", d("from_xiso"), baseline)
+            run("verify xiso", ["verify", d("a.xiso"), "--no-lookup"])
+            # Last on purpose: the byte-audit reclaims its artifact
+            # (a second copy of the game) once compared.
+            check_partition("  bytes(iso-xiso)", d("a.xiso"), src)
 
     # verify subcommand on every artifact kind
     run("verify iso", ["verify", d("a.iso"), "--no-lookup"])
@@ -465,21 +818,24 @@ def main(argv=None):
     run("verify cso", ["verify", d("a.cso")])
     run("verify cci(split)", ["verify", d("u.cci")])
     run("verify cso(split)", ["verify", d("u.cso")])
-    if have_chdman:
-        run("verify chd", ["verify", d("a.chd")])
-    else:
-        print("%-24s SKIP   (chdman not installed - optional)"
-              % "verify chd", flush=True)
+    run("verify chd", ["verify", d("a.chd")])
 
     failed = [r["edge"] for r in RESULTS if not r["ok"]]
     total = time.monotonic() - t_start
-    print("\n%d edges, %d failed, %dm%02ds total"
+    # The report is written BEFORE the summary line prints. The summary
+    # is what humans and scripts key on to declare a run finished, and
+    # report generation after it is minutes of artifact re-decoding - a
+    # window in which an automation that trusted the summary once
+    # deleted the workdir out from under the report being written. The
+    # last line of output is now genuinely the last work done.
+    with _LiveBar("report", "artifacts"):
+        write_report(w, src, kind, baseline, total, 1 if failed else 0)
+    say("\n%d edges, %d failed, %dm%02ds total"
           % (len(RESULTS), len(failed), total // 60, total % 60))
-    write_report(w, src, kind, baseline, total, 1 if failed else 0)
     if failed:
-        print("FAILED:", ", ".join(failed))
+        say("FAILED: " + ", ".join(failed))
         return 1
-    print("MATRIX: ALL PASS")
+    say("MATRIX: ALL PASS")
     return 0
 
 

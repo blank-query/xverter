@@ -43,7 +43,9 @@ writing requires python-lz4 (installed with xverter; pyz users: pip install lz4)
 """
 
 import os
+import queue
 import struct
+import threading
 import sys
 
 from . import lz4compat
@@ -53,6 +55,7 @@ MAGIC = b"CCIM"
 HEADER = struct.Struct("<4sLQQLBBH")
 HEADER_SIZE = 32
 BLOCK_SIZE = 2048
+_WRITE_BUF = 1 << 22          # 4 MiB of blocks per write() call
 VERSION = 1
 INDEX_ALIGNMENT = 2
 SPLIT_OFFSET = 0xFF000000  # start a new slice once tell() exceeds this
@@ -91,7 +94,17 @@ def find_slices(path):
         if not found:
             raise CciError("no slices found matching %s" % path)
         nums = [n for n, _ in found]
-        if nums != list(range(nums[0], nums[0] + len(nums))):
+        # A split set is 1-based (Game.1.cci, Game.2.cci, ...). Unlike
+        # CSO - whose index lives in part 1 and records the part count -
+        # each CCI slice is self-contained, so a set that does not start
+        # at .1 means the first slice is gone; without this check the
+        # reader would silently decode block 0 from what is really the
+        # second slice's data. (A missing LAST slice still cannot be
+        # detected from filenames alone - the format carries no total.)
+        if nums[0] != 1:
+            raise CciError("split set is missing its first slice "
+                           "(found slices %s, expected to start at 1)" % nums)
+        if nums != list(range(1, 1 + len(nums))):
             raise CciError("non-contiguous slice numbers: %s" % nums)
         return [p for _, p in found]
     if not os.path.exists(path):
@@ -142,9 +155,18 @@ def _read_header(f, path):
 
 def _read_index(f, path, index_offset, nblocks):
     """Read N+1 index entries; return (offsets list, flags list)."""
+    need = (nblocks + 1) * 4
+    # nblocks derives from the header's uncompressed_size, so a hostile
+    # header can make `need` enormous - and FileIO.read(huge) really
+    # does try to allocate that buffer (MemoryError), unlike a short
+    # read. Refuse before reading anything we can't possibly have.
+    f.seek(0, 2)
+    avail = f.tell() - index_offset
+    if index_offset < 0 or need > max(0, avail):
+        raise CciError("%s: index of %d bytes exceeds the file" % (path, need))
     f.seek(index_offset)
-    raw = f.read((nblocks + 1) * 4)
-    if len(raw) != (nblocks + 1) * 4:
+    raw = f.read(need)
+    if len(raw) != need:
         raise CciError("%s: truncated index" % path)
     vals = struct.unpack("<%dI" % (nblocks + 1), raw)
     offs = [(v & 0x7FFFFFFF) << INDEX_ALIGNMENT for v in vals]
@@ -238,6 +260,13 @@ class CciReader:
         local = gidx - self._cum[si]
         f = self._files[si]
         stored = offs[local + 1] - offs[local]
+        # A hostile/corrupt index can make two adjacent entries differ
+        # by gigabytes; without this bound f.read(stored) would attempt
+        # that allocation on a tiny file. A real compressed 2 KiB sector
+        # is always < BLOCK_SIZE. (CSO's reader already bounds this.)
+        if stored <= 0 or stored > BLOCK_SIZE + 16:
+            raise CciError("block %d: implausible stored size %d"
+                           % (gidx, stored))
         f.seek(offs[local])
         if flags[local] or stored != BLOCK_SIZE:
             rec = f.read(stored)
@@ -259,16 +288,33 @@ class CciReader:
 
 
 def xbox_image_offset(stream):
-    """Byte offset of the game partition inside stream: 0x18300000 for a
-    full OG-Xbox redump image, else 0 (bare partition / anything else -
-    the writers are content-agnostic and compress whatever they're
-    given)."""
+    """Byte offset of the game partition inside stream, or 0 if there is
+    no recognisable one.
+
+    CCI and CSO are **optimized** containers: they hold the game
+    partition and drop what comes before it. They were designed for
+    original-Xbox discs and only ever checked for that generation's
+    partition base, which left xverter - which does write them for
+    XGD2 and XGD3, an extension no reference tool offers - keeping the
+    whole image on those discs and the partition alone on OG Xbox. The
+    same format, archival on two disc generations and optimized on the
+    third.
+
+    It now finds the partition the same way every other reader in
+    xverter does, so the answer is the game partition on all three. A
+    stream with no XDVDFS anywhere still returns 0: the block writers
+    are content-agnostic and will compress whatever they are handed.
+
+    Note this changes XGD2/XGD3 output, and cannot change XGD1 output,
+    which is the generation the reference tools actually produce - so
+    the byte-identity those writers were held to is untouched."""
+    from .xdvdfs import find_base, XdvdfsError
     pos = stream.tell()
     try:
-        stream.seek(REDUMP_VD_OFFSET)
-        if stream.read(len(XDVDFS_MAGIC)) == XDVDFS_MAGIC:
-            return REDUMP_IMAGE_OFFSET
-        return 0
+        try:
+            return find_base(stream)
+        except XdvdfsError:
+            return 0
     finally:
         stream.seek(pos)
 
@@ -281,25 +327,44 @@ class _SliceWriter:
         self.f = open(path, "wb")
         self.f.write(b"\x00" * HEADER_SIZE)   # placeholder header
         self.records = []                     # (record_size, compressed)
+        # Position is tracked here rather than asked of the file: at
+        # millions of blocks, one tell() per block cost 2.5s of a 21s
+        # image build, purely to test the split threshold.
+        self.pos = HEADER_SIZE
+        self._buf = bytearray()
 
     def tell(self):
-        return self.f.tell()
+        return self.pos
 
     def add_block(self, comp, raw):
-        """Write one 2048-byte sector, choosing compressed or raw storage.
-        comp may be None (lz4 output unavailable/oversized -> store raw)."""
+        """Queue one 2048-byte sector, compressed or raw. Bytes land in
+        a buffer and reach the file in large writes; the file's contents
+        and the index are unchanged."""
+        buf = self._buf
         if comp is not None and len(comp) < COMPRESS_THRESHOLD:
             pad = (-(len(comp) + 1)) % 4
-            self.f.write(bytes((pad,)))
-            self.f.write(comp)
+            buf.append(pad)
+            buf += comp
             if pad:
-                self.f.write(b"\x00" * pad)
-            self.records.append((1 + len(comp) + pad, True))
+                buf += b"\x00" * pad
+            n = 1 + len(comp) + pad
+            self.records.append((n, True))
         else:
-            self.f.write(raw)
-            self.records.append((BLOCK_SIZE, False))
+            buf += raw
+            n = BLOCK_SIZE
+            self.records.append((n, False))
+        self.pos += n
+        if len(buf) >= _WRITE_BUF:
+            self.f.write(buf)
+            del buf[:]
+
+    def flush_buf(self):
+        if self._buf:
+            self.f.write(self._buf)
+            del self._buf[:]
 
     def finalize(self):
+        self.flush_buf()
         index_offset = self.f.tell()
         pos = HEADER_SIZE
         out = bytearray()
@@ -337,6 +402,13 @@ def build_cci(src, out_path, split=True, split_offset=SPLIT_OFFSET,
     base, ext = os.path.splitext(out_path)
     if ext.lower() != ".cci":
         raise CciError("output path must end in .cci: %s" % out_path)
+    # Refuse to touch a pre-existing output, as every other builder
+    # does. The slice writer opens "base.1.ext" in "wb" immediately, so
+    # without this a retry would truncate a prior good slice before it
+    # could fail.
+    for p in (out_path, "%s.1%s" % (base, ext)):
+        if os.path.exists(p):
+            raise CciError("output already exists: %s" % p)
 
     stream = src
     own = False
@@ -361,25 +433,61 @@ def build_cci(src, out_path, split=True, split_offset=SPLIT_OFFSET,
         # in order so the split/layout logic is untouched.
         window = 16384                                 # 32 MiB of blocks
         done = 0
+        # A reader thread keeps the next window in hand so the source
+        # read overlaps the compression of the current one: the loop
+        # then costs max(read, compress) per window instead of the sum.
+        rq = queue.Queue(2)
+        rerr = []
+
+        def _fill():
+            left = nblocks
+            try:
+                while left > 0:
+                    k = min(window, left)
+                    b = stream.read(k * BLOCK_SIZE)
+                    if len(b) < k * BLOCK_SIZE:
+                        b = b + b"\x00" * (k * BLOCK_SIZE - len(b))
+                    rq.put((k, b))
+                    left -= k
+            except BaseException as exc:                # noqa: BLE001
+                rerr.append(exc)
+            finally:
+                rq.put(None)
+
+        rt = threading.Thread(target=_fill, daemon=True)
+        rt.start()
         while done < nblocks:
-            n = min(window, nblocks - done)
-            buf = stream.read(n * BLOCK_SIZE)
-            if len(buf) < n * BLOCK_SIZE:
-                buf = buf + b"\x00" * (n * BLOCK_SIZE - len(buf))
-            raws = [buf[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
+            item = rq.get()
+            if item is None:
+                break
+            if rerr:
+                raise rerr[0]
+            n, buf = item
+            # memoryview: slicing a 32 MiB window into 16384 blocks used
+            # to copy the whole window again, per window.
+            mv = memoryview(buf)
+            raws = [mv[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
                     for j in range(n)]
-            comps = lz4compat.compress_batch(raws)
-            for raw, comp in zip(raws, comps):
-                if split and slices[-1].tell() > split_offset:
-                    slices[-1].finalize()
-                    done_paths.append(slices[-1].path)
-                    slices.append(_SliceWriter("%s.%d%s"
-                                               % (base, len(slices) + 1,
-                                                  ext)))
-                slices[-1].add_block(comp, raw)
+            # Write each run as it comes back rather than waiting for the
+            # window: read, compress and write all overlap.
+            at = 0
+            for comps in lz4compat.compress_batch_iter(raws):
+                for comp in comps:
+                    raw = raws[at]
+                    at += 1
+                    if split and slices[-1].tell() > split_offset:
+                        slices[-1].finalize()
+                        done_paths.append(slices[-1].path)
+                        slices.append(_SliceWriter("%s.%d%s"
+                                                   % (base, len(slices) + 1,
+                                                      ext)))
+                    slices[-1].add_block(comp, raw)
             done += n
             if progress:
                 progress(done, nblocks)
+        rt.join()
+        if rerr:
+            raise rerr[0]
         slices[-1].finalize()
         done_paths.append(slices[-1].path)
         if progress:

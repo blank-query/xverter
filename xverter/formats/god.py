@@ -45,12 +45,15 @@ Pure stdlib. Streams subpart-at-a-time (~836 KiB).
 import argparse
 import hashlib
 import os
+import queue
 import shutil
 import struct
 import sys
+import threading
 import time
 
 BLOCK_SIZE = 0x1000
+WRITE_QUEUE_DEPTH = 4        # subparts in flight to the writer thread
 BLOCKS_PER_SUBPART = 0xCC          # 204
 SUBPARTS_PER_PART = 0xCB           # 203
 BLOCKS_PER_PART = 0xA1C4           # 41412 data blocks
@@ -66,6 +69,74 @@ CONTENT_TYPES = {0x7000: "GamesOnDemand", 0x5000: "XboxOriginal"}
 
 def sha1(data):
     return hashlib.sha1(data).digest()
+
+
+#: Subparts hashed concurrently before results are drained in order.
+#: 16 x 816 KiB of data in flight, which is nothing next to the write
+#: queue it feeds.
+HASH_BATCH = 16
+_HASH_POOL = None
+
+
+def _free_threaded():
+    try:
+        import sysconfig
+        return bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+    except Exception:                                 # noqa: BLE001
+        return False
+
+
+def _hash_pool():
+    """A pool for subpart hashing, or None to hash on this thread.
+
+    Measured at this writer's real granularity - 204 blocks of 4 KiB per
+    subpart, looped, not one convenient giant batch:
+
+      GIL build      2 workers 1.17x, and 4+ is SLOWER than serial
+      free-threaded  2 -> 2.04x, 8 -> 5.48x, 16 -> 8.10x
+
+    So with a GIL there is nothing here worth the risk, and this returns
+    None: that path stays exactly the serial loop it has always been.
+    Without one the same work parallelises properly and is worth taking.
+    """
+    global _HASH_POOL
+    if not _free_threaded():
+        return None
+    if _HASH_POOL is None:
+        import concurrent.futures
+        _HASH_POOL = concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(16, (os.cpu_count() or 4)),
+            thread_name_prefix="godsha1")
+    return _HASH_POOL
+
+
+def _check_subtable(computed, stored, data, n_blocks, where):
+    """Compare a computed hash table against the stored one.
+
+    The whole table is compared in one go, which is the common case and
+    costs nothing. Only when it differs do we walk block by block - the
+    slow path exists purely to name the exact block that failed, and a
+    mismatch means this container is being rejected anyway."""
+    if computed[:n_blocks * HASH_SIZE] == stored[:n_blocks * HASH_SIZE]:
+        return
+    mv = memoryview(data)
+    for bi in range(n_blocks):
+        if sha1(mv[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE]) != \
+                stored[bi * HASH_SIZE:(bi + 1) * HASH_SIZE]:
+            die(where(bi))
+    die(where(None))
+
+
+def _subtable(data):
+    """The 4096-byte hash table for one subpart: SHA-1 of every 4 KiB
+    block, in order, zero-padded."""
+    subtable = bytearray(BLOCK_SIZE)
+    mv = memoryview(data)
+    n_blocks = (len(data) + BLOCK_SIZE - 1) // BLOCK_SIZE
+    for bi in range(n_blocks):
+        subtable[bi * HASH_SIZE:(bi + 1) * HASH_SIZE] = \
+            sha1(mv[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE])
+    return subtable
 
 
 class GodError(Exception):
@@ -171,6 +242,8 @@ def convert(header_path, out_path, verify_only=False, progress=None):
     expected_mht_hash = hdr["mht_hash"]
 
     total_data = sum(sizes)
+    pool = _hash_pool()
+    vbatch = []
     with open(os.devnull if verify_only else out_path, "wb") as out:
         for pi, ppath in enumerate(part_paths):
             is_last = pi == part_count - 1
@@ -214,20 +287,47 @@ def convert(header_path, out_path, verify_only=False, progress=None):
                     if any(b for b in subtable[n_blocks * HASH_SIZE:]):
                         die("subtable %d of part %d has data beyond expected "
                             "%d entries" % (si, pi, n_blocks))
-                    mv = memoryview(data)
-                    for bi in range(n_blocks):
-                        block = mv[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE]
-                        if sha1(block) != subtable[bi * HASH_SIZE:(bi + 1) * HASH_SIZE]:
-                            die("DATA BLOCK HASH MISMATCH: part %d, subpart %d, "
-                                "block %d (global block %d, iso offset 0x%X)"
-                                % (pi, si, bi,
-                                   pi * BLOCKS_PER_PART + si * BLOCKS_PER_SUBPART + bi,
-                                   bytes_written + bi * BLOCK_SIZE))
-                        blocks_verified += 1
-                    out.write(data)
+
+                    def _where(pi=pi, si=si, at=bytes_written):
+                        def msg(bi):
+                            if bi is None:
+                                return ("subpart %d of part %d does not match "
+                                        "its hash table" % (si, pi))
+                            return ("DATA BLOCK HASH MISMATCH: part %d, "
+                                    "subpart %d, block %d (global block %d, "
+                                    "iso offset 0x%X)"
+                                    % (pi, si, bi,
+                                       pi * BLOCKS_PER_PART
+                                       + si * BLOCKS_PER_SUBPART + bi,
+                                       at + bi * BLOCK_SIZE))
+                        return msg
+
+                    if pool is None:
+                        _check_subtable(_subtable(data), subtable, data,
+                                        n_blocks, _where())
+                        blocks_verified += n_blocks
+                        out.write(data)
+                    else:
+                        # Hash several subparts at once, then verify and
+                        # write them in order - identical checks, identical
+                        # output, just not one at a time.
+                        vbatch.append((pool.submit(_subtable, data), subtable,
+                                       data, n_blocks, _where()))
+                        if len(vbatch) >= HASH_BATCH:
+                            for fut, st_, d_, nb_, w_ in vbatch:
+                                _check_subtable(fut.result(), st_, d_, nb_, w_)
+                                blocks_verified += nb_
+                                out.write(d_)
+                            del vbatch[:]
                     bytes_written += data_len
                     if progress:
                         progress(bytes_written, total_data)
+
+                for fut, st_, d_, nb_, w_ in vbatch:      # tail of the batch
+                    _check_subtable(fut.result(), st_, d_, nb_, w_)
+                    blocks_verified += nb_
+                    out.write(d_)
+                del vbatch[:]
 
                 if pf.read(1):
                     die("trailing bytes after last subpart in part %d" % pi)
@@ -375,22 +475,41 @@ class GodStream:
         return block[in_block:in_block + n]
 
     def _verified_block(self, si, bi):
-        key = (si, bi)
-        if self._cache_idx == key:
-            return self._cache
+        """One verified 4 KiB block.
+
+        The whole subpart around it is read and verified at once and then
+        cached: consumers stream through this in order, so fetching a
+        block at a time meant 204 seeks and 204 separate hashes per
+        subpart. Every block is still checked against its sub-table entry
+        before any of it is handed out - that is the point of this class
+        and it does not change."""
+        if self._cache_idx == si:
+            return self._subpart_block(si, bi)
         pi, file_off, dlen = self._block_base[si]
         f = self._handles[pi]
-        f.seek(file_off + bi * BLOCK_SIZE)
-        blen = min(BLOCK_SIZE, dlen - bi * BLOCK_SIZE)
-        block = f.read(blen)
-        if len(block) != blen:
-            die("short read in part %d subpart %d block %d" % (pi, si, bi))
+        f.seek(file_off)
+        data = f.read(dlen)
+        if len(data) != dlen:
+            die("short read in part %d subpart %d" % (pi, si))
         st = self._subtables[si]
-        if sha1(block) != st[bi * HASH_SIZE:(bi + 1) * HASH_SIZE]:
-            die("DATA BLOCK HASH MISMATCH at subpart %d block %d" % (si, bi))
-        self._cache_idx = key
-        self._cache = block
-        return block
+        n_blocks = (dlen + BLOCK_SIZE - 1) // BLOCK_SIZE
+
+        def _where(pi=pi, si=si):
+            def msg(b):
+                if b is None:
+                    return ("subpart %d of part %d does not match its hash "
+                            "table" % (si, pi))
+                return "DATA BLOCK HASH MISMATCH at subpart %d block %d" % (si, b)
+            return msg
+
+        _check_subtable(_subtable(data), st, data, n_blocks, _where())
+        self._cache_idx = si
+        self._cache = data
+        return self._subpart_block(si, bi)
+
+    def _subpart_block(self, si, bi):
+        off = bi * BLOCK_SIZE
+        return self._cache[off:off + BLOCK_SIZE]
 
 
 def list_xdvdfs(iso_path):
@@ -411,23 +530,39 @@ def list_xdvdfs(iso_path):
 
     entries = []
 
-    def walk(off):
-        if off + 14 > len(table):
-            return
-        left, right = struct.unpack_from("<HH", table, off)
-        if left == 0xFFFF and right == 0xFFFF:
-            return  # empty-directory sentinel
-        start, size = struct.unpack_from("<II", table, off + 4)
-        attr = table[off + 12]
-        nlen = table[off + 13]
-        name = table[off + 14:off + 14 + nlen].decode("ascii", "replace")
-        if left not in (0, 0xFFFF):
-            walk(left * 4)
-        entries.append((name, size, attr))
-        if right not in (0, 0xFFFF):
-            walk(right * 4)
-
-    walk(0)
+    # Iterative in-order traversal with a visited guard: a hostile or
+    # deep root table would otherwise recurse until RecursionError (this
+    # listing runs at the end of an otherwise successful conversion).
+    if len(table) >= 14 and not (
+            struct.unpack_from("<HH", table, 0) == (0xFFFF, 0xFFFF)):
+        seen = set()
+        stack = []
+        cur = 0
+        descend = True
+        while stack or descend:
+            while descend:
+                if cur in seen or cur + 14 > len(table):
+                    descend = False
+                    break
+                seen.add(cur)
+                stack.append(cur)
+                left = struct.unpack_from("<HH", table, cur)[0]
+                if left not in (0, 0xFFFF):
+                    cur = left * 4
+                else:
+                    descend = False
+            if not stack:
+                break
+            off = stack.pop()
+            _l, right = struct.unpack_from("<HH", table, off)
+            _start, size = struct.unpack_from("<II", table, off + 4)
+            attr = table[off + 12]
+            nlen = table[off + 13]
+            name = table[off + 14:off + 14 + nlen].decode("ascii", "replace")
+            entries.append((name, size, attr))
+            if right not in (0, 0xFFFF):
+                cur = right * 4
+                descend = True
     for name, size, attr in entries:
         kind = "<DIR>" if attr & 0x10 else "%d" % size
         print("  %-32s %12s  attr=0x%02X" % (name, kind, attr))
@@ -579,8 +714,12 @@ def _stream_allocation_extent(f, base, xd):
     root_sector, root_size = struct.unpack("<II", _read_full(f, 8))
     extent = 33 * SECTOR_SIZE
     stack = [(root_sector, root_size)]
+    seen = set()
     while stack:
         sector, size = stack.pop()
+        if (sector, size) in seen:                 # cycle guard: corrupt tables
+            continue
+        seen.add((sector, size))
         extent = max(extent, sector * SECTOR_SIZE + size)
         for _name, start, sz, attr in xd.walk_table(
                 xd.read_table(f, base, sector, size)):
@@ -683,35 +822,107 @@ def _build(f, out_dir, trim, game_title, progress):
     remaining = data_size
     mhts = []                       # per part: concatenated subtable hashes
     part_sizes = []
+    pool = _hash_pool()
     for pi in range(part_count):
         mht = bytearray()
         with open(os.path.join(data_dir, "Data%04d" % pi), "wb") as pf:
             pf.write(b"\x00" * BLOCK_SIZE)          # MHT placeholder
-            for _si in range(SUBPARTS_PER_PART):
-                if remaining <= 0:
-                    break
-                want = min(SUBPART_DATA_SIZE, remaining)
-                data = _read_full(f, want)
-                if len(data) != want:
-                    # only the sector-rounding tail may be missing from
-                    # the stream; zero-fill it, anything more is truncation
-                    if remaining - len(data) > pad:
-                        die("source image truncated: %d bytes missing "
-                            "before allocation extent"
-                            % (remaining - len(data) - pad))
-                    data += b"\x00" * (want - len(data))
-                subtable = bytearray(BLOCK_SIZE)
-                mv = memoryview(data)
-                n_blocks = (len(data) + BLOCK_SIZE - 1) // BLOCK_SIZE
-                for bi in range(n_blocks):
-                    subtable[bi * HASH_SIZE:(bi + 1) * HASH_SIZE] = \
-                        sha1(mv[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE])
-                pf.write(subtable)
-                pf.write(data)
-                mht += sha1(subtable)
-                remaining -= len(data)
-                if progress:
-                    progress(data_size - remaining, data_size)
+            # Hand the writes to a thread so the next subpart is read and
+            # hashed while this one drains to disk. Whether the hashing
+            # itself is also spread across threads depends on the
+            # interpreter - see _hash_pool().
+            wq = queue.Queue(WRITE_QUEUE_DEPTH)
+            werr = []
+
+            def _drain(fh=pf, q=wq, err=werr):
+                while True:
+                    item = q.get()
+                    if item is None:
+                        return
+                    try:
+                        fh.write(item[0])
+                        fh.write(item[1])
+                    except BaseException as exc:     # surface on the main thread
+                        err.append(exc)
+                        return
+
+            wt = threading.Thread(target=_drain, daemon=True)
+            wt.start()
+
+            def _put(item):
+                """Queue a write, but abandon it if the writer thread has
+                died. The queue is bounded, so without this a dead
+                consumer (a mid-part write failure - disk full) would
+                block the producer forever on a full queue."""
+                while not werr:
+                    try:
+                        wq.put(item, timeout=0.25)
+                        return True
+                    except queue.Full:
+                        continue
+                return False
+
+            batch = []
+            try:
+                for _si in range(SUBPARTS_PER_PART):
+                    if remaining <= 0:
+                        break
+                    if werr:
+                        break
+                    want = min(SUBPART_DATA_SIZE, remaining)
+                    data = _read_full(f, want)
+                    if len(data) != want:
+                        # only the sector-rounding tail may be missing from
+                        # the stream; zero-fill it, anything more is truncation
+                        if remaining - len(data) > pad:
+                            die("source image truncated: %d bytes missing "
+                                "before allocation extent"
+                                % (remaining - len(data) - pad))
+                        data += b"\x00" * (want - len(data))
+                    remaining -= len(data)
+                    if pool is None:
+                        # neither buffer is touched again after queueing
+                        subtable = _subtable(data)
+                        if not _put((subtable, data)):
+                            break
+                        mht += sha1(subtable)
+                    else:
+                        # Whole subparts hash in parallel and are emitted
+                        # strictly in submission order, so the tables, the
+                        # MHT and the file are exactly what the serial
+                        # path produces.
+                        batch.append((pool.submit(_subtable, data), data))
+                        if len(batch) >= HASH_BATCH:
+                            # Consume from the front so anything not yet
+                            # resolved stays in `batch` for the finally
+                            # to reap if a put is abandoned mid-drain.
+                            while batch:
+                                fut, buf_ = batch[0]
+                                st = fut.result()
+                                del batch[0]
+                                if not _put((st, buf_)):
+                                    break
+                                mht += sha1(st)
+                    if progress:
+                        progress(data_size - remaining, data_size)
+                while batch:                       # tail of the last batch
+                    fut, buf_ = batch[0]
+                    st = fut.result()
+                    del batch[0]
+                    if not _put((st, buf_)):
+                        break
+                    mht += sha1(st)
+            finally:
+                for fut, _buf in batch:            # never leave futures running
+                    try:
+                        fut.result()
+                    except BaseException:          # noqa: BLE001
+                        pass
+                wq.put(None)
+                wt.join()
+            if werr:
+                raise werr[0]
+            # every queued write has landed, so tell() is the true size
             part_sizes.append(pf.tell())
         mhts.append(mht)
 

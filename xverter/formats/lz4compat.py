@@ -17,6 +17,8 @@ Setting HAVE_LZ4 = False at runtime forces the pure-Python read path
 (used by the test suite); compression then reports itself unavailable.
 """
 
+import os as _os
+
 try:
     import lz4.block as _lz4block
 except ImportError:  # pragma: no cover - environment dependent
@@ -45,18 +47,56 @@ class Lz4Missing(Exception):
 _POOL = None
 
 
+def _free_threaded():
+    """True on a build with the GIL disabled (PEP 703)."""
+    try:
+        import sysconfig
+        return bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+    except Exception:                                 # noqa: BLE001
+        return False
+
+
+def _workers():
+    """How many threads actually pay, measured on a 12c/24t machine
+    compressing 2 KB LZ4-HC blocks.
+
+    The two interpreters want opposite things and it is not close:
+
+      GIL build    4-6 workers x 4096-block tasks   ~920 MB/s
+                   16 workers x 256-block tasks     ~479 MB/s
+      free-threaded  16 workers x 256-block tasks  ~2700 MB/s
+                     4 workers x 4096-block tasks   ~870 MB/s
+
+    With a GIL, hand-off between threads dominates at this block size,
+    so few threads with big tasks win. Without one, the work is finally
+    parallel and fine-grained batches keep every core fed - 9.5x over
+    serial, against 3.4x at best with the GIL. Going past the physical
+    core count loses again either way."""
+    n = _os.cpu_count() or 4
+    if _free_threaded():
+        return min(16, max(4, n))
+    return min(4, n)
+
+
+def _chunk():
+    # Small tasks are pure overhead with a GIL and pure benefit without.
+    return 256 if _free_threaded() else 4096
+
+
+#: Blocks per pool task, sized for the interpreter in use.
+BATCH_CHUNK = _chunk()
+
+
 def _pool():
     global _POOL
     if _POOL is None:
         import concurrent.futures
-        import os as _os
         _POOL = concurrent.futures.ThreadPoolExecutor(
-            max_workers=min(16, _os.cpu_count() or 4),
-            thread_name_prefix="lz4hc")
+            max_workers=_workers(), thread_name_prefix="lz4hc")
     return _POOL
 
 
-def compress_batch(blocks, chunk=256):
+def compress_batch(blocks, chunk=BATCH_CHUNK):
     """Order-preserving parallel compress_block over a sequence of raw
     blocks. Output is byte-for-byte identical to sequential calls (same
     LZ4-HC level, block-independent compression); parallelism is real
@@ -67,15 +107,50 @@ def compress_batch(blocks, chunk=256):
         raise Lz4Missing(INSTALL_HINT)
     if len(blocks) <= chunk:
         return [compress_block(b) for b in blocks]
-    parts = [blocks[i:i + chunk] for i in range(0, len(blocks), chunk)]
-
-    def run(part):
-        return [compress_block(b) for b in part]
-
     out = []
-    for res in _pool().map(run, parts):
+    for res in compress_batch_iter(blocks, chunk):
         out.extend(res)
     return out
+
+
+def compress_batch_iter(blocks, chunk=BATCH_CHUNK):
+    """compress_batch's output, yielded run by run in submission order,
+    so a caller can start writing before the whole batch is done. Same
+    bytes as compress_batch - only the delivery is incremental."""
+    if not HAVE_LZ4:
+        raise Lz4Missing(INSTALL_HINT)
+    if len(blocks) <= chunk:
+        yield [compress_block(b) for b in blocks]
+        return
+    parts = [blocks[i:i + chunk] for i in range(0, len(blocks), chunk)]
+
+    # The lz4 entry point is called directly from the comprehension:
+    # every wrapper in between is another Python frame per block, and at
+    # ~3.6M blocks per image there is no room for a spare one.
+    if not HAVE_LZ4 or _lz4block is None:
+        raise Lz4Missing(INSTALL_HINT)
+    _compress = _lz4block.compress
+
+    def run(part):
+        return [_compress(b, mode="high_compression", compression=HC_LEVEL,
+                          store_size=False) for b in part]
+
+    for res in _pool().map(run, parts):
+        yield res
+
+
+def _raw_compress():
+    """The bare lz4 entry point with this project's fixed settings, so
+    hot loops can call it without a Python wrapper frame in between."""
+    if not HAVE_LZ4:
+        raise Lz4Missing(INSTALL_HINT)
+    import lz4.block as _b
+    _compress = _b.compress
+
+    def go(data):
+        return _compress(data, mode="high_compression",
+                         compression=HC_LEVEL, store_size=False)
+    return go
 
 
 def compress_block(data):

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xverter"
-version = "1.0.3"
+dynamic = ["version"]          # read from xverter/__init__.py, one source
 description = "xVerter: Xbox and Xbox 360 game format converter - GoD, ISO, ZAR, STFS, extracted; any to any, verified at every step"
 readme = "README.md"
 license = {text = "MIT"}
@@ -26,6 +26,7 @@ dependencies = [
     "textual>=0.80",                          # the TUI (bare `xverter` opens it)
     "lz4",                                    # CCI/CSO compression
     "zstandard; python_version < '3.14'",     # zar (stdlib zstd on 3.14+)
+    "isal",                                   # ZIP deflate: 20-28x zlib, same size
 ]
 
 [project.urls]
@@ -43,6 +44,9 @@ xv-cso = "xverter.formats.cso:cli"
 
 [project.optional-dependencies]
 security = ["defusedxml"]
+
+[tool.setuptools.dynamic]
+version = {attr = "xverter.__version__"}
 
 [tool.setuptools]
 packages = ["xverter", "xverter.formats"]

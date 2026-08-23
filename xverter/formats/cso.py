@@ -52,7 +52,9 @@ writing requires python-lz4 (installed with xverter; pyz users: pip install lz4)
 """
 
 import os
+import queue
 import struct
+import threading
 import sys
 
 from . import lz4compat
@@ -168,8 +170,19 @@ class CsoReader:
                 raise CsoError("%s: uncompressed_size %d not a multiple "
                                "of %d" % (self.slice_paths[0], usize,
                                           BLOCK_SIZE))
-            raw = f0.read((nblocks + 1) * 4)  # index follows the header
-            if len(raw) != (nblocks + 1) * 4:
+            need = (nblocks + 1) * 4          # index follows the header
+            # nblocks comes from the header's uncompressed_size, so a
+            # hostile value would make this read attempt a huge buffer
+            # (FileIO.read really allocates it - MemoryError). Refuse
+            # before reading beyond what the file can hold.
+            pos = f0.tell()
+            f0.seek(0, 2)
+            if need > max(0, f0.tell() - pos):
+                raise CsoError("%s: index of %d bytes exceeds the file"
+                               % (self.slice_paths[0], need))
+            f0.seek(pos)
+            raw = f0.read(need)
+            if len(raw) != need:
                 raise CsoError("%s: truncated index" % self.slice_paths[0])
             vals = struct.unpack("<%dI" % (nblocks + 1), raw)
             if vals[-1] & 0x80000000:
@@ -278,17 +291,13 @@ class CsoReader:
         return block
 
 
-def xbox_image_offset(stream):
-    """Byte offset of the game partition inside stream: 0x18300000 for a
-    full OG-Xbox redump image, else 0 (content-agnostic pass-through)."""
-    pos = stream.tell()
-    try:
-        stream.seek(REDUMP_VD_OFFSET)
-        if stream.read(len(XDVDFS_MAGIC)) == XDVDFS_MAGIC:
-            return REDUMP_IMAGE_OFFSET
-        return 0
-    finally:
-        stream.seek(pos)
+# One definition, shared with the CCI writer. It used to be copied into
+# both, which is how the two came to disagree: a fix to one silently
+# left the other answering the old way, and the round-trip check caught
+# it only because the writers were then compressing different ranges of
+# the same disc. Where the game partition starts is one question and
+# deserves one answer.
+from .cci import xbox_image_offset       # noqa: E402,F401
 
 
 class _PartWriter:
@@ -328,6 +337,14 @@ class _PartWriter:
         self.f.close()
 
 
+def _stream_comps(raws):
+    """Flatten compress_batch_iter into a per-block iterator, so each
+    block is written as its run lands rather than after the window."""
+    for run in lz4compat.compress_batch_iter(raws):
+        for c in run:
+            yield c
+
+
 def build_cso(src, out_path, split=True, split_offset=SPLIT_OFFSET,
               image_offset=None, progress=None):
     """Compress an ISO stream (path or seekable file-like) to CSO
@@ -353,6 +370,13 @@ def build_cso(src, out_path, split=True, split_offset=SPLIT_OFFSET,
     base, ext = os.path.splitext(out_path)
     if ext.lower() != ".cso":
         raise CsoError("output path must end in .cso: %s" % out_path)
+    # Refuse to touch a pre-existing output, as every other builder
+    # does. The slice writer opens "base.1.ext" in "wb" immediately, so
+    # without this a retry would truncate a prior good slice before it
+    # could fail.
+    for p in (out_path, "%s.1%s" % (base, ext)):
+        if os.path.exists(p):
+            raise CsoError("output already exists: %s" % p)
 
     stream = src
     own = False
@@ -383,14 +407,39 @@ def build_cso(src, out_path, split=True, split_offset=SPLIT_OFFSET,
         # preserving, byte-identical to sequential), write in order.
         window = 16384                                 # 32 MiB of blocks
         i = 0
+        # Reader thread holds the next window, so the source read
+        # overlaps compression of the current one.
+        rq = queue.Queue(2)
+        rerr = []
+
+        def _fill():
+            left = nblocks
+            try:
+                while left > 0:
+                    k = min(window, left)
+                    b = stream.read(k * BLOCK_SIZE)
+                    if len(b) < k * BLOCK_SIZE:
+                        b = b + b"\x00" * (k * BLOCK_SIZE - len(b))
+                    rq.put((k, b))
+                    left -= k
+            except BaseException as exc:                # noqa: BLE001
+                rerr.append(exc)
+            finally:
+                rq.put(None)
+
+        rt = threading.Thread(target=_fill, daemon=True)
+        rt.start()
         while i < nblocks:
-            n = min(window, nblocks - i)
-            buf = stream.read(n * BLOCK_SIZE)
-            if len(buf) < n * BLOCK_SIZE:
-                buf = buf + b"\x00" * (n * BLOCK_SIZE - len(buf))
-            raws = [buf[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
+            item = rq.get()
+            if item is None:
+                break
+            if rerr:
+                raise rerr[0]
+            n, buf = item
+            mv = memoryview(buf)
+            raws = [mv[j * BLOCK_SIZE:(j + 1) * BLOCK_SIZE]
                     for j in range(n)]
-            for raw, comp in zip(raws, lz4compat.compress_batch(raws)):
+            for raw, comp in zip(raws, _stream_comps(raws)):
                 p = parts[-1]
                 if split and p.pos > split_offset:
                     p = _PartWriter("%s.%d%s" % (base, len(parts) + 1, ext))
@@ -409,6 +458,9 @@ def build_cso(src, out_path, split=True, split_offset=SPLIT_OFFSET,
                 i += 1
             if progress:
                 progress(i, nblocks)
+        rt.join()
+        if rerr:
+            raise rerr[0]
         index[-1] = parts[-1].pos >> INDEX_ALIGNMENT
         parts[0].rewrite_index(index)
         for p in parts:
