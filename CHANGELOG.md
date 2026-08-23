@@ -31,6 +31,14 @@ against the baseline, and `verify` to the descriptor root. Image input **67
 edges** (was 62); STFS input **62** (it lacks the five pressed-byte audits an
 image earns: `67 − 5 = 62`).
 
+**STFS names over 40 bytes are refused, not truncated.** STFS's file-table
+name field is a hard 40 bytes of ASCII; some disc games carry longer asset
+names (a real XGD3 shader is `transparent_generic_viewer_centered_m.vsh`,
+41 chars). The writer now scans names up front and raises a clear error
+naming the offender before writing anything, rather than truncating into a
+valid-looking package with corrupted names. The matrix skips the STFS edge
+for such a tree, like the xiso slice on a bare image.
+
 **Fixed: the TUI RAM-scratch and 4GiB-split toggles did nothing.** Their
 handler sat inside `on_button_pressed` guarded by `event.switch`, which a
 button press never carries — so the switches were dead and an unrecognized
