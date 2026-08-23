@@ -350,6 +350,7 @@ def _derive_exe_info(entries):
     return None
 
 
+
 def _output_siblings(out_path):
     """Every path a writer might have created for this output: the one
     it was given, plus the Name.N.ext slices the split writers emit.
@@ -1780,6 +1781,7 @@ def cmd_convert(args):
             tid = int(args.title_id, 0) if getattr(args, "title_id", None) else None
             mid = int(args.media_id, 0) if getattr(args, "media_id", None) else None
             title = getattr(args, "title", None)
+            retail_warn = None
             man = {}
             entries, closer = _stfs_source_entries(kind, path, w, man, prog)
             try:
@@ -1802,6 +1804,7 @@ def cmd_convert(args):
                     # Derive identity from the payload default.xex (as GoD
                     # does); name from --title or the source filename.
                     info = _derive_exe_info(entries)
+                    derived_tid = info.get("title_id") if info else None
                     if title is not None:
                         name = title
                     else:
@@ -1810,13 +1813,23 @@ def cmd_convert(args):
                         # can read a title id from, incl. a stripped ZAR) >
                         # an XBE cert's own title (OG Xbox games) > the
                         # redump disc name (retail iso only) > filename.
-                        tid = info.get("title_id") if info else None
-                        name = (titledb_mod.name_for_title_id(tid)
+                        name = (titledb_mod.name_for_title_id(derived_tid)
                                 or (info.get("title") if info and
                                     info.get("title") else None)
                                 or _redump_name(path)
                                 or os.path.splitext(os.path.basename(
                                     path.rstrip(os.sep)))[0])
+                    # Convert regardless, but flag it: a game that matches
+                    # no retail release (auto-derivation only) is homebrew or
+                    # corrupt. Warned at the end, not before - no prompt.
+                    if (title is None and tid is None and not (derived_tid and
+                            titledb_mod.name_for_title_id(derived_tid))):
+                        _idpart = ("title id 0x%08X" % (derived_tid & 0xFFFFFFFF)
+                                   if derived_tid else "no title id")
+                        retail_warn = ("%s didn't match any retail game (%s) - "
+                                       "if it's not homebrew, it's corrupt"
+                                       % (os.path.basename(path.rstrip(os.sep)),
+                                          _idpart))
                     header = stfs_mod.synth_header(ctype, display_name=name,
                                                    info=info)
                     if tid is not None or mid is not None:
@@ -1837,6 +1850,8 @@ def cmd_convert(args):
             print("wrote %s (%s)"
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash chain verified to root"))
+            if retail_warn:
+                sys.stderr.write("warning: " + retail_warn + "\n")
             return 0
         if kind == "stfs" and out_kind == "iso":
             man = {}
