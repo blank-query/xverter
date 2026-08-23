@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.3.0 — the missing conversion, and three sweeps deeper
+
+**New format: `.xiso` output — the trimmed bare image emulators actually want.**
+`xverter convert "Game (redump).iso" -o Game.xiso` was the one conversion an
+xemu user needed and the tool refused. The new writer is a byte SLICE, not a
+rebuild: XDVDFS offsets are partition-relative, so the bytes from the
+partition base to the end of the image are already a complete bare image with
+the original pressed layout intact. Every image-bearing source slices
+(iso/GoD/CCI/CSO, and CHD via its materialized image); zar/STFS/folder
+sources rebuild a bare image under the .xiso name; a bare image is refused —
+there is nothing to trim. Verified the only way that counts: readback
+SHA-1 against the sliced bytes, structure-checked, byte-audited against the
+pressed source in the suite — and boot-tested: a real redump sliced by this
+writer boots to the Halo main menu in xemu.
+
+**New interface: `--progress=json`.** Bare `--progress` keeps today's text
+protocol byte-identically; `--progress=json` renders the same events as pure
+NDJSON on stderr with a closed envelope (progress* → error? → exit). Programs
+driving xverter get a parser-stable contract instead of scraping human
+output.
+
+**The suite grew again: 62 edges (57 for STFS).** Every first-hop conversion
+descends from the true source for every input kind; the xiso slice family is
+byte-audited against the pressed disc; the double-build redundancy the old
+composition carried is gone. The README explains exactly why STFS runs five
+fewer edges (they are byte-audits whose ground truth a download title cannot
+provide — fewer possible checks, never less coverage).
+
+**Three bug sweeps, ~30 verified fixes.** Two hostile review passes and a
+fuzzing campaign (420 generative round-trips over hostile trees, nearly 300
+mutated containers, concurrency hammering, chaos input) found and fixed —
+among others: two real data-loss paths (converting a gamedir onto itself
+moved the user's files; an output placed inside its own source directory was
+deleted by its own verification), an orphaned child conversion on SIGTERM, a
+family of hostile-input hangs and allocation bombs across the parsers,
+mid-read zip corruption crashing instead of refusing, and Windows
+drive-letter path traversal in archive extraction. Interrupts are clean
+everywhere: Ctrl-C and SIGTERM leave no partial outputs.
+
+**Portability hardening.** The engine now adapts to interpreters it never
+met: zstd builds without multithreading, systems without
+`os.copy_file_range`. The full release suite passes on Android/Termux on a
+Galaxy Z Fold 4 — all four titles, every edge, zero failures — and the
+README carries the phone quartet's numbers.
+
+**TUI.** Enter navigates the library. Buttons regrouped by console family:
+Xbox 360 (ISO ZAR GoD CHD), Original Xbox (XISO CCI CSO), transport
+(ZIP 7z Folder). Live update buttons fixed (they crashed the TUI since they
+were wired to a method that didn't exist — found by the sweep), plus a
+handful of race fixes in navigation and batch mode.
+
+
 ## 1.2.1 — hammered
 
 1.2.0 got fuzzed, bombed, and lied to from every direction we could think of. Most attacks
