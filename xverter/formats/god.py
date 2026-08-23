@@ -731,7 +731,7 @@ def _stream_allocation_extent(f, base, xd):
 
 
 def _build_header(path, content_type, info, title, block_count, part_count,
-                  parts_total_size, mht_hash):
+                  parts_total_size, mht_hash, thumbnail=None):
     buf = _header_template()
     struct.pack_into(">I", buf, 0x344, content_type)
     struct.pack_into(">I", buf, 0x354, info["media_id"])
@@ -750,6 +750,13 @@ def _build_header(path, content_type, info, title, block_count, part_count,
         buf[0x411:0x411 + len(enc)] = enc
         buf[0x1691:0x1691 + len(enc)] = enc
     buf[0x35B] = buf[0x35F] = buf[0x391] = 0         # iso2god finalize parity
+    if thumbnail:
+        # content + title thumbnail (the icon a dashboard shows) - embedded
+        # before the header self-hash below, so it is covered by it.
+        for _so, _io in ((0x1712, 0x171A), (0x1716, 0x571A)):
+            struct.pack_into(">I", buf, _so, len(thumbnail))
+            buf[_io:_io + 0x4000] = b"\x00" * 0x4000
+            buf[_io:_io + len(thumbnail)] = thumbnail
     buf[0x32C:0x32C + HASH_SIZE] = sha1(buf[0x344:0x344 + 0xACBC])
     with open(path, "wb") as f:
         f.write(buf)
@@ -816,6 +823,10 @@ def _build(f, out_dir, trim, game_title, progress):
         info["title"]
         or titledb.name_for_title_id(info["title_id"])
         or "")
+    # a reserved xVerter test disc auto-carries the xVerter icon
+    thumbnail = (titledb.xverter_icon()
+                 if titledb.XVERTER_TITLES.get("%08X" % info["title_id"])
+                 else None)
     pkg = "%08X" % (info["media_id"] if content_type == 0x7000
                     else info["title_id"])
     content_dir = os.path.join(out_dir, "%08X" % info["title_id"],
@@ -951,7 +962,7 @@ def _build(f, out_dir, trim, game_title, progress):
 
     header_path = os.path.join(content_dir, pkg)
     _build_header(header_path, content_type, info, title, block_count,
-                  part_count, sum(part_sizes), digest)
+                  part_count, sum(part_sizes), digest, thumbnail=thumbnail)
     return header_path
 
 

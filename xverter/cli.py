@@ -755,6 +755,20 @@ def _redump_check(path, progress=None):
                        "(crc %s) - modified, patched or damaged" % crc)
 
 
+def _user_thumbnail(arg):
+    """The --thumbnail PNG bytes, validated, or None."""
+    if not arg:
+        return None
+    with open(arg, "rb") as f:
+        png = f.read()
+    if png[:8] != b"\x89PNG\r\n\x1a\n":
+        raise CliError("--thumbnail must be a PNG image")
+    if len(png) > 0x4000:
+        raise CliError("--thumbnail too large (%d bytes; max %d)"
+                       % (len(png), 0x4000))
+    return png
+
+
 def _redump_name(path):
     """The canonical redump game name for an image, or None. Reuses the
     redump check, which only hashes when the file's size matches a known
@@ -1835,6 +1849,13 @@ def cmd_convert(args):
                     if tid is not None or mid is not None:
                         header = stfs_mod.apply_metadata(
                             header, title_id=tid, media_id=mid)
+                _eff_tid = int.from_bytes(header[0x360:0x364], "big")
+                _thumb = _user_thumbnail(getattr(args, "thumbnail", None))
+                if _thumb is None and titledb_mod.XVERTER_TITLES.get(
+                        "%08X" % _eff_tid):
+                    _thumb = titledb_mod.xverter_icon()
+                if _thumb:
+                    header = stfs_mod.set_thumbnail(header, _thumb)
                 stfs_mod.build(entries, args.output, header,
                                progress=prog.cb("stfs-write"))
             finally:
@@ -2194,6 +2215,11 @@ def main(argv=None):
     p.add_argument("--media-id", metavar="HEX", default=None,
                    help="override the media id for .stfs output (0x-hex or "
                         "decimal). Normally read from the payload default.xex")
+    p.add_argument("--thumbnail", metavar="PNG", default=None,
+                   help="embed this PNG as the package icon for .stfs "
+                        "output (what a dashboard shows). Max 16 KB. A "
+                        "reserved xVerter test disc carries the xVerter "
+                        "icon automatically")
     p.set_defaults(fn=cmd_convert)
 
     args = ap.parse_args(argv)

@@ -145,6 +145,39 @@ def apply_metadata(header, content_type=None, title=None,
     return bytes(h)
 
 
+# XContentHeader thumbnail slots (STFS and GoD share them): a content icon
+# and a title icon, each a PNG up to 0x4000 bytes, that a dashboard shows.
+THUMB_SIZE_OFFSET = 0x1712
+TITLE_THUMB_SIZE_OFFSET = 0x1716
+THUMB_OFFSET = 0x171A
+TITLE_THUMB_OFFSET = 0x571A
+THUMB_MAX = 0x4000
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def set_thumbnail(header, png):
+    """Embed a PNG as both the content and title thumbnail (the icon a
+    dashboard shows for the package). Returns new header bytes; build()
+    reseals the header hash afterward, so raw writes here are safe. A
+    None/empty image leaves the header unchanged."""
+    if not png:
+        return header
+    if png[:8] != _PNG_MAGIC:
+        raise StfsError("thumbnail must be a PNG image")
+    if len(png) > THUMB_MAX:
+        raise StfsError("thumbnail too large (%d bytes; the slot is %d)"
+                        % (len(png), THUMB_MAX))
+    h = bytearray(header)
+    if len(h) < TITLE_THUMB_OFFSET + THUMB_MAX:
+        raise StfsError("header too small to hold a thumbnail")
+    for size_off, img_off in ((THUMB_SIZE_OFFSET, THUMB_OFFSET),
+                              (TITLE_THUMB_SIZE_OFFSET, TITLE_THUMB_OFFSET)):
+        struct.pack_into(">I", h, size_off, len(png))
+        h[img_off:img_off + THUMB_MAX] = b"\x00" * THUMB_MAX
+        h[img_off:img_off + len(png)] = png
+    return bytes(h)
+
+
 class StfsError(Exception):
     pass
 

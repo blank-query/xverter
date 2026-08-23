@@ -79,6 +79,17 @@ def name_for_title_id(title_id, system="xbox360"):
     return XVERTER_TITLES.get(key) or _load(system).get(key) or None
 
 
+def xverter_icon():
+    """The bundled xVerter icon PNG bytes, or None. Auto-embedded as the
+    package thumbnail for the reserved test discs so they show art."""
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "data",
+                               "xverter_icon.png"), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
 def distill(games):
     """Reduce x360db's game records to {TITLE_ID: name}. The primary id
     wins; regional alternate ids fill in only where unmapped."""
