@@ -808,7 +808,14 @@ def _build(f, out_dir, trim, game_title, progress):
             % block_count)
     part_count = (block_count + BLOCKS_PER_PART - 1) // BLOCKS_PER_PART
 
-    title = game_title if game_title is not None else info["title"]
+    # Name: an explicit override, else the executable's own title (XBE
+    # cert; a XEX has none), else the title id resolved against xVerter's
+    # title database - so a GoD names itself like the STFS path does.
+    from .. import titledb
+    title = game_title if game_title is not None else (
+        info["title"]
+        or titledb.name_for_title_id(info["title_id"])
+        or "")
     pkg = "%08X" % (info["media_id"] if content_type == 0x7000
                     else info["title_id"])
     content_dir = os.path.join(out_dir, "%08X" % info["title_id"],
