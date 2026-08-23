@@ -387,6 +387,8 @@ def _output_kind(out_path):
         return "xiso"
     if ext == ".god":
         return "god"
+    if ext == ".stfs":
+        return "stfs"
     if ext == ".chd":
         return "chd"
     if ext == ".zip":
@@ -1366,7 +1368,7 @@ def cmd_dat(args):
 def cmd_convert(args):
     kind, path = detect_mod.detect(args.input)
     out_kind = _output_kind(args.output)
-    if out_kind == kind and kind != "gamedir":
+    if out_kind == kind and kind not in ("gamedir", "stfs"):
         raise CliError("input is already %s" % kind)
     scratch_base = getattr(args, "workdir", None)
     if scratch_base is None and getattr(args, "scratch", "disk") == "ram":
@@ -1694,6 +1696,39 @@ def cmd_convert(args):
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
+            return 0
+        if out_kind == "stfs":
+            # Faithful rebuild: an STFS package carries its content type
+            # (XBLA/DLC/TU/...) in the header, and we never invent one -
+            # so writing STFS requires an STFS source whose header we
+            # preserve verbatim. Other inputs would need a content type
+            # chosen for them, which we will not guess.
+            if kind != "stfs":
+                raise CliError(
+                    "writing STFS needs an STFS source: the package's "
+                    "content type (XBLA/DLC/title-update/...) is carried "
+                    "from the source header and never invented. Convert "
+                    "an STFS package to .stfs to rebuild it.")
+            with open(path, "rb") as _hf:
+                header = _hf.read(0xB000)
+            man = {}
+            entries, closer = stfs_mod.file_entries(path, manifest=man)
+            try:
+                stfs_mod.build(entries, args.output, header,
+                               progress=prog.cb("stfs-write"))
+            finally:
+                closer()
+            if not args.no_verify:
+                # Never trust a writer: re-read the whole package and check
+                # every allocated block against its L0 entry, the tables
+                # against their parents, up to the descriptor's root hash.
+                stfs_mod.verify_chains(args.output,
+                                       progress=prog.cb("verify"))
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output, "NO GUARANTEES - --leeroy-jenkins"
+                     if args.no_verify else "hash chain verified to root"))
             return 0
         if kind == "stfs" and out_kind == "iso":
             man = {}

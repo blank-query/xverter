@@ -41,6 +41,7 @@ CONVERT_TARGETS = [
     ("to-zar", "→ ZAR", "zar", "primary"),
     ("to-god", "→ GoD", "god", "primary"),
     ("to-chd", "→ CHD", "chd", "primary"),
+    ("to-stfs", "→ STFS", "stfs", "default"),
     ("to-xiso", "→ XISO", "xiso", "default"),
     ("to-cci", "→ CCI", "cci", "default"),
     ("to-cso", "→ CSO", "cso", "default"),
@@ -49,13 +50,14 @@ CONVERT_TARGETS = [
     ("to-dir", "→ Folder", "dir", "default"),
 ]
 
-# The button rows are grouped by console: Xbox 360 formats first,
-# Original Xbox formats second (xiso for xemu; CCI/CSO were only ever
-# XGD1 containers), general transport/extract third, utilities last.
+# The button rows group by role: Xbox 360 native formats first (STFS
+# joins its console family), emulation and Original Xbox targets second
+# (CHD for future emulators, xiso for xemu, CCI/CSO for OG modded
+# hardware), general transport/extract third, utilities last.
 BUTTON_ROWS = [
-    ("to-iso", "to-zar", "to-god", "to-chd"),      # Xbox 360
-    ("to-xiso", "to-cci", "to-cso"),               # Original Xbox
-    ("to-zip", "to-7z", "to-dir"),                 # transport / extract
+    ("to-iso", "to-zar", "to-god", "to-stfs"),         # Xbox 360
+    ("to-chd", "to-xiso", "to-cci", "to-cso"),         # emulation / OG Xbox
+    ("to-zip", "to-7z", "to-dir"),                     # transport / extract
 ]
 
 
@@ -159,20 +161,20 @@ class XVerterApp(App):
         background: transparent;
         text-style: bold;
     }
-    /* rows are console families: 360 / OG Xbox / transport */
-    #to-iso, #to-zar, #to-god, #to-chd {
+    /* rows: 360 native / emulation & OG Xbox / transport */
+    #to-iso, #to-zar, #to-god, #to-stfs {
         border: round #2196f3;
         color: #64b5f6;
     }
-    #to-iso:hover, #to-zar:hover, #to-god:hover, #to-chd:hover {
+    #to-iso:hover, #to-zar:hover, #to-god:hover, #to-stfs:hover {
         background: #1565c0;
         color: #eaf4fe;
     }
-    #to-xiso, #to-cci, #to-cso {
+    #to-chd, #to-xiso, #to-cci, #to-cso {
         border: round #12b096;
         color: #3cd0b5;
     }
-    #to-xiso:hover, #to-cci:hover, #to-cso:hover {
+    #to-chd:hover, #to-xiso:hover, #to-cci:hover, #to-cso:hover {
         background: #0d8f7a;
         color: #eafcf8;
     }
@@ -533,11 +535,7 @@ class XVerterApp(App):
             self._log("that's the parent-directory row - select a game")
             return
         base = os.path.basename(path)
-        stem = os.path.splitext(base)[0] if os.path.isfile(path) else base
-        if target == "dir":
-            out = os.path.join(self.library, stem + "_extracted") + os.sep
-        else:
-            out = os.path.join(self.library, stem + "." + target)
+        out = self._out_path_for(path, target)
         if os.path.exists(out.rstrip(os.sep)):
             self._log("SKIP: output exists: %s"
                       % os.path.basename(out.rstrip(os.sep)))
@@ -988,7 +986,12 @@ class XVerterApp(App):
         stem = os.path.splitext(base)[0] if os.path.isfile(path) else base
         if target == "dir":
             return os.path.join(self.library, stem + "_extracted") + os.sep
-        return os.path.join(self.library, stem + "." + target)
+        out = os.path.join(self.library, stem + "." + target)
+        if os.path.abspath(out) == os.path.abspath(path):
+            # A faithful rebuild whose input already wears the target
+            # extension (stfs -> stfs): never overwrite the source.
+            out = os.path.join(self.library, stem + "_rebuilt." + target)
+        return out
 
     @work(thread=True, group="jobs")
     def _run_batch(self, target, names, lib):
@@ -1014,11 +1017,21 @@ class XVerterApp(App):
                         self._log, "SKIP %s: not a recognized game (%s)"
                         % (name, str(e).splitlines()[0][:60]))
                     continue
-                if kind == target or (target == "dir"
-                                      and kind == "gamedir"):
+                if ((kind == target and target != "stfs")
+                        or (target == "dir" and kind == "gamedir")):
                     skipped += 1
                     self.call_from_thread(
                         self._log, "SKIP %s: already %s" % (name, kind))
+                    continue
+                if target == "stfs" and kind != "stfs":
+                    # STFS output is a faithful rebuild: the content type
+                    # (XBLA/DLC/TU) is carried from the source header and
+                    # never invented, so it needs an STFS source. Skip,
+                    # never fail - same posture as the xiso pre-flight.
+                    skipped += 1
+                    self.call_from_thread(
+                        self._log,
+                        "SKIP %s: STFS output needs an STFS source" % name)
                     continue
                 if target == "xiso" and kind == "iso":
                     # A bare image IS an xiso; only a full redump has a

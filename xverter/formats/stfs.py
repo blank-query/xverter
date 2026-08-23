@@ -23,9 +23,17 @@ against its L0 entry as it streams out, so a bit-rotted package fails
 loudly instead of extracting silently wrong. verify_chains() checks
 every allocated block including slack the files don't reference.
 
-STFS as an *output* format is not built yet (LIVE/PIRS signatures are
-Microsoft-private-key RSA; the ecosystem norm is junk signature bytes,
-which modded consoles and emulators don't check).
+STFS *writing* (build()) rebuilds a package faithfully: it preserves the
+source header verbatim - content type (XBLA 0x000D0000, DLC 0x00000002,
+title update 0x000B0000, ...), title, media id, the lot - and never
+invents one, so it cannot misrepresent what the package is. It lays the
+content out as a read-only single-width package (contiguous blocks,
+one L0 hash table per 170 blocks, higher tables above, root sealed into
+the volume descriptor and the header re-hashed). The signature bytes are
+the ecosystem-standard junk that modded consoles and emulators do not
+check - the same posture every writer in this family takes, GoD/iso2god
+included. Every build is re-read by the reader above and hash-verified
+to the root before success is reported.
 """
 
 import hashlib
@@ -63,6 +71,12 @@ def _tables_through(c):
         n += c // (level_span * PER_TABLE) + 1
         level_span *= PER_TABLE
     return n
+
+
+def data_off(c, base, width=BLOCK):
+    """Absolute file offset of data block c in a single-width package
+    (module-level twin of _Package.data_off, used by the writer)."""
+    return base + width * _tables_through(c) + BLOCK * c
 
 
 class _Package:
@@ -258,6 +272,159 @@ class _Package:
                         "is_dir": is_dir, "startclust": start,
                         "blocks": blocks})
         return out
+
+
+
+# --------------------------------------------------------------- writing
+
+def _hdr_base(header):
+    """Block-aligned end of the header (where L0 table #0 sits)."""
+    hsz = struct.unpack(">I", header[HEADER_SIZE_OFFSET:HEADER_SIZE_OFFSET + 4])[0]
+    return (hsz + BLOCK - 1) & ~(BLOCK - 1)
+
+
+def _plan(entries):
+    """Order (dirs before their children) and lay out records. entries is
+    [(relpath, size, opener)]. Returns (records, ft_blocks, nblocks) where
+    records is [(name, is_dir, parent_idx, start_block, nblk, size, opener)]."""
+    files = [(rel.replace(os.sep, "/").strip("/"), size, opener)
+             for rel, size, opener in entries]
+    dirset = set()
+    for rel, _s, _o in files:
+        parts = rel.split("/")
+        for i in range(1, len(parts)):
+            dirset.add("/".join(parts[:i]))
+    dirs = sorted(dirset, key=lambda d: (d.count("/"), d))
+    recs = []            # mutable rows
+    idx_of = {}
+    for d in dirs:
+        parent = d.rsplit("/", 1)[0] if "/" in d else None
+        idx_of[d] = len(recs)
+        recs.append([d.rsplit("/", 1)[-1], True, parent, 0, 0, 0, None])
+    for rel, size, opener in files:
+        parent = rel.rsplit("/", 1)[0] if "/" in rel else None
+        recs.append([rel.rsplit("/", 1)[-1], False, parent, 0, 0, size, opener])
+    ft_blocks = max(1, (FT_ENTRY * len(recs) + BLOCK - 1) // BLOCK)
+    nxt = ft_blocks
+    for r in recs:
+        if not r[1]:
+            n = (r[5] + BLOCK - 1) // BLOCK
+            r[3] = nxt if n else 0
+            r[4] = n
+            nxt += n
+    return recs, ft_blocks, nxt, idx_of
+
+
+def _ft_bytes(recs, idx_of, ft_blocks):
+    buf = bytearray()
+    # map each record to its full path so children find their parent index
+    for i, r in enumerate(recs):
+        name, is_dir, parent, start, nblk, size, _op = r
+        rec = bytearray(FT_ENTRY)
+        nb = name.encode("ascii", "replace")[:0x28]
+        rec[:len(nb)] = nb
+        rec[0x28] = len(nb) | (0x80 if is_dir else 0x40)
+        rec[0x29] = nblk & 0xFF; rec[0x2A] = (nblk >> 8) & 0xFF; rec[0x2B] = (nblk >> 16) & 0xFF
+        rec[0x2C] = nblk & 0xFF; rec[0x2D] = (nblk >> 8) & 0xFF; rec[0x2E] = (nblk >> 16) & 0xFF
+        rec[0x2F] = start & 0xFF; rec[0x30] = (start >> 8) & 0xFF; rec[0x31] = (start >> 16) & 0xFF
+        pid = 0xFFFF if parent is None else idx_of[parent]
+        struct.pack_into(">H", rec, 0x32, pid)
+        struct.pack_into(">I", rec, 0x34, 0 if is_dir else size)
+        buf += rec
+    buf += b"\x00" * (ft_blocks * BLOCK - len(buf))
+    return bytes(buf)
+
+
+def build(entries, out_path, header, progress=None):
+    """Write a read-only STFS package from `entries` [(relpath,size,opener)],
+    carrying `header` (>= a full 0xB000-ish header from a source package)
+    verbatim so content type/title are preserved. Streams file data; does
+    not hold the whole payload in memory. Returns (nblocks, record_count)."""
+    if len(header) < 0x344 + 4:
+        raise StfsError("header template too small")
+    base = _hdr_base(header)
+    recs, ft_blocks, nblocks, idx_of = _plan(entries)
+    ft = _ft_bytes(recs, idx_of, ft_blocks)
+
+    n_l0 = (nblocks + PER_TABLE - 1) // PER_TABLE
+    l0 = [bytearray(BLOCK) for _ in range(n_l0)]
+
+    def l0_put(c, digest):
+        nxt = c + 1
+        o = (c % PER_TABLE) * HASH_ENTRY
+        l0[c // PER_TABLE][o:o + HASH_ENTRY] = (
+            digest + bytes([0x80, (nxt >> 16) & 0xFF, (nxt >> 8) & 0xFF, nxt & 0xFF]))
+
+    filesize = data_off(nblocks - 1, base) + BLOCK
+    done = [0]
+    with open(out_path, "wb") as o:
+        o.truncate(filesize)
+        o.seek(0); o.write(header[:base])
+        # file-table blocks
+        for t in range(ft_blocks):
+            blk = ft[t * BLOCK:(t + 1) * BLOCK]
+            o.seek(data_off(t, base)); o.write(blk)
+            l0_put(t, hashlib.sha1(blk).digest())
+        # file data blocks, streamed through each opener
+        for r in recs:
+            name, is_dir, parent, start, nblk, size, opener = r
+            if is_dir:
+                continue
+            stream = opener()
+            try:
+                for k in range(nblk):
+                    chunk = stream.read(BLOCK)
+                    if len(chunk) < BLOCK:
+                        chunk = chunk + b"\x00" * (BLOCK - len(chunk))
+                    c = start + k
+                    o.seek(data_off(c, base)); o.write(chunk)
+                    l0_put(c, hashlib.sha1(chunk).digest())
+                    done[0] += 1
+                    if progress:
+                        progress(done[0], nblocks)
+            finally:
+                cl = getattr(stream, "close", None)
+                if cl:
+                    cl()
+        # higher-level tables from L0 upward
+        levels = [[bytes(t) for t in l0]]
+        child = levels[0]
+        while len(child) > 1:
+            parents = []
+            for j in range((len(child) + PER_TABLE - 1) // PER_TABLE):
+                tb = bytearray(BLOCK)
+                for i, ch in enumerate(child[j * PER_TABLE:(j + 1) * PER_TABLE]):
+                    tb[i * HASH_ENTRY:i * HASH_ENTRY + 20] = hashlib.sha1(ch).digest()
+                parents.append(bytes(tb))
+            levels.append(parents)
+            child = parents
+        top_hash = hashlib.sha1(child[0]).digest()
+        # place every table at its content-addressed site (single width)
+        for t in range(n_l0):
+            c0 = t * PER_TABLE
+            m = _tables_through(c0) - (_tables_through(c0 - 1) if c0 else 0)
+            first = data_off(c0, base)
+            for k in range(1, m + 1):
+                lvl = k - 1
+                tidx = t if lvl == 0 else (c0 // (PER_TABLE ** lvl) // PER_TABLE)
+                if lvl < len(levels) and tidx < len(levels[lvl]):
+                    o.seek(first - k * BLOCK)
+                    o.write(levels[lvl][tidx])
+        # volume descriptor + header self-hash
+        desc = bytearray(0x24)
+        desc[0] = 0x24
+        desc[2] = 0x01                               # single-width read-only
+        struct.pack_into("<H", desc, 3, ft_blocks)
+        desc[8:0x1C] = top_hash
+        struct.pack_into(">I", desc, 0x1C, nblocks)
+        o.seek(DESCRIPTOR_OFFSET); o.write(desc)
+        # Header self-hash covers [0x344:0xB000] with the NEW descriptor in
+        # place; build that region in memory (the file is write-only) and
+        # seal the digest at 0x32C.
+        region = bytearray(header[0x344:0xB000])
+        region[DESCRIPTOR_OFFSET - 0x344:DESCRIPTOR_OFFSET - 0x344 + 0x24] = desc
+        o.seek(0x32C); o.write(hashlib.sha1(bytes(region)).digest())
+    return nblocks, len(recs)
 
 
 # ------------------------------------------------------------ public API
