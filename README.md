@@ -122,21 +122,6 @@ column — and still beats it on the quartet: 37m07s at launch, 30m25s now, 238 
 
 Compression, as a fraction of the raw ISO (content-dependent — Anniversary's assets are already compressed, Spartan's aren't): CHD 60–90%, ZAR 60–93%, CCI/CSO 70–96%, GoD ~100.5% (its SHA-1 hash tree costs half a percent).
 
-### The same matrix on a mid-range laptop
-
-For a realistic second data point: Halo CE again, this time on an HP Envy x360 14 (AMD Ryzen 7 8840HS, 8c/16t, 16GB RAM, Windows 11 Home) running the standalone `xverter.exe` — no Python install, no chdman. (Both columns are **v1.0.2 measurements**, kept as an honest hardware comparison; current builds are roughly twice as fast on both machines, per the table above.)
-
-| Conversion            | desktop (above) | laptop |
-| --------------------- | ---------------:| ------:|
-| dir → iso             | 4.5             | 13.9   |
-| dir → zar             | 10.5            | 50.2   |
-| iso → god             | 5.1             | 16.0   |
-| iso → cci             | 15.1            | 51.2   |
-| iso → cso             | 14.8            | 45.5   |
-| full matrix           | 5m55s (48 edges)| 15m57s (44 edges — v1.0.2 delegated CHD to chdman, which was absent; CHD is native since 1.2.0 and runs everywhere) |
-
-Roughly 3× the desktop's times across the board — a laptop-class CPU converts a full-size XGD1 disc to any format in under a minute, and every check still passes. All 44 edges: ALL PASS.
-
 ## Attribution — the shoulders this stands on
 
 Every line of code in xverter is original, but none of it would exist without the Xbox preservation community. Two contributions ship inside or alongside the tool and deserve headline billing:
