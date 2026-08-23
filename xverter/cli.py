@@ -35,6 +35,7 @@ from .formats import archives as archives_mod
 from .formats import lz4compat as lz4compat_mod
 from .formats import zar_native as zar_native_mod
 from . import datcache
+from . import titledb as titledb_mod
 
 # One source of truth: the package defines it, everything else asks.
 # These drifted apart once (1.0.0 here against 1.0.3 in pyproject) with
@@ -1413,8 +1414,17 @@ def cmd_dat(args):
         if not installed:
             print("%s DAT already current: redump has %s, you have %s - "
                   "nothing written" % (args.system, version, have))
-            return 0
-        print("cached %s DAT version %s -> %s" % (args.system, version, path))
+        else:
+            print("cached %s DAT version %s -> %s"
+                  % (args.system, version, path))
+        # the 360 title-id -> name database rides along on the same update
+        if args.system == "xbox360":
+            try:
+                tpath, tcount = titledb_mod.update("xbox360")
+                print("cached xbox360 title database: %d titles -> %s"
+                      % (tcount, tpath))
+            except Exception as e:                    # noqa: BLE001
+                print("title database refresh skipped: %s" % e)
         return 0
     for system in sorted(datcache.SYSTEMS):
         cpath, age = datcache.cached(system)
@@ -1795,12 +1805,16 @@ def cmd_convert(args):
                     if title is not None:
                         name = title
                     else:
-                        # name priority: redump DAT canonical name (free
-                        # unless the source really is a known dump) > the XBE
-                        # cert's own title (XEX has none) > source filename.
-                        name = (_redump_name(path)
+                        # name priority: the 360 title-id -> marketplace
+                        # name (a XEX carries none; works for ANY source we
+                        # can read a title id from, incl. a stripped ZAR) >
+                        # an XBE cert's own title (OG Xbox games) > the
+                        # redump disc name (retail iso only) > filename.
+                        tid = info.get("title_id") if info else None
+                        name = (titledb_mod.name_for_title_id(tid)
                                 or (info.get("title") if info and
                                     info.get("title") else None)
+                                or _redump_name(path)
                                 or os.path.splitext(os.path.basename(
                                     path.rstrip(os.sep)))[0])
                     header = stfs_mod.synth_header(ctype, display_name=name,

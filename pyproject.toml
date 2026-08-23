@@ -52,4 +52,4 @@ version = {attr = "xverter.__version__"}
 packages = ["xverter", "xverter.formats"]
 
 [tool.setuptools.package-data]
-xverter = ["data/*.dat", "data/*.txt", "bin/*"]
+xverter = ["data/*.dat", "data/*.txt", "data/*.json", "bin/*"]
