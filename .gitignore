@@ -10,3 +10,7 @@ scratch/
 marketing/
 app/
 bug_report.md
+
+# Private operator notes — testing-platform SSH/creds. NEVER commit.
+.testing-hosts.local.md
+*.local.md
