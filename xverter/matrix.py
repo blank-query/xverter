@@ -235,6 +235,32 @@ def check_dir(edge, path, baseline):
     return ok
 
 
+def _read_content_type(path):
+    """The 32-bit STFS content type at offset 0x344."""
+    with open(path, "rb") as f:
+        f.seek(0x344)
+        return int.from_bytes(f.read(4), "big")
+
+
+def check_content_type(edge, path, want):
+    """The written STFS package must carry exactly the content type it was
+    asked for (a chosen --content-type, or a preserved source type) - not
+    merely a structurally valid header. Without this the flag could be
+    ignored or mis-stamped and every other check would still pass."""
+    t0 = time.monotonic()
+    got = _read_content_type(path)
+    dt = time.monotonic() - t0
+    ok = (got == want)
+    RESULTS.append({"edge": edge, "type": "content-type", "ok": ok,
+                    "seconds": round(dt, 1),
+                    "want": "0x%08X" % want, "got": "0x%08X" % got})
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok
+             else "FAIL (want 0x%08X, got 0x%08X)" % (want, got), dt),
+          flush=True)
+    return ok
+
+
 def check_partition(edge, got_path, src_path):
     """A decompressed image must be the source's game partition, byte
     for byte.
@@ -797,10 +823,18 @@ def main(argv=None):
     # package is round-tripped, content-checked against the baseline, and
     # `verify` walks our own output's hash tree to the descriptor root.
     if kind == "stfs":
+        # Preserve: the rebuilt package must carry the SOURCE's own type,
+        # not a default - read it off the source and assert it survives.
+        want_ct = _read_content_type(src)
         run("stfs(src)->stfs", ["convert", src, "-o", d("a.stfs")])
     else:
+        # A non-default type on purpose (DLC, not the XBLA a lazy writer
+        # might fall back to): proves --content-type is actually honoured,
+        # not merely accepted.
+        want_ct = 0x00000002                         # dlc
         run("%s(src)->stfs" % kind,
-            ["convert", src, "-o", d("a.stfs"), "--content-type", "xbla"])
+            ["convert", src, "-o", d("a.stfs"), "--content-type", "dlc"])
+    check_content_type("  stfs content-type", d("a.stfs"), want_ct)
     run("stfs(r)->dir", ["convert", d("a.stfs"), "-o", d("from_stfs") + "/"])
     check_dir("  content(stfs)", d("from_stfs"), baseline)
     run("verify stfs", ["verify", d("a.stfs")])

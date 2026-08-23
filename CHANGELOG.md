@@ -27,9 +27,9 @@ modal to choose the type; an STFS source skips it and preserves its own. The
 
 **Matrix: STFS is a normal output column for every input.** Each input now
 runs the STFS output family — write, round-trip to a directory, content-check
-against the baseline, and `verify` to the descriptor root. Image input **66
-edges** (was 62); STFS input **61** (it lacks the five pressed-byte audits an
-image earns: `66 − 5 = 61`).
+against the baseline, and `verify` to the descriptor root. Image input **67
+edges** (was 62); STFS input **62** (it lacks the five pressed-byte audits an
+image earns: `67 − 5 = 62`).
 
 **Fixed: the TUI RAM-scratch and 4GiB-split toggles did nothing.** Their
 handler sat inside `on_button_pressed` guarded by `event.switch`, which a
