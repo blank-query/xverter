@@ -749,6 +749,23 @@ def _redump_check(path, progress=None):
                        "(crc %s) - modified, patched or damaged" % crc)
 
 
+def _redump_name(path):
+    """The canonical redump game name for an image, or None. Reuses the
+    redump check, which only hashes when the file's size matches a known
+    redump size - so a non-redump source (trimmed image, homebrew, a
+    container) costs nothing and just returns None."""
+    if not os.path.isfile(path):
+        return None
+    try:
+        status, detail = _redump_check(path)
+    except Exception:                                 # noqa: BLE001
+        return None
+    if status != "match":
+        return None
+    # detail is "Game Name (Region) (...).iso [Xbox 360]"
+    return os.path.splitext(detail.rsplit(" [", 1)[0])[0] or None
+
+
 def _dat_lookup(dat_path, size, crc, sha1):
     # Prefer defusedxml (XXE/entity-expansion hardening) when available;
     # stdlib expat (Python >= 3.11 / libexpat >= 2.4) has built-in
@@ -1771,8 +1788,13 @@ def cmd_convert(args):
                     # Derive identity from the payload default.xex (as GoD
                     # does); name from --title or the source filename.
                     info = _derive_xex_info(entries)
-                    name = (title if title is not None else os.path.splitext(
-                        os.path.basename(path.rstrip(os.sep)))[0])
+                    if title is not None:
+                        name = title
+                    else:
+                        # canonical name from the redump DAT (free unless the
+                        # source is actually a known redump), else filename
+                        name = (_redump_name(path) or os.path.splitext(
+                            os.path.basename(path.rstrip(os.sep)))[0])
                     header = stfs_mod.synth_header(ctype, display_name=name,
                                                    info=info)
                     if tid is not None or mid is not None:

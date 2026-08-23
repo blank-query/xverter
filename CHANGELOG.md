@@ -31,6 +31,18 @@ against the baseline, and `verify` to the descriptor root. Image input **67
 edges** (was 62); STFS input **62** (it lacks the five pressed-byte audits an
 image earns: `67 − 5 = 62`).
 
+**STFS packages carry real, derived metadata (and you can override it).**
+A synthesized STFS package used to be a title_id=0 shell a console can't
+index. Now `X -> stfs` derives the game's identity from the source: the
+title id / media id / disc number come from the payload `default.xex` (the
+same exec-info GoD reads), and the display name comes from the **redump
+DAT** (matched by the source's hash - the canonical game name), falling back
+to the source filename. `--content-type`, `--title`, `--title-id` and
+`--media-id` fill or override any of it. On an `stfs -> stfs` rebuild those
+flags *edit* the preserved header - rename a package or re-stamp an id by
+converting with a flag, no metadata editor needed. (Deriving from the source
+is conversion; a convert-with-override is the edit.)
+
 **STFS names over 40 bytes are refused, not truncated.** STFS's file-table
 name field is a hard 40 bytes of ASCII; some disc games carry longer asset
 names (a real XGD3 shader is `transparent_generic_viewer_centered_m.vsh`,
