@@ -21,6 +21,18 @@ import os
 
 X360DB_URL = "https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json"
 
+# xVerter's own reserved title ids - the legal test discs, so that converting
+# one names itself as a first-class release instead of tripping the "matches
+# no retail game" warning. Their title ids spell the disc format (XGD1/2/3)
+# and are checked BEFORE the x360db map, so they always resolve and survive a
+# `dat update` that refreshes the external database. Coordinated with the
+# test-disc project, which stamps these ids into the discs' executables.
+XVERTER_TITLES = {
+    "58474431": "xVerter Test Disc (XGD1)",   # "XGD1"
+    "58474432": "xVerter Test Disc (XGD2)",   # "XGD2"
+    "58474433": "xVerter Test Disc (XGD3)",   # "XGD3"
+}
+
 _cache = {}
 
 
@@ -64,7 +76,7 @@ def name_for_title_id(title_id, system="xbox360"):
         except ValueError:
             return None
     key = "%08X" % (int(title_id) & 0xFFFFFFFF)
-    return _load(system).get(key) or None
+    return XVERTER_TITLES.get(key) or _load(system).get(key) or None
 
 
 def distill(games):
