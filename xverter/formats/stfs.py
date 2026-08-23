@@ -83,22 +83,65 @@ def parse_content_type(text):
             "like 0x000D0000" % (text, ", ".join(sorted(CONTENT_TYPES))))
 
 
-def synth_header(content_type, display_name=""):
-    """Build a minimal but valid LIVE package header (0xB000 bytes) for a
-    source that carries no STFS header of its own. Only the fields our
-    reader needs are set - magic, header size, content type, metadata
-    version, and a best-effort display title; build() fills the volume
-    descriptor and the header self-hash. Everything else is zero, which is
-    exactly the ecosystem-standard 'junk where it does not matter' posture
-    the signature bytes already take."""
+# XContentHeader metadata field offsets - identical in STFS and GoD
+# (both are CON/LIVE/PIRS packages), verified against a real Spartan header.
+MEDIA_ID_OFFSET = 0x354
+TITLE_ID_OFFSET = 0x360
+PLATFORM_OFFSET = 0x364          # platform, exec_type, disc_number, disc_count
+
+
+def synth_header(content_type, display_name="", info=None):
+    """Build a valid LIVE package header (0xB000 bytes) for a source that
+    carries no STFS header of its own. Sets the fields a console actually
+    indexes on - content type, and (from the payload default.xex, via
+    `info`) media id, title id, platform/exec type, disc number/count -
+    plus a display title. build() fills the volume descriptor and reseals
+    the header self-hash. Everything else is the ecosystem-standard junk
+    the signature bytes already are."""
     h = bytearray(0xB000)
     h[0:4] = b"LIVE"
     struct.pack_into(">I", h, HEADER_SIZE_OFFSET, 0xB000)   # base -> 0xB000
     struct.pack_into(">I", h, CONTENT_TYPE_OFFSET, int(content_type) & 0xFFFFFFFF)
     struct.pack_into(">I", h, 0x348, 2)                     # metadata version
+    if info:
+        struct.pack_into(">I", h, MEDIA_ID_OFFSET, int(info.get("media_id", 0)) & 0xFFFFFFFF)
+        struct.pack_into(">I", h, TITLE_ID_OFFSET, int(info.get("title_id", 0)) & 0xFFFFFFFF)
+        h[PLATFORM_OFFSET]     = int(info.get("platform", 0)) & 0xFF
+        h[PLATFORM_OFFSET + 1] = int(info.get("executable_type", 0)) & 0xFF
+        h[PLATFORM_OFFSET + 2] = int(info.get("disc_number", 0)) & 0xFF
+        h[PLATFORM_OFFSET + 3] = int(info.get("disc_count", 0)) & 0xFF
     if display_name:
-        name = display_name.encode("utf-16-be")[:0xFE]
-        h[TITLE_OFFSET:TITLE_OFFSET + len(name)] = name
+        _set_title(h, display_name)
+    return bytes(h)
+
+
+def _set_title(h, title):
+    """Write the UTF-16-BE display name at TITLE_OFFSET, clearing the old
+    one first (so an edit does not leave a longer previous name trailing)."""
+    span = 0x80
+    h[TITLE_OFFSET:TITLE_OFFSET + span] = b"\x00" * span
+    enc = str(title).encode("utf-16-be")[:span - 2]
+    h[TITLE_OFFSET:TITLE_OFFSET + len(enc)] = enc
+
+
+def apply_metadata(header, content_type=None, title=None,
+                   title_id=None, media_id=None):
+    """Overlay chosen metadata onto an existing header (bytes) and return
+    the new bytes. Only fields that are not None are changed - the rest of
+    the header (a preserved STFS source, or a fresh synth_header) is kept.
+    This is how `--content-type/--title/--title-id/--media-id` both fill a
+    synthesized header and *edit* a preserved one on an stfs->stfs rebuild.
+    build() reseals the header self-hash afterwards, so raw field writes
+    are safe."""
+    h = bytearray(header)
+    if content_type is not None:
+        struct.pack_into(">I", h, CONTENT_TYPE_OFFSET, int(content_type) & 0xFFFFFFFF)
+    if media_id is not None:
+        struct.pack_into(">I", h, MEDIA_ID_OFFSET, int(media_id) & 0xFFFFFFFF)
+    if title_id is not None:
+        struct.pack_into(">I", h, TITLE_ID_OFFSET, int(title_id) & 0xFFFFFFFF)
+    if title is not None:
+        _set_title(h, title)
     return bytes(h)
 
 

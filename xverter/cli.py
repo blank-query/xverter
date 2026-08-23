@@ -326,6 +326,25 @@ def _stfs_source_entries(kind, path, w, manifest, prog):
     return entries, (lambda: None)          # pivot cleaned up with w
 
 
+def _derive_xex_info(entries):
+    """Exec-info (title/media id, disc, platform) from the payload's
+    default.xex, or None. Same source GoD reads its ids from - so an STFS
+    package synthesized from a game carries the game's real identity, not
+    zeros."""
+    for rel, _sz, opener in entries:
+        if rel.lower().lstrip("/") == "default.xex":
+            f = opener()
+            try:
+                return god_mod._parse_xex(f, 0)
+            except Exception:                        # noqa: BLE001
+                return None
+            finally:
+                cl = getattr(f, "close", None)
+                if cl:
+                    cl()
+    return None
+
+
 def _output_siblings(out_path):
     """Every path a writer might have created for this output: the one
     it was given, plus the Name.N.ext slices the split writers emit.
@@ -1724,28 +1743,41 @@ def cmd_convert(args):
             # non-STFS source has no type to carry, so --content-type is
             # required there - the one decision only the user can make,
             # surfaced rather than guessed.
-            ctype = None
-            if getattr(args, "content_type", None) is not None:
-                ctype = stfs_mod.parse_content_type(args.content_type)
-            if kind == "stfs":
-                with open(path, "rb") as _hf:
-                    header = bytearray(_hf.read(0xB000))
-                if ctype is not None:
-                    struct.pack_into(">I", header,
-                                     stfs_mod.CONTENT_TYPE_OFFSET, ctype)
-                header = bytes(header)
-            else:
-                if ctype is None:
-                    raise CliError(
-                        "writing STFS from a %s source needs a content "
-                        "type - it is never guessed. Add --content-type "
-                        "xbla|dlc|title-update|xbox-original (or a raw "
-                        "value like 0x000D0000)." % kind)
-                stem = os.path.splitext(os.path.basename(args.output))[0]
-                header = stfs_mod.synth_header(ctype, display_name=stem)
+            ctype = (stfs_mod.parse_content_type(args.content_type)
+                     if getattr(args, "content_type", None) is not None
+                     else None)
+            tid = int(args.title_id, 0) if getattr(args, "title_id", None) else None
+            mid = int(args.media_id, 0) if getattr(args, "media_id", None) else None
+            title = getattr(args, "title", None)
             man = {}
             entries, closer = _stfs_source_entries(kind, path, w, man, prog)
             try:
+                if kind == "stfs":
+                    # Faithful rebuild; the --* flags EDIT the preserved
+                    # header (content type / name / ids), else it is kept
+                    # verbatim.
+                    with open(path, "rb") as _hf:
+                        header = _hf.read(0xB000)
+                    header = stfs_mod.apply_metadata(
+                        header, content_type=ctype, title=title,
+                        title_id=tid, media_id=mid)
+                else:
+                    if ctype is None:
+                        raise CliError(
+                            "writing STFS from a %s source needs a content "
+                            "type - it is never guessed. Add --content-type "
+                            "xbla|dlc|title-update|xbox-original (or a raw "
+                            "value like 0x000D0000)." % kind)
+                    # Derive identity from the payload default.xex (as GoD
+                    # does); name from --title or the source filename.
+                    info = _derive_xex_info(entries)
+                    name = (title if title is not None else os.path.splitext(
+                        os.path.basename(path.rstrip(os.sep)))[0])
+                    header = stfs_mod.synth_header(ctype, display_name=name,
+                                                   info=info)
+                    if tid is not None or mid is not None:
+                        header = stfs_mod.apply_metadata(
+                            header, title_id=tid, media_id=mid)
                 stfs_mod.build(entries, args.output, header,
                                progress=prog.cb("stfs-write"))
             finally:
@@ -2092,6 +2124,17 @@ def main(argv=None):
                         "Required for such sources (the type is never "
                         "guessed); an STFS source preserves its own type "
                         "unless this overrides it")
+    p.add_argument("--title", metavar="NAME", default=None,
+                   help="display name for .stfs output (what a console "
+                        "dashboard shows). Derived from the source when "
+                        "possible; this overrides it, and EDITS the name on "
+                        "an stfs->stfs rebuild")
+    p.add_argument("--title-id", metavar="HEX", default=None,
+                   help="override the title id for .stfs output (0x-hex or "
+                        "decimal). Normally read from the payload default.xex")
+    p.add_argument("--media-id", metavar="HEX", default=None,
+                   help="override the media id for .stfs output (0x-hex or "
+                        "decimal). Normally read from the payload default.xex")
     p.set_defaults(fn=cmd_convert)
 
     args = ap.parse_args(argv)

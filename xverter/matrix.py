@@ -242,6 +242,23 @@ def _read_content_type(path):
         return int.from_bytes(f.read(4), "big")
 
 
+def check_stfs_title_id(edge, path):
+    """The written STFS package must carry a real (nonzero) title id -
+    proof the writer derived it from the payload default.xex (or preserved
+    it on a rebuild) rather than shipping a title_id=0 shell a console
+    can't index."""
+    t0 = time.monotonic()
+    tid = int.from_bytes(open(path, "rb").read(0x364)[0x360:0x364], "big")
+    dt = time.monotonic() - t0
+    ok = tid != 0
+    RESULTS.append({"edge": edge, "type": "stfs-title-id", "ok": ok,
+                    "seconds": round(dt, 1), "title_id": "0x%08X" % tid})
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL (title_id is zero)", dt),
+          flush=True)
+    return ok
+
+
 def check_content_type(edge, path, want):
     """The written STFS package must carry exactly the content type it was
     asked for (a chosen --content-type, or a preserved source type) - not
@@ -855,6 +872,7 @@ def main(argv=None):
             run("%s(src)->stfs" % kind,
                 ["convert", src, "-o", d("a.stfs"), "--content-type", "dlc"])
         check_content_type("  stfs content-type", d("a.stfs"), want_ct)
+        check_stfs_title_id("  stfs title-id", d("a.stfs"))
         run("stfs(r)->dir", ["convert", d("a.stfs"), "-o", d("from_stfs") + "/"])
         check_dir("  content(stfs)", d("from_stfs"), baseline)
         run("verify stfs", ["verify", d("a.stfs")])
