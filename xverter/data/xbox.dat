@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox</name>
-		<description>Microsoft - Xbox - Datfile (2684) (2026-08-16 15-36-53)</description>
-		<version>2026-08-16 15-36-53</version>
-		<date>2026-08-16 15-36-53</date>
+		<description>Microsoft - Xbox - Datfile (2687) (2026-08-23 06-16-53)</description>
+		<version>2026-08-23 06-16-53</version>
+		<date>2026-08-23 06-16-53</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -1770,6 +1770,11 @@
 		<category>Games</category>
 		<description>Colin McRae Rally 04 (USA) (En,Fr,De,Es,It)</description>
 		<rom name="Colin McRae Rally 04 (USA) (En,Fr,De,Es,It).iso" size="7825162240" crc="1a035f8c" md5="0d180434ebbda81cd7b8e0ddfaec8be2" sha1="4a6e0bdd780ad6ec1e1239724787bc04354611c9"/>
+	</game>
+	<game name="Colin McRae Rally 2005 (Asia)" id="137223">
+		<category>Games</category>
+		<description>Colin McRae Rally 2005 (Asia)</description>
+		<rom name="Colin McRae Rally 2005 (Asia).iso" size="7825162240" crc="a0e7cce2" md5="b4e652f1bdf21111bd198d0af8e6423c" sha1="0f516c06fd485fec8bcddf39b17608f88bff008b"/>
 	</game>
 	<game name="Colin McRae Rally 2005 (Europe) (En,Fr,De,Es,It)" id="18137">
 		<category>Games</category>
@@ -3555,6 +3560,11 @@
 		<category>Games</category>
 		<description>FIFA World Cup Germany 2006 (Europe) (Fr,De)</description>
 		<rom name="FIFA World Cup Germany 2006 (Europe) (Fr,De).iso" size="7825162240" crc="5d3c3e90" md5="822b39ce96e4b3c299670ac873d0f071" sha1="ac7bfb0006a4cd9c5683b724cdb80e820cc6bff2"/>
+	</game>
+	<game name="FIFA World Cup Germany 2006 (Sweden) (En,Sv)" id="137117">
+		<category>Games</category>
+		<description>FIFA World Cup Germany 2006 (Sweden) (En,Sv)</description>
+		<rom name="FIFA World Cup Germany 2006 (Sweden) (En,Sv).iso" size="7825162240" crc="eed4d9b5" md5="487e2df88b055de5cf76f52dbc9e5e4a" sha1="dd06fece531d4cdc88bbf736355c46632d506715"/>
 	</game>
 	<game name="FIFA World Cup Germany 2006 (USA)" id="42660">
 		<category>Games</category>
@@ -8822,10 +8832,10 @@
 		<description>Phantom Dust (Japan) (Demo)</description>
 		<rom name="Phantom Dust (Japan) (Demo).iso" size="7825162240" crc="17875cf7" md5="baf09c14a3a8752d800c7c3b82787186" sha1="b7000ce178ee0153d2463d968ee6459076851b1b"/>
 	</game>
-	<game name="Phantom Dust (Japan, Korea) (En,Ja)" id="56010">
+	<game name="Phantom Dust (Japan, Asia) (En,Ja)" id="56010">
 		<category>Games</category>
-		<description>Phantom Dust (Japan, Korea) (En,Ja)</description>
-		<rom name="Phantom Dust (Japan, Korea) (En,Ja).iso" size="7825162240" crc="e45ed99a" md5="7e91978f763970a7fa8d04e94f63599e" sha1="48a2f14e5df48b0c5f172fc9f9621ca83e7e85af"/>
+		<description>Phantom Dust (Japan, Asia) (En,Ja)</description>
+		<rom name="Phantom Dust (Japan, Asia) (En,Ja).iso" size="7825162240" crc="e45ed99a" md5="7e91978f763970a7fa8d04e94f63599e" sha1="48a2f14e5df48b0c5f172fc9f9621ca83e7e85af"/>
 	</game>
 	<game name="Phantom Dust (USA) (En,Ja)" id="50124">
 		<category>Games</category>
@@ -9982,6 +9992,11 @@
 		<description>Shrek (USA)</description>
 		<rom name="Shrek (USA).iso" size="7825162240" crc="05ea1125" md5="62a9c6e2066eb3cac7248ec2ce12f203" sha1="3c99ba97210052c4919c1124a88f55e2e14a10c8"/>
 	</game>
+	<game name="Shrek 2 (Europe) (Rev 1)" id="108473">
+		<category>Games</category>
+		<description>Shrek 2 (Europe) (Rev 1)</description>
+		<rom name="Shrek 2 (Europe) (Rev 1).iso" size="7825162240" crc="12007ee7" md5="fccf4ed7293eae18baf779e520bc45e7" sha1="6d9195b78f85d46eec0dac224777afd0cf970ece"/>
+	</game>
 	<game name="Shrek 2 (France)" id="50495">
 		<category>Games</category>
 		<description>Shrek 2 (France)</description>
@@ -10006,11 +10021,6 @@
 		<category>Games</category>
 		<description>Shrek 2 (UK)</description>
 		<rom name="Shrek 2 (UK).iso" size="7825162240" crc="6792351a" md5="19b74378b87d8269d39efa1937fc96b2" sha1="cba65d5ae3688006b4694163a91c1f247c684cc1"/>
-	</game>
-	<game name="Shrek 2 (UK) (Rev 1)" id="108473">
-		<category>Games</category>
-		<description>Shrek 2 (UK) (Rev 1)</description>
-		<rom name="Shrek 2 (UK) (Rev 1).iso" size="7825162240" crc="12007ee7" md5="fccf4ed7293eae18baf779e520bc45e7" sha1="6d9195b78f85d46eec0dac224777afd0cf970ece"/>
 	</game>
 	<game name="Shrek 2 (USA, Japan)" id="21173">
 		<category>Games</category>
@@ -11362,6 +11372,11 @@
 		<category>Preproduction</category>
 		<description>Thief - Deadly Shadows (USA) (Beta) (2004-04-12)</description>
 		<rom name="Thief - Deadly Shadows (USA) (Beta) (2004-04-12).iso" size="2400897024" crc="a4a5b10f" md5="c8cbfee7f56a0312ad194b9329063269" sha1="fd8e5520d370b88ed85b770b0b115217ee64a852"/>
+	</game>
+	<game name="Thing, The (Asia)" id="137118">
+		<category>Games</category>
+		<description>Thing, The (Asia)</description>
+		<rom name="Thing, The (Asia).iso" size="7825162240" crc="04c6318e" md5="4f2f9d3283c1b70778677b022e21ef51" sha1="a230dcfdcef9130bbc8208c86c32776b365a71a3"/>
 	</game>
 	<game name="Thing, The (Europe) (En,Fr,Es,It)" id="12162">
 		<category>Games</category>

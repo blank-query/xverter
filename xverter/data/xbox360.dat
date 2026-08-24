@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3698) (2026-08-16 15-26-56)</description>
-		<version>2026-08-16 15-26-56</version>
-		<date>2026-08-16 15-26-56</date>
+		<description>Microsoft - Xbox 360 - Datfile (3702) (2026-08-23 09-58-20)</description>
+		<version>2026-08-23 09-58-20</version>
+		<date>2026-08-23 09-58-20</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -4220,6 +4220,11 @@
 		<description>Disney Infinity 2.0 - Play Without Limits (Europe) (Fr,De,It,Nl)</description>
 		<rom name="Disney Infinity 2.0 - Play Without Limits (Europe) (Fr,De,It,Nl).iso" size="7838695424" crc="7d5d8dd4" md5="5cb0957b20c841ca819beaab3c96f763" sha1="d7581ea77592237d495a25fe5937fcf7d7535778"/>
 	</game>
+	<game name="Disney Infinity 2.0 - Play Without Limits (Scandinavia) (Sv,No,Da,Fi)" id="137116">
+		<category>Games</category>
+		<description>Disney Infinity 2.0 - Play Without Limits (Scandinavia) (Sv,No,Da,Fi)</description>
+		<rom name="Disney Infinity 2.0 - Play Without Limits (Scandinavia) (Sv,No,Da,Fi).iso" size="7838695424" crc="f2a9d694" md5="efa2b707516487c98bb45e49c8aee49b" sha1="c139b97280200af76d29e6fff9f7ef6d09b8f2b5"/>
+	</game>
 	<game name="Disney Infinity 2.0 Edition (USA) (En,Fr,Es,Pt)" id="60558">
 		<category>Games</category>
 		<description>Disney Infinity 2.0 Edition (USA) (En,Fr,Es,Pt)</description>
@@ -4304,6 +4309,11 @@
 		<category>Games</category>
 		<description>Disney-Pixar Brave (Russia) (Pl,Ru)</description>
 		<rom name="Disney-Pixar Brave (Russia) (Pl,Ru).iso" size="7838695424" crc="4dabb426" md5="a2f4e9c9b136e020c27b9f2b7326d20d" sha1="ca5c5cf6b4d7291e782a3b9c24d582bafd51b837"/>
+	</game>
+	<game name="Disney-Pixar Brave (Scandinavia) (En,Sv,No,Da)" id="137114">
+		<category>Games</category>
+		<description>Disney-Pixar Brave (Scandinavia) (En,Sv,No,Da)</description>
+		<rom name="Disney-Pixar Brave (Scandinavia) (En,Sv,No,Da).iso" size="7838695424" crc="046a6f23" md5="3d81ef5b8be0f19193a553e6555b7fcd" sha1="d845a2f0a29f11136cd76b63f67a0e82dce3a5c4"/>
 	</game>
 	<game name="Disney-Pixar Brave (USA, Australia) (En,Fr,Es)" id="39361">
 		<category>Games</category>
@@ -10526,15 +10536,15 @@
 		<description>Mercenaries 2 - World in Flames (USA) (En,Fr)</description>
 		<rom name="Mercenaries 2 - World in Flames (USA) (En,Fr).iso" size="7835492352" crc="cbc441f0" md5="381356fb3a5688a5c1642fb6bb04d26b" sha1="93cf6b6ed22f2334e00b5dfd11faa13e1d2bcab3"/>
 	</game>
-	<game name="Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt)" id="39033">
-		<category>Games</category>
-		<description>Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt)</description>
-		<rom name="Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt).iso" size="8738846720" crc="7524ae2b" md5="d674877aea3144ae08e75ceb4d5ad0ac" sha1="81021826b07d93d1714dcd4574108a99b57410c6"/>
-	</game>
 	<game name="Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt) (Demo)" id="63133">
 		<category>Demos</category>
 		<description>Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt) (Demo)</description>
 		<rom name="Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt) (Demo).iso" size="7838695424" crc="3e0373a3" md5="ca453e0c6c61f7ca7af8ffe147601ac3" sha1="e329c4f7a97c181cc2f3494b3e2b1c87f781f004"/>
+	</game>
+	<game name="Metal Gear Rising - Revengeance (World) (En,Ja,Fr,De,Es,It,Pt)" id="39033">
+		<category>Games</category>
+		<description>Metal Gear Rising - Revengeance (World) (En,Ja,Fr,De,Es,It,Pt)</description>
+		<rom name="Metal Gear Rising - Revengeance (World) (En,Ja,Fr,De,Es,It,Pt).iso" size="8738846720" crc="7524ae2b" md5="d674877aea3144ae08e75ceb4d5ad0ac" sha1="81021826b07d93d1714dcd4574108a99b57410c6"/>
 	</game>
 	<game name="Metal Gear Solid - HD Collection (Europe) (Disc 1)" id="90845">
 		<category>Games</category>
@@ -10991,10 +11001,10 @@
 		<description>Musou Orochi - Maou Sairin (Japan) (Rev 1)</description>
 		<rom name="Musou Orochi - Maou Sairin (Japan) (Rev 1).iso" size="7835492352" crc="6382874c" md5="e7722130023c4eb0f714bacb0e69f97e" sha1="e4e63dbf57dcba55a70e7bc3801e239245567b28"/>
 	</game>
-	<game name="Musou Orochi 2 (Japan)" id="61906">
+	<game name="Musou Orochi 2 (Japan, Asia)" id="61906">
 		<category>Games</category>
-		<description>Musou Orochi 2 (Japan)</description>
-		<rom name="Musou Orochi 2 (Japan).iso" size="8738846720" crc="f243fd12" md5="b9e88decd3953d4b6bdd3e524c86de65" sha1="3d69c8fa0ec1a79ec51e22d7aabd2206eb627d64"/>
+		<description>Musou Orochi 2 (Japan, Asia)</description>
+		<rom name="Musou Orochi 2 (Japan, Asia).iso" size="8738846720" crc="f243fd12" md5="b9e88decd3953d4b6bdd3e524c86de65" sha1="3d69c8fa0ec1a79ec51e22d7aabd2206eb627d64"/>
 	</game>
 	<game name="Mussang Orochi - Mawang Jaerim (Korea)" id="136811">
 		<category>Games</category>
@@ -14774,20 +14784,20 @@
 		<description>Silent Hill - Downpour (USA, Europe) (En,Fr,De,Es,It,Pt)</description>
 		<rom name="Silent Hill - Downpour (USA, Europe) (En,Fr,De,Es,It,Pt).iso" size="7838695424" crc="85dd4166" md5="4067f22d42014dad7746be15b52f4e13" sha1="341db3ee003daee8c26719867b1ab7cda42b9c6d"/>
 	</game>
-	<game name="Silent Hill - HD Collection (USA, Europe) (En,Fr,De,Es,It)" id="58139">
+	<game name="Silent Hill - HD Collection (World) (En,Fr,De,Es,It)" id="58139">
 		<category>Games</category>
-		<description>Silent Hill - HD Collection (USA, Europe) (En,Fr,De,Es,It)</description>
-		<rom name="Silent Hill - HD Collection (USA, Europe) (En,Fr,De,Es,It).iso" size="8738846720" crc="26bd82e5" md5="23ce163949231bdafe918dd7d6fa2c1d" sha1="713311c8d479364fe5050189c920c62c5f1f754a"/>
+		<description>Silent Hill - HD Collection (World) (En,Fr,De,Es,It)</description>
+		<rom name="Silent Hill - HD Collection (World) (En,Fr,De,Es,It).iso" size="8738846720" crc="26bd82e5" md5="23ce163949231bdafe918dd7d6fa2c1d" sha1="713311c8d479364fe5050189c920c62c5f1f754a"/>
+	</game>
+	<game name="Silent Hill - Homecoming (Australia, Germany) (En,Fr,De,Es,It)" id="12599">
+		<category>Games</category>
+		<description>Silent Hill - Homecoming (Australia, Germany) (En,Fr,De,Es,It)</description>
+		<rom name="Silent Hill - Homecoming (Australia, Germany) (En,Fr,De,Es,It).iso" size="7838695424" crc="314f396e" md5="70d33af183a1ee2922073d9e44fa5764" sha1="a11f936f5e1a093d53b7d1e85645e832d5753ac2"/>
 	</game>
 	<game name="Silent Hill - Homecoming (Europe) (En,Fr,De,Es,It)" id="55848">
 		<category>Games</category>
 		<description>Silent Hill - Homecoming (Europe) (En,Fr,De,Es,It)</description>
 		<rom name="Silent Hill - Homecoming (Europe) (En,Fr,De,Es,It).iso" size="7835492352" crc="769a30dc" md5="b415d8f7a111fa6b5d356a90fc470ad2" sha1="4914d3e25668ae1f217f02ad7134a88bcf4eae2f"/>
-	</game>
-	<game name="Silent Hill - Homecoming (Germany) (En,Fr,De,Es,It)" id="12599">
-		<category>Games</category>
-		<description>Silent Hill - Homecoming (Germany) (En,Fr,De,Es,It)</description>
-		<rom name="Silent Hill - Homecoming (Germany) (En,Fr,De,Es,It).iso" size="7838695424" crc="314f396e" md5="70d33af183a1ee2922073d9e44fa5764" sha1="a11f936f5e1a093d53b7d1e85645e832d5753ac2"/>
 	</game>
 	<game name="Silent Hill - Homecoming (USA) (En,Fr,De,Es,It)" id="16782">
 		<category>Games</category>
@@ -14939,6 +14949,11 @@
 		<description>Skylanders - Imaginators (Europe) (Fr,Nl)</description>
 		<rom name="Skylanders - Imaginators (Europe) (Fr,Nl).iso" size="8738846720" crc="0444b91e" md5="e704f7e6277b9dadfba39d635ac0a475" sha1="f0ec78da33d2e292ef46de8b501ff13bcfa398cf"/>
 	</game>
+	<game name="Skylanders - Imaginators (Scandinavia) (Sv,No,Da,Fi)" id="137115">
+		<category>Games</category>
+		<description>Skylanders - Imaginators (Scandinavia) (Sv,No,Da,Fi)</description>
+		<rom name="Skylanders - Imaginators (Scandinavia) (Sv,No,Da,Fi).iso" size="8738846720" crc="3add9973" md5="1fe3502a31c658ee9158153110a0b505" sha1="ed67992feda585bcdcc6b265b42d7c9d2daba987"/>
+	</game>
 	<game name="Skylanders - Imaginators (USA) (En,Fr)" id="103649">
 		<category>Games</category>
 		<description>Skylanders - Imaginators (USA) (En,Fr)</description>
@@ -14968,6 +14983,11 @@
 		<category>Games</category>
 		<description>Skylanders - SuperChargers (Europe) (Fr,Nl)</description>
 		<rom name="Skylanders - SuperChargers (Europe) (Fr,Nl).iso" size="8738846720" crc="64e62127" md5="75ae6cdf6537c2fa4fff2e1a22957d8c" sha1="a4df9c1f9c9c4ca9160052758e1f8810c8d484f3"/>
+	</game>
+	<game name="Skylanders - SuperChargers (Scandinavia) (Sv,No,Da,Fi)" id="137166">
+		<category>Games</category>
+		<description>Skylanders - SuperChargers (Scandinavia) (Sv,No,Da,Fi)</description>
+		<rom name="Skylanders - SuperChargers (Scandinavia) (Sv,No,Da,Fi).iso" size="8738846720" crc="296b5fc8" md5="b79a6c966288fb5acd12cd128915a03e" sha1="d48c972cf6f59ab5b8a45feafb07dbfdf2c184af"/>
 	</game>
 	<game name="Skylanders - SuperChargers (USA) (En,Fr)" id="103022">
 		<category>Games</category>
@@ -18359,10 +18379,10 @@
 		<description>Your Shape - Fitness Evolved (Korea) (En,Ko)</description>
 		<rom name="Your Shape - Fitness Evolved (Korea) (En,Ko).iso" size="7838695424" crc="849fc11b" md5="268c10b832fdf980acc013abbc56d473" sha1="8d871d4f5202a2b1f4ea1189fc72b83388a4fa9c"/>
 	</game>
-	<game name="Your Shape - Fitness Evolved (USA, Europe)" id="51984">
+	<game name="Your Shape - Fitness Evolved (World)" id="51984">
 		<category>Games</category>
-		<description>Your Shape - Fitness Evolved (USA, Europe)</description>
-		<rom name="Your Shape - Fitness Evolved (USA, Europe).iso" size="7838695424" crc="09139cd3" md5="79010c1a01144d5a62c950bedcaac50f" sha1="c1fb54a21ea2e44d9b4e3c14d27e68543ebad81d"/>
+		<description>Your Shape - Fitness Evolved (World)</description>
+		<rom name="Your Shape - Fitness Evolved (World).iso" size="7838695424" crc="09139cd3" md5="79010c1a01144d5a62c950bedcaac50f" sha1="c1fb54a21ea2e44d9b4e3c14d27e68543ebad81d"/>
 	</game>
 	<game name="Your Shape - Fitness Evolved 2012 (Asia) (En,Zh)" id="87528">
 		<category>Games</category>
