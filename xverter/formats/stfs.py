@@ -103,6 +103,13 @@ def synth_header(content_type, display_name="", info=None):
     struct.pack_into(">I", h, HEADER_SIZE_OFFSET, 0xB000)   # base -> 0xB000
     struct.pack_into(">I", h, CONTENT_TYPE_OFFSET, int(content_type) & 0xFFFFFFFF)
     struct.pack_into(">I", h, 0x348, 2)                     # metadata version
+    # Unrestricted "all-console" license entry. A zero license descriptor
+    # reads as unlicensed content and the console refuses to launch it
+    # ("couldn't start") - a native package and the GoD template both carry
+    # licenseID 0xFFFFFFFFFFFFFFFF with bits=1 here. This lives before the
+    # header self-hash region (0x344+), so build() does not reseal over it.
+    struct.pack_into(">Q", h, 0x22C, 0xFFFFFFFFFFFFFFFF)
+    struct.pack_into(">I", h, 0x234, 1)
     if info:
         struct.pack_into(">I", h, MEDIA_ID_OFFSET, int(info.get("media_id", 0)) & 0xFFFFFFFF)
         struct.pack_into(">I", h, TITLE_ID_OFFSET, int(info.get("title_id", 0)) & 0xFFFFFFFF)
@@ -498,6 +505,14 @@ def build(entries, out_path, header, progress=None):
             digest + bytes([0x80, (nxt >> 16) & 0xFF, (nxt >> 8) & 0xFF, nxt & 0xFF]))
 
     filesize = data_off(nblocks - 1, base) + BLOCK
+    # Content size = every block after the 0xB000 header (data + hash tables
+    # + file table). A zero here leaves the console unable to size the
+    # content and it refuses to launch; native packages carry the real
+    # value (verified: filesize - base reproduces Spartan's 0x8B916000
+    # exactly). Patched into the header before its self-hash region is
+    # sealed below, so the digest covers the correct size.
+    header = bytearray(header)
+    struct.pack_into(">Q", header, 0x34C, filesize - base)
     done = [0]
     with open(out_path, "wb") as o:
         o.truncate(filesize)
