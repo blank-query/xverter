@@ -1450,7 +1450,32 @@ def cmd_dat(args):
     return 0
 
 
+def _convert_store(args):
+    """--store: archive the input folder's files verbatim into a zar, with
+    NO format detection or conversion. Everything else in cmd_convert exists
+    to recognise a container and transform it; this is the one path that does
+    not - it wraps whatever bytes are in the folder, at their exact relative
+    paths, into a zar. That is how a package (STFS/GoD/...) gets stored
+    byte-for-byte at a chosen path instead of being detected and unpacked."""
+    out_kind = _output_kind(args.output)
+    if out_kind != "zar":
+        raise CliError(
+            "--store only writes a .zar archive; got %s output. It stores "
+            "files verbatim, which only the zar container does." % out_kind)
+    if not os.path.isdir(args.input):
+        raise CliError(
+            "--store archives a FOLDER verbatim; point it at a directory "
+            "whose files are the exact paths you want in the zar (e.g. "
+            "<TitleID>/<ContentType>/<contentid>), not a single file")
+    prog = _Progress(getattr(args, "progress", None)
+                     or ("tty" if sys.stderr.isatty() else None))
+    zar_mod.pack(args.input, args.output, progress=prog.cb("store"))
+    print("wrote %s (stored verbatim, round-trip verified)" % args.output)
+
+
 def cmd_convert(args):
+    if getattr(args, "store", False):
+        return _convert_store(args)
     kind, path = detect_mod.detect(args.input)
     out_kind = _output_kind(args.output)
     if out_kind == kind and kind not in ("gamedir", "stfs"):
@@ -2220,6 +2245,15 @@ def main(argv=None):
                         "output (what a dashboard shows). Max 16 KB. A "
                         "reserved xVerter test disc carries the xVerter "
                         "icon automatically")
+    p.add_argument("--store", "--raw", dest="store", action="store_true",
+                   help="archive the input FOLDER's files verbatim into a "
+                        ".zar with NO format detection or conversion. The "
+                        "way to wrap a package (STFS/GoD/...) into a zar "
+                        "byte-for-byte at a chosen path - lay the file out "
+                        "as <folder>/<TitleID>/<ContentType>/<contentid> "
+                        "and it lands there unchanged. Without this, xverter "
+                        "recognises the package by its magic and converts "
+                        "its contents instead")
     p.set_defaults(fn=cmd_convert)
 
     args = ap.parse_args(argv)
