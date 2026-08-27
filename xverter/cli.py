@@ -381,46 +381,63 @@ def _output_siblings(out_path):
     return found
 
 
-def _pivot_iso(kind, path, w, prog, verify):
-    """Materialise a source that is not already an image as one, and
-    return its path.
-
-    Only formats with no image of their own get here - an archive or a
-    folder - so an image has to be built rather than passed through. A
-    zar goes straight from the archive into the image; anything else is
-    extracted to a directory first, because it has no other way in."""
-    iso = os.path.join(w, "pivot_out.iso")
-    if kind == "zar" and zar_mod.can_stream():
-        man = {}
-        tree, closer = zar_mod.iso_tree(path, manifest=man)
-        try:
-            builders_mod.build_iso_from_tree(
-                tree, iso, verify=verify, manifest=man,
-                progress=prog.cb("iso-write"),
-                verify_progress=prog.cb("verify"))
-        finally:
-            closer()
-        return iso
+def _lazy_image_source(kind, path):
+    """A seekable XDVDFS LazyImage over a random-access tree source - a zar,
+    an STFS package, or a folder - so a target builds in a single pass with
+    no temp ISO written, or (None, None) if the source is not a tree.
+    Returns (image, closer). The image's bytes are identical to a
+    materialised ISO by construction - both come from xdvdfs._allocate - so
+    this only skips the scratch file, never changes the output."""
+    if kind == "zar":
+        zr = zar_native_mod.ZarReader(path)
+        entries = [(rel, size, (lambda r=rel: zr.open_read(r)))
+                   for rel, size in zr.files()]
+        root = xdvdfs_mod.tree_from_entries(entries, where=path)
+        return xdvdfs_mod.LazyImage(root), zr.close
     if kind == "stfs":
         man = {}
         entries, closer = stfs_mod.file_entries(path, manifest=man)
-        try:
-            tree = xdvdfs_mod.tree_from_entries(entries, where=path)
-            builders_mod.build_iso_from_tree(
-                tree, iso, verify=verify, manifest=man,
-                progress=prog.cb("iso-write"),
-                verify_progress=prog.cb("verify"))
-        finally:
-            closer()
-        return iso
-    manifest = {}
-    gamedir = _to_gamedir(kind, path, w, manifest=manifest,
-                          progress=prog.cb("extract"))
-    builders_mod.build_iso(gamedir, iso, verify=verify,
-                           manifest=manifest or None,
-                           progress=prog.cb("iso-write"),
-                           verify_progress=prog.cb("verify"))
-    return iso
+        root = xdvdfs_mod.tree_from_entries(entries, where=path)
+        return xdvdfs_mod.LazyImage(root), closer
+    if kind == "gamedir":
+        entries = []
+        for r, _d, fs in os.walk(path):
+            for f in fs:
+                full = os.path.join(r, f)
+                entries.append((os.path.relpath(full, path),
+                                os.path.getsize(full),
+                                (lambda p=full: open(p, "rb"))))
+        root = xdvdfs_mod.tree_from_entries(entries, where=path)
+        return xdvdfs_mod.LazyImage(root), None
+    return None, None
+
+
+def _source_image(kind, path, w):
+    """A seekable image for any source that holds or can synthesise one, so
+    every image target (god/cci/cso/chd) builds DIRECTLY from the source
+    with no pivot ISO on disk: the raw path for an iso, a decoding reader
+    for cci/cso/chd, a GodStream for a GoD, a synthesised LazyImage for a
+    tree (zar/gamedir). Returns (image, closer); closer is None when nothing
+    needs closing. Both an image reader and a LazyImage present the bare
+    game partition the writers consume, and LazyImage and the ISO writer
+    share xdvdfs._allocate, so the bytes are identical either way."""
+    if kind == "iso":
+        return path, None
+    if kind in ("cci", "cso", "chd"):
+        r = _wrapper_reader(kind, path)
+        return r, r.close
+    if kind == "god":
+        s = god_mod.GodStream(path)
+        return s, s.close
+    if kind in ("zar", "gamedir", "stfs"):
+        img, extra = _lazy_image_source(kind, path)
+
+        def _close():
+            img.close()
+            if extra:
+                extra()
+        return img, _close
+    raise CliError("cannot build an image from a %s source" % kind)
 
 
 def _output_kind(out_path):
@@ -811,6 +828,9 @@ def _dat_lookup(dat_path, size, crc, sha1):
 def _wrapper_reader(kind, path):
     if kind == "iso":
         return open(path, "rb")
+    if kind == "chd":
+        from .formats import chd_native
+        return chd_native.ChdReader(path)
     return (cci_mod.CciReader if kind == "cci" else cso_mod.CsoReader)(path)
 
 
@@ -956,8 +976,9 @@ class _SourceHashAhead:
         self._box = []
         self._err = []
         self._t = None
-        if in_kind not in ("iso", "god", "cci", "cso"):
-            return                       # pivot cases: let verify do it
+        if in_kind not in ("iso", "god", "cci", "cso", "chd",
+                            "zar", "gamedir", "stfs"):
+            return                       # nothing streamable to read ahead
         self._t = threading.Thread(
             target=self._run, args=(in_kind, in_path, w), daemon=True)
         self._t.start()
@@ -1003,6 +1024,16 @@ def _source_stream_sha1(in_kind, in_path, w):
     if in_kind == "god":
         with god_mod.GodStream(in_path) as f:
             return _hash(f)
+    if in_kind in ("zar", "gamedir", "stfs"):
+        # An independent second synthesis of the same tree - a fresh
+        # LazyImage - so a transient read error during the build's stream
+        # is caught rather than faithfully carried into both.
+        img, closer = _source_image(in_kind, in_path, w)
+        try:
+            return _hash(img)
+        finally:
+            if closer:
+                closer()
     with _wrapper_reader(in_kind, in_path) as f:
         return _hash(f)
 
@@ -1052,32 +1083,10 @@ def _verify_wrapper(out_kind, out_path, in_kind, in_path, w,
     got_t.start()
     if source_sha1 is not None:
         want = source_sha1               # computed during the build
-    elif in_kind == "iso":
-        with open(in_path, "rb") as f:
-            from .formats.cci import xbox_image_offset
-            off = xbox_image_offset(f)
-            if off:
-                import hashlib as _h
-                h = _h.sha1()
-                f.seek(off)
-                while True:
-                    b = f.read(1 << 22)
-                    if not b:
-                        break
-                    h.update(b)
-                want = h.hexdigest()
-            else:
-                want = stream_sha1(f)
-    elif in_kind == "god":
-        with god_mod.GodStream(in_path) as f:
-            want = stream_sha1(f)
-    elif in_kind in ("cci", "cso"):
-        with _wrapper_reader(in_kind, in_path) as f:
-            want = stream_sha1(f)
     else:
-        iso = os.path.join(w, "pivot_out.iso")
-        with open(iso, "rb") as f:
-            want = stream_sha1(f)
+        # Fallback if the ahead did not finish: recompute the source's
+        # image sha1 the one canonical way, for every source kind.
+        want = _source_stream_sha1(in_kind, in_path, w)
     got_t.join()
     if got_err:
         raise got_err[0]
@@ -1662,22 +1671,21 @@ def cmd_convert(args):
             _gil_hint()
             print("wrote %s" % args.output)
             return 0
-        if out_kind == "god" and kind in ("iso", "cci", "cso"):
-            # These sources already hold a pressed image, so the GoD gets
-            # that image and not one rebuilt out of its files. Without
-            # this, cci->god and iso->god disagreed about the same disc -
-            # each verifying happily against itself, because a GoD is
-            # checked against its own hash tree and the tree was built
-            # over whichever bytes it was handed.
-            god_src = path if kind == "iso" else _wrapper_reader(kind, path)
+        if out_kind == "god":
+            # Built DIRECTLY from the source's image stream - a reader for a
+            # pressed/compressed image, a synthesised LazyImage for a tree -
+            # with no pivot ISO on disk. A GoD is checked against its own
+            # hash tree over whichever bytes it was handed, and build_god
+            # re-reads and walks that tree, so verify needs no pivot either.
+            god_src, closer = _source_image(kind, path, w)
             try:
-                hdr = builders_mod.build_god(god_src, args.output,
-                                             verify=not args.no_verify,
-                                             progress=prog.cb("god-write"),
-                                             verify_progress=prog.cb("verify"))
+                hdr = builders_mod.build_god(
+                    god_src, args.output, verify=not args.no_verify,
+                    progress=prog.cb("god-write"),
+                    verify_progress=prog.cb("verify"))
             finally:
-                if kind != "iso":
-                    god_src.close()
+                if closer:
+                    closer()
             ident.report()
             _gil_hint()
             print("wrote GoD container (header: %s) (%s)"
@@ -1693,27 +1701,13 @@ def cmd_convert(args):
             # is already in hand. GodStream reads through the hash-
             # verifying container view, checked equivalent to the old
             # materialised route byte-for-byte.
+            chd_src, closer = _source_image(kind, path, w)
+            src_size = (os.path.getsize(path) if kind == "iso"
+                        else chd_src.size)
             ahead = None
-            closer = None
-            if kind == "iso":
-                chd_src = path
-                src_size = os.path.getsize(path)
-                if not args.no_verify:
-                    ahead = _FileHashAhead(path)
-            elif kind in ("god", "cci", "cso"):
-                chd_src = (god_mod.GodStream(path) if kind == "god"
-                           else _wrapper_reader(kind, path))
-                closer = chd_src.close
-                src_size = chd_src.size
-                if not args.no_verify:
-                    ahead = _SourceHashAhead(kind, path, w)
-            else:
-                src_iso = _pivot_iso(kind, path, w, prog,
-                                     not args.no_verify)
-                chd_src = src_iso
-                src_size = os.path.getsize(src_iso)
-                if not args.no_verify:
-                    ahead = _FileHashAhead(src_iso)
+            if not args.no_verify:
+                ahead = (_FileHashAhead(path) if kind == "iso"
+                         else _SourceHashAhead(kind, path, w))
             try:
                 chd_mod.build(chd_src, args.output,
                               progress=prog.cb("chd-write"))
@@ -1741,25 +1735,13 @@ def cmd_convert(args):
             # build produces, so it starts now and runs alongside it.
             ahead = (_SourceHashAhead(kind, path, w)
                      if not args.no_verify else None)
-            if kind == "iso":
-                written = build(path, args.output, split=split,
+            src, closer = _source_image(kind, path, w)
+            try:
+                written = build(src, args.output, split=split,
                                 progress=prog.cb("compress"))
-            elif kind == "god":
-                with god_mod.GodStream(path) as stream:
-                    written = build(stream, args.output, split=split,
-                                    progress=prog.cb("compress"))
-            elif kind == "cci" and out_kind == "cso":
-                with cci_mod.CciReader(path) as stream:
-                    written = build(stream, args.output, split=split,
-                                    progress=prog.cb("compress"))
-            elif kind == "cso" and out_kind == "cci":
-                with cso_mod.CsoReader(path) as stream:
-                    written = build(stream, args.output, split=split,
-                                    progress=prog.cb("compress"))
-            else:
-                iso = _pivot_iso(kind, path, w, prog, not args.no_verify)
-                written = build(iso, args.output, split=split,
-                                progress=prog.cb("compress"))
+            finally:
+                if closer:
+                    closer()
             if not args.no_verify:
                 _verify_wrapper(out_kind, written[0], kind, path, w,
                                 progress=prog.cb("verify"),
@@ -1988,22 +1970,6 @@ def cmd_convert(args):
             print("wrote %s (%s)"
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
-            return 0
-        if out_kind == "god":
-            # Everything that holds an image already returned above, so
-            # what is left has none and needs one built. Ahead of the
-            # extraction rather than after it, because a zar can go
-            # straight into the pivot without touching a scratch copy.
-            iso = _pivot_iso(kind, path, w, prog, not args.no_verify)
-            hdr = builders_mod.build_god(iso, args.output,
-                                         verify=not args.no_verify,
-                                         progress=prog.cb("god-write"),
-                                         verify_progress=prog.cb("verify"))
-            ident.report()
-            _gil_hint()
-            print("wrote GoD container (header: %s) (%s)"
-                  % (hdr, "NO GUARANTEES - --leeroy-jenkins"
-                     if args.no_verify else "hash tree verified"))
             return 0
         manifest = {}
         gamedir = _to_gamedir(kind, path, w, manifest=manifest,
