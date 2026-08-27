@@ -169,7 +169,12 @@ class _Progress:
             if done < total and now - self._last < 0.25:
                 return
             self._last = now
-            if self.mode == "lines":
+            if callable(self.mode):
+                # Library callers (xverter.convert) pass a callback here
+                # instead of a rendering mode: forward the raw (done,
+                # total) for the stage, same throttling as every sink.
+                self.mode(done, max(total, 1))
+            elif self.mode == "lines":
                 sys.stderr.write("PROGRESS %s %d %d\n"
                                  % (stage, done, max(total, 1)))
             elif self.mode == "json":
