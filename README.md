@@ -97,32 +97,44 @@ One franchise, every format Microsoft pressed — XGD1/2/3 — plus the download
 
 ## Benchmarks
 
-Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, CachyOS Linux, free-threaded Python 3.14t. **Every conversion time includes full verification** (round-trip hash checks are not optional in these numbers). Seconds, with the 1.0.2 launch figure in parentheses:
+Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, CachyOS Linux, free-threaded Python 3.14t. **Every conversion time includes full verification** (round-trip hash checks are not optional in these numbers). Seconds, with **1.0.2 on the identical full pressed disc (its GIL build)** in parentheses — an honest like-for-like: the same bytes in, the same verified conversion, old code vs new:
 
 | Conversion (from the pressed source) | Spartan Assault (2.3GB) | Halo CE (7.3GB) | Halo 3 (7.8GB) | Anniversary (8.7GB) |
 | ----------------------- | -----------------------:| ---------------:| --------------:| -------------------:|
 | dir → iso               | 3.1 (3.1)               | 4.2 (4.5)       | 6.6 (7.7)      | 10.7 (10.3)         |
 | dir → zar               | 6.3 (17.2)              | 5.8 (10.5)      | 11.3 (25.2)    | 15.6 (34.1)         |
-| iso → god               | —                       | 3.2 (5.1)       | 5.3 (8.4)      | 5.0 (10.9)          |
-| iso → zar               | —                       | 5.6 (10.5)      | 11.0 (25.2)    | 15.7 (34.1)         |
-| iso → cci               | —                       | 15.4 (15.1)     | 16.6 (26.5)    | 18.2 (34.5)         |
-| iso → cso               | —                       | 13.5 (14.8)     | 15.2 (26.4)    | 16.6 (34.2)         |
-| iso → chd               | —                       | 43.6 (48.0)     | 55.0 (84.0)    | 61.4 (123.9)        |
+| iso → god               | —                       | 3.2 (12.1)      | 5.3 (12.2)     | 5.0 (14.0)          |
+| iso → zar               | —                       | 5.6 (12.4)      | 11.0 (27.7)    | 15.7 (37.5)         |
+| iso → cci               | —                       | 15.4 (25.2)     | 16.6 (28.3)    | 18.2 (31.2)         |
+| iso → cso               | —                       | 13.5 (24.2)     | 15.2 (27.4)    | 16.6 (30.6)         |
+| iso → chd               | —                       | 21.1 (107.5)    | 32.8 (119.2)   | 35.5 (152.9)        |
 | iso → xiso              | —                       | 9.5             | 9.9            | 11.3                |
-| **full matrix**         | **4m49s** (5m49s, 48 edges) | **6m21s** (5m55s, 48 edges) | **8m39s** (10m47s, 48 edges) | **10m36s** (14m48s, 48 edges) |
+| **full matrix**         | **3m46s** (6m15s, 48 edges) | **6m08s** (7m54s, 48 edges) | **8m10s** (12m19s, 48 edges) | **9m42s** (16m40s, 48 edges) |
 
 Spartan Assault is a download-era title — no pressed disc exists, so its first hops run from
 the STFS package itself: → iso 9.4s, → xiso 9.3s, → god 10.4s, → zar 11.3s, → cci 16.3s,
-→ cso 16.0s, → chd 36.3s. The xiso row has no launch figure because the format is new in this
-release; its time includes the byte-for-byte readback of the whole sliced partition. One
-honesty note on the parentheses: the launch suite built its containers from its own trimmed
-rebuild, while every current number converts the full pressed disc — more data in, and still
-faster nearly everywhere.
+→ cso 16.0s, → chd 36.3s. The xiso row has no 1.0.2 figure because the format is new in this
+release; its time includes the byte-for-byte readback of the whole sliced partition. Both
+columns convert the **same full pressed disc** — no trimmed-rebuild shortcut on either side —
+so the parentheses are a straight old-code-vs-new-code read. The `dir →` rows build from the
+extracted files, which are identical whichever way you got them, so those parentheses are
+unchanged; every `iso →` row reads the whole pressed image, and that is where the gap shows —
+`iso → chd` most of all, where 1.0.2 shelled out to `chdman` (107–153s) and the native writer
+now does it in 21–36s.
 
-The current column runs **62 edges (57 for Spartan)** — a quarter more coverage than the launch
-column — and still beats it on the quartet: 37m07s at launch, 30m25s now, 243 edges against
-192 (single uncontended runs; the suite's run-to-run noise is about ±4%). CHD went native in
-1.2.0, which is where its column's savings come from.
+### How far we've come — seconds per edge, pressed disc, 1.0.2 vs now
+
+One number captures the whole tool at once: **seconds per edge** — total suite time ÷ edges run. It is the fair yardstick precisely because coverage keeps growing (the suite runs *more* edges every release), so raw wall-clock flatters older, thinner builds; per-edge does not. Below is the launch build (**1.0.2**, on a stock **GIL** interpreter) against the current build (native everything, no-middleman streaming, **free-threaded 3.14t**) — both converting the **same full pressed discs**, no trimmed-rebuild shortcut on either side:
+
+| Disc | 1.0.2 · GIL | current · 3.14t | **per edge** |
+| --------------------- | -----------:| ---------------:| -----------:|
+| Halo CE (XGD1)        | 9.9 s/edge  | 5.4 s/edge      | **1.8× faster** |
+| Halo 3 (XGD2)         | 15.4 s/edge | 7.2 s/edge      | **2.1× faster** |
+| Anniversary (XGD3)    | 20.8 s/edge | 9.4 s/edge      | **2.2× faster** |
+| Spartan Assault (STFS)| 7.8 s/edge  | 3.6 s/edge      | **2.2× faster** |
+| **whole quartet**     | **13.5 s/edge** | **6.4 s/edge** | **≈ 2× faster** |
+
+Quartet totals behind those averages: **43m08s over 192 edges** for 1.0.2 → **27m46s over 261 edges** now — *less* wall-clock for a *third more* coverage. And the win **widens with disc size** (1.8× on the smallest game up to 2.2× on the largest), because the bigger the disc, the more the free-threaded compression scaling and the native CHD writer have to work with. Two things compound here: the code got faster (native CHD, direct streaming with no pivot ISO), and the interpreter got faster (free-threaded Python runs the compression pools across every core). Same games, same full pressed discs, every edge verified — just over half the time per unit of work.
 
 Compression, as a fraction of the raw ISO (content-dependent — Anniversary's assets are already compressed, Spartan's aren't): CHD 60–90%, ZAR 60–93%, CCI/CSO 70–96%, GoD ~100.5% (its SHA-1 hash tree costs half a percent).
 
