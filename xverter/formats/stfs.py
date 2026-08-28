@@ -646,22 +646,24 @@ class _FileStream:
         self._left = entry["size"]
         nblocks = (entry["size"] + BLOCK - 1) // BLOCK
         self._chain = pkg.chain(entry["startclust"], nblocks)
-        self._buf = b""
+        self._buf = bytearray()
         self._manifest = manifest
         self._h = hashlib.sha1() if manifest is not None else None
 
     def read(self, n=-1):
         if n is None or n < 0:
             n = self._left + len(self._buf)
-        while len(self._buf) < n and self._left > 0:
+        buf = self._buf                       # bytearray: O(1) amortized append.
+        while len(buf) < n and self._left > 0:  # bytes += was O(n^2) on large n.
             c = next(self._chain)
             b = self._pkg.verified_block(c)
             chunk = b[:self._left] if self._left < BLOCK else b
             self._left -= len(chunk)
             if self._h is not None:
                 self._h.update(chunk)
-            self._buf += chunk
-        out, self._buf = self._buf[:n], self._buf[n:]
+            buf += chunk
+        out = bytes(buf[:n])
+        del buf[:n]
         return out
 
     def close(self):
