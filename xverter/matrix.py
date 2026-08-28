@@ -27,6 +27,7 @@ Usage: python3 -m xverter.matrix <input-game> <workdir>
 Exit 0 = all edges PASS.
 """
 
+import glob
 import hashlib
 import html as html_mod
 import json
@@ -214,6 +215,25 @@ def run(edge, argv):
     if not ok:
         say("    " + detail)
     return ok
+
+
+def discard(*paths):
+    """Delete a transient artifact - and any split siblings - the moment
+    the last edge that reads it is done, so peak scratch stays bounded on
+    a dual-layer game (XGD3 held ~100G of containers at once otherwise).
+    The a.* family is deliberately NEVER passed here: the report's
+    artifact table is scanned from it at the end (scan_artifacts), and the
+    workdir is removed wholesale after the report is delivered."""
+    for pth in paths:
+        if os.path.isdir(pth):
+            shutil.rmtree(pth, ignore_errors=True)
+            continue
+        base, ext = os.path.splitext(pth)
+        for sp in [pth] + glob.glob("%s.[0-9]*%s" % (glob.escape(base), ext)):
+            try:
+                os.unlink(sp)
+            except OSError:
+                pass
 
 
 def check_dir(edge, path, baseline):
@@ -769,8 +789,10 @@ def main(argv=None):
         # one build per wrapper, from reality, byte-audited both ways.
         run("cci(src)->iso", ["convert", d("a.cci"), "-o", d("back_cci.iso")])
         check_partition("  bytes(cci-iso)", d("back_cci.iso"), src)
+        discard(d("back_cci.iso"))
         run("cso(src)->iso", ["convert", d("a.cso"), "-o", d("back_cso.iso")])
         check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
+        discard(d("back_cso.iso"))
         run("cci(src)->god", ["convert", d("a.cci"), "-o", d("s.god")])
         check_god_data("  bytes(cci-god)", god_header_in(d("s.god")), src)
         shutil.rmtree(d("s.god"), ignore_errors=True)
@@ -811,6 +833,7 @@ def main(argv=None):
     run("cci->cso", ["convert", d("a.cci"), "-o", d("x.cso")])
     run("cso(x)->dir", ["convert", d("x.cso"), "-o", d("from_xcso") + "/"])
     check_dir("  content(cci-cso)", d("from_xcso"), baseline)
+    discard(d("x.cso"), d("g.cci"))
 
     # split wrappers: opt-in 4GiB console slices (--split)
     _s, _l = hop("cci")
@@ -832,6 +855,7 @@ def main(argv=None):
     if kind == "iso":
         run("chd(src)->iso", ["convert", d("a.chd"), "-o", d("back_chd.iso")])
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
+        discard(d("back_chd.iso"))
 
     # stfs: a normal output column for every input kind - no container is
     # exempt because of what the input was. An STFS source rebuilds and
@@ -905,7 +929,9 @@ def main(argv=None):
     run("verify cci", ["verify", d("a.cci")])
     run("verify cso", ["verify", d("a.cso")])
     run("verify cci(split)", ["verify", d("u.cci")])
+    discard(d("u.cci"))
     run("verify cso(split)", ["verify", d("u.cso")])
+    discard(d("u.cso"))
     run("verify chd", ["verify", d("a.chd")])
 
     failed = [r["edge"] for r in RESULTS if not r["ok"]]
