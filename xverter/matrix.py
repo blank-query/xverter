@@ -672,6 +672,39 @@ def god_header_in(tree):
     raise MatrixError("no GoD header found under %s" % tree)
 
 
+def _stfs_offender_of(baseline):
+    """First path component STFS's 40-byte ASCII file-table field cannot
+    hold, or None if every name fits. Decides whether the STFS output
+    edges run."""
+    for p in baseline:
+        for c in p.split("/"):
+            e = c.encode("ascii", "replace")
+            if len(e) > 0x28 or e.decode("ascii") != c:
+                return c
+    return None
+
+
+def _planned_edges(kind, full_disc, stfs_ok):
+    """The exact edge count this matrix will run for `kind`, from the two
+    conditions knowable before any edge runs: a video partition to slice
+    (the xiso family) and whether the tree's names fit STFS. Announced up
+    front so a live outer progress bar can fill, and asserted against the
+    real total at the end so it can never silently drift from the run.
+
+    Derived from and checked against the pressed-media gate: iso full
+    disc 68, iso with an over-long name 62, STFS source 63."""
+    n = 48                                   # unconditional edges
+    if kind == "iso":
+        n += 9                               # pressed-source byte audits
+        if full_disc:
+            n += 5                           # xiso family
+    else:
+        n += 3 * sum(1 for t in ("iso", "zar", "xiso") if t != kind)
+    if stfs_ok:
+        n += 6                               # STFS output family
+    return n
+
+
 def main(argv=None):
     global LEEROY
     argv = sys.argv[1:] if argv is None else argv
@@ -724,6 +757,20 @@ def main(argv=None):
     with _LiveBar("baseline"):
         baseline = xdvdfs_mod.hash_tree(d("base"))
     say("baseline: %d files\n" % len(baseline))
+
+    # The edge count is settled the moment the baseline exists: kind is
+    # known, and the two count-affecting conditions - a video partition to
+    # slice, and whether the names fit STFS - are readable now. Announce
+    # it so a live outer bar can fill; checked against the real total at
+    # the end. _stfs_offender and _full_disc are reused by the edges below.
+    _stfs_offender = _stfs_offender_of(baseline)
+    _full_disc = False
+    if kind == "iso":
+        from .formats.cci import xbox_image_offset as _xio
+        with open(src, "rb") as _sf:
+            _full_disc = _xio(_sf) > 0
+    _edge_total = _planned_edges(kind, _full_disc, _stfs_offender is None)
+    say("EDGES %d" % _edge_total)
 
     # dir -> iso -> dir
     run("dir->iso", ["convert", d("base"), "-o", d("a.iso")])
@@ -869,15 +916,7 @@ def main(argv=None):
     # a note - a real limitation, not a failure. Same posture as the xiso
     # precondition. STFS-source names are reader-produced (always fit), so
     # a rebuild never trips this.
-    _stfs_offender = None
-    for _p in baseline:
-        for _c in _p.split("/"):
-            _e = _c.encode("ascii", "replace")
-            if len(_e) > 0x28 or _e.decode("ascii") != _c:
-                _stfs_offender = _c
-                break
-        if _stfs_offender:
-            break
+    # _stfs_offender was computed up front (for the edge total); reuse it.
     if _stfs_offender is not None:
         say("  stfs: SKIP - a name is too long or non-ASCII for STFS "
             "(%r, %d bytes); this tree cannot be packed as STFS\n"
@@ -909,10 +948,7 @@ def main(argv=None):
     # exactly the right audit: output == src[partition_base:], byte for
     # byte.
     if kind == "iso":
-        from .formats.cci import xbox_image_offset as _xio
-        with open(src, "rb") as _sf:
-            _full_disc = _xio(_sf) > 0
-        if _full_disc:
+        if _full_disc:                       # computed up front for the total
             run("iso(src)->xiso", ["convert", src, "-o", d("a.xiso")])
             run("xiso->dir", ["convert", d("a.xiso"),
                               "-o", d("from_xiso") + "/"])
@@ -946,6 +982,10 @@ def main(argv=None):
         write_report(w, src, kind, baseline, total, 1 if failed else 0)
     say("\n%d edges, %d failed, %dm%02ds total"
           % (len(RESULTS), len(failed), total // 60, total % 60))
+    if _edge_total != len(RESULTS):
+        say("WARNING: announced %d edges but ran %d - _planned_edges has "
+            "drifted from the matrix body and needs updating"
+            % (_edge_total, len(RESULTS)))
     if failed:
         say("FAILED: " + ", ".join(failed))
         return 1
