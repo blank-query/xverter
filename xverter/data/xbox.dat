@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox</name>
-		<description>Microsoft - Xbox - Datfile (2687) (2026-08-23 06-16-53)</description>
-		<version>2026-08-23 06-16-53</version>
-		<date>2026-08-23 06-16-53</date>
+		<description>Microsoft - Xbox - Datfile (2688) (2026-08-31 08-40-43)</description>
+		<version>2026-08-31 08-40-43</version>
+		<date>2026-08-31 08-40-43</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -1156,10 +1156,10 @@
 		<description>Burnout 2 - Point of Impact (USA)</description>
 		<rom name="Burnout 2 - Point of Impact (USA).iso" size="7825162240" crc="6ebd6398" md5="d67dc5052b541843cd65b327ab00f639" sha1="22b264ad29e876ffd44b73613a782316bfdbfb26"/>
 	</game>
-	<game name="Burnout 3 - Takedown (Asia)" id="23017">
+	<game name="Burnout 3 - Takedown (Asia, Korea)" id="23017">
 		<category>Games</category>
-		<description>Burnout 3 - Takedown (Asia)</description>
-		<rom name="Burnout 3 - Takedown (Asia).iso" size="7825162240" crc="201d29bd" md5="be86cfd9242fc4302fd5e236595c9cf4" sha1="feb2769f445dc48c2cece7861f4dfe83c30bcaa8"/>
+		<description>Burnout 3 - Takedown (Asia, Korea)</description>
+		<rom name="Burnout 3 - Takedown (Asia, Korea).iso" size="7825162240" crc="201d29bd" md5="be86cfd9242fc4302fd5e236595c9cf4" sha1="feb2769f445dc48c2cece7861f4dfe83c30bcaa8"/>
 	</game>
 	<game name="Burnout 3 - Takedown (Europe) (En,Es,Nl,Sv)" id="20584">
 		<category>Games</category>
@@ -2296,6 +2296,11 @@
 		<description>Dead or Alive 2 Ultimate (USA, Asia) (En,Ja)</description>
 		<rom name="Dead or Alive 2 Ultimate (USA, Asia) (En,Ja).iso" size="7825162240" crc="14e15b49" md5="21a6f5c9d791aa2d9bf33aa8493f0f39" sha1="996eb8c0d44f660dcfa0b316c1cd274af99f7823"/>
 	</game>
+	<game name="Dead or Alive 3 (Asia, Korea) (En,Fr,De,Es,It)" id="59397">
+		<category>Games</category>
+		<description>Dead or Alive 3 (Asia, Korea) (En,Fr,De,Es,It)</description>
+		<rom name="Dead or Alive 3 (Asia, Korea) (En,Fr,De,Es,It).iso" size="7825162240" crc="13d4a704" md5="0f21514b81bb92da9e774b7cf1e04644" sha1="8b6af7a5efa02e12a0d475521f957d39608d5668"/>
+	</game>
 	<game name="Dead or Alive 3 (Europe) (En,Ja,Fr,De,Es,It)" id="6101">
 		<category>Games</category>
 		<description>Dead or Alive 3 (Europe) (En,Ja,Fr,De,Es,It)</description>
@@ -2310,11 +2315,6 @@
 		<category>Demos</category>
 		<description>Dead or Alive 3 (Japan) (Taikenban)</description>
 		<rom name="Dead or Alive 3 (Japan) (Taikenban).iso" size="7825162240" crc="4f0bcb09" md5="71eea0c4f92e402914a09f8697ef5986" sha1="10f133b3c7465063c161f836066aeb2714b432c5"/>
-	</game>
-	<game name="Dead or Alive 3 (Korea) (En,Fr,De,Es,It)" id="59397">
-		<category>Games</category>
-		<description>Dead or Alive 3 (Korea) (En,Fr,De,Es,It)</description>
-		<rom name="Dead or Alive 3 (Korea) (En,Fr,De,Es,It).iso" size="7825162240" crc="13d4a704" md5="0f21514b81bb92da9e774b7cf1e04644" sha1="8b6af7a5efa02e12a0d475521f957d39608d5668"/>
 	</game>
 	<game name="Dead or Alive 3 (USA) (En,Ja)" id="27158">
 		<category>Games</category>
@@ -5421,6 +5421,11 @@
 		<category>Games</category>
 		<description>Lord of the Rings, The - The Third Age (USA)</description>
 		<rom name="Lord of the Rings, The - The Third Age (USA).iso" size="7825162240" crc="e78d2f34" md5="57e3789289a89c860067d3c770e61807" sha1="bc97495b5702b11c4ae2c0e53d47ab1844dd3e4b"/>
+	</game>
+	<game name="Lord of the Rings, The - The Two Towers (Asia)" id="137638">
+		<category>Games</category>
+		<description>Lord of the Rings, The - The Two Towers (Asia)</description>
+		<rom name="Lord of the Rings, The - The Two Towers (Asia).iso" size="7825162240" crc="c01d25d4" md5="5744098f14d117cb0631afb09772e8cf" sha1="7c8d15a6501864573aec97b3b1340fb01e07734d"/>
 	</game>
 	<game name="Lord of the Rings, The - The Two Towers (Asia) (En,Zh)" id="84440">
 		<category>Games</category>
@@ -10722,6 +10727,11 @@
 		<description>Star Wars - Jedi Starfighter (USA)</description>
 		<rom name="Star Wars - Jedi Starfighter (USA).iso" size="7825162240" crc="5cf519cf" md5="2fab3907ae49b4bd9a7804694c690e01" sha1="40b6064787cfc2fce39f4082375a81db7d54fdf7"/>
 	</game>
+	<game name="Star Wars - Knights of the Old Republic (Asia, Korea)" id="94252">
+		<category>Games</category>
+		<description>Star Wars - Knights of the Old Republic (Asia, Korea)</description>
+		<rom name="Star Wars - Knights of the Old Republic (Asia, Korea).iso" size="7825162240" crc="060edb9e" md5="d3b392992b47640868ee0e1f14503088" sha1="4c9fd18865b5db6d1a1779e85cbcac2f6dfa7109"/>
+	</game>
 	<game name="Star Wars - Knights of the Old Republic (Europe)" id="14692">
 		<category>Games</category>
 		<description>Star Wars - Knights of the Old Republic (Europe)</description>
@@ -10741,11 +10751,6 @@
 		<category>Games</category>
 		<description>Star Wars - Knights of the Old Republic (Italy)</description>
 		<rom name="Star Wars - Knights of the Old Republic (Italy).iso" size="7825162240" crc="7bf164c0" md5="7f4a9a7c30a404802be0317af8db368a" sha1="fd090d6caaac4a481907bec8c22b67eaffcc6724"/>
-	</game>
-	<game name="Star Wars - Knights of the Old Republic (Korea)" id="94252">
-		<category>Games</category>
-		<description>Star Wars - Knights of the Old Republic (Korea)</description>
-		<rom name="Star Wars - Knights of the Old Republic (Korea).iso" size="7825162240" crc="060edb9e" md5="d3b392992b47640868ee0e1f14503088" sha1="4c9fd18865b5db6d1a1779e85cbcac2f6dfa7109"/>
 	</game>
 	<game name="Star Wars - Knights of the Old Republic (USA)" id="29372">
 		<category>Games</category>
@@ -11178,10 +11183,10 @@
 		<description>Tecmo Classic Arcade (Europe) (En,Ja,Fr,De,Es,It)</description>
 		<rom name="Tecmo Classic Arcade (Europe) (En,Ja,Fr,De,Es,It).iso" size="7825162240" crc="34bc5de5" md5="c03626cc64f8218be7f56fbd78eb856d" sha1="a298cb79b0d85eb3bf0a47e35f733a33c0665437"/>
 	</game>
-	<game name="Tecmo Classic Arcade (USA, Japan) (En,Ja)" id="48320">
+	<game name="Tecmo Classic Arcade (USA, Asia) (En,Ja)" id="48320">
 		<category>Games</category>
-		<description>Tecmo Classic Arcade (USA, Japan) (En,Ja)</description>
-		<rom name="Tecmo Classic Arcade (USA, Japan) (En,Ja).iso" size="7825162240" crc="4a25d86d" md5="16ff92339a599188b3e8a17247368f08" sha1="a70eacf4ec50ae38a5b7fd90d52ca80558997e79"/>
+		<description>Tecmo Classic Arcade (USA, Asia) (En,Ja)</description>
+		<rom name="Tecmo Classic Arcade (USA, Asia) (En,Ja).iso" size="7825162240" crc="4a25d86d" md5="16ff92339a599188b3e8a17247368f08" sha1="a70eacf4ec50ae38a5b7fd90d52ca80558997e79"/>
 	</game>
 	<game name="Teen Titans (USA)" id="54505">
 		<category>Games</category>
@@ -12638,15 +12643,15 @@
 		<description>WWE Raw (Japan)</description>
 		<rom name="WWE Raw (Japan).iso" size="7825162240" crc="fa3214d6" md5="917b6da38319731ee71d5108ff442446" sha1="a4cbea3d796003cb6473f2650197e80b372aa04c"/>
 	</game>
+	<game name="WWE Raw 2 (Asia, Korea)" id="76229">
+		<category>Games</category>
+		<description>WWE Raw 2 (Asia, Korea)</description>
+		<rom name="WWE Raw 2 (Asia, Korea).iso" size="7825162240" crc="641c8cf3" md5="cd7210b046fd59f6ee8e119e88b10d80" sha1="5fcfbe46a86860beddd5d59f0516c71aae2b7ff6"/>
+	</game>
 	<game name="WWE Raw 2 (Europe)" id="24427">
 		<category>Games</category>
 		<description>WWE Raw 2 (Europe)</description>
 		<rom name="WWE Raw 2 (Europe).iso" size="7825162240" crc="2e5e0357" md5="2ccf4de8fe561bc61da429ab5134501f" sha1="2153e45778579ac1e08fd1e99da2a7b38c5eb79e"/>
-	</game>
-	<game name="WWE Raw 2 (Korea)" id="76229">
-		<category>Games</category>
-		<description>WWE Raw 2 (Korea)</description>
-		<rom name="WWE Raw 2 (Korea).iso" size="7825162240" crc="641c8cf3" md5="cd7210b046fd59f6ee8e119e88b10d80" sha1="5fcfbe46a86860beddd5d59f0516c71aae2b7ff6"/>
 	</game>
 	<game name="WWE Raw 2 (USA)" id="51285">
 		<category>Games</category>
@@ -12778,15 +12783,15 @@
 		<description>Xbox 360 - Das Offizielle Xbox-Magazin - Demo Disk 12-2006 (Germany)</description>
 		<rom name="Xbox 360 - Das Offizielle Xbox-Magazin - Demo Disk 12-2006 (Germany).iso" size="7825162240" crc="843d3b77" md5="6af58d970e73290aa7d6a9bafcc09b20" sha1="9625b47511c4fe2bdaf18eb3d2c5f97dceac7839"/>
 	</game>
-	<game name="Xbox 360 - Den Officiella Xbox-Tidningen Nr 1 - April 06 (Sweden)" id="101462">
+	<game name="Xbox 360 - Den officiella Xbox-tidningen Nr 1 - April 06 (Sweden)" id="101462">
 		<category>Coverdiscs</category>
-		<description>Xbox 360 - Den Officiella Xbox-Tidningen Nr 1 - April 06 (Sweden)</description>
-		<rom name="Xbox 360 - Den Officiella Xbox-Tidningen Nr 1 - April 06 (Sweden).iso" size="7825162240" crc="60ac02bf" md5="e53bc5baf351a27269eea7617e0b71ea" sha1="38df8595007b5f2bfbd5f6370d835428f36c1a08"/>
+		<description>Xbox 360 - Den officiella Xbox-tidningen Nr 1 - April 06 (Sweden)</description>
+		<rom name="Xbox 360 - Den officiella Xbox-tidningen Nr 1 - April 06 (Sweden).iso" size="7825162240" crc="60ac02bf" md5="e53bc5baf351a27269eea7617e0b71ea" sha1="38df8595007b5f2bfbd5f6370d835428f36c1a08"/>
 	</game>
-	<game name="Xbox 360 - Den Officiella Xbox-Tidningen Nr 2 - Juni 06 (Sweden)" id="101477">
+	<game name="Xbox 360 - Den officiella Xbox-tidningen Nr 2 - Juni 06 (Sweden)" id="101477">
 		<category>Coverdiscs</category>
-		<description>Xbox 360 - Den Officiella Xbox-Tidningen Nr 2 - Juni 06 (Sweden)</description>
-		<rom name="Xbox 360 - Den Officiella Xbox-Tidningen Nr 2 - Juni 06 (Sweden).iso" size="7825162240" crc="4f7637ce" md5="b971b2b0c1a0d06d52c8d730113610d3" sha1="58b93a9c985b52e37c8fa4d06c6d88daa8445b79"/>
+		<description>Xbox 360 - Den officiella Xbox-tidningen Nr 2 - Juni 06 (Sweden)</description>
+		<rom name="Xbox 360 - Den officiella Xbox-tidningen Nr 2 - Juni 06 (Sweden).iso" size="7825162240" crc="4f7637ce" md5="b971b2b0c1a0d06d52c8d730113610d3" sha1="58b93a9c985b52e37c8fa4d06c6d88daa8445b79"/>
 	</game>
 	<game name="Xbox 360 - The Official Australian Xbox Magazine Issue 05 - August 2006 (Europe, Australia)" id="16709">
 		<category>Coverdiscs</category>

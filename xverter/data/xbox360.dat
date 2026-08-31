@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3702) (2026-08-23 09-58-20)</description>
-		<version>2026-08-23 09-58-20</version>
-		<date>2026-08-23 09-58-20</date>
+		<description>Microsoft - Xbox 360 - Datfile (3707) (2026-08-30 14-20-37)</description>
+		<version>2026-08-30 14-20-37</version>
+		<date>2026-08-30 14-20-37</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -894,11 +894,6 @@
 		<category>Games</category>
 		<description>Asura's Wrath (World)</description>
 		<rom name="Asura's Wrath (World).iso" size="8738846720" crc="3b0b4353" md5="a264235425866299293019f45f48bd3b" sha1="4e9c256be8cf46a46d6e4dd46b738672e892fc74"/>
-	</game>
-	<game name="Atsumare! Pinata (Japan) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Zh,Ko,Pl,Cs,Hu,Sk)" id="76147">
-		<category>Games</category>
-		<description>Atsumare! Pinata (Japan) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Zh,Ko,Pl,Cs,Hu,Sk)</description>
-		<rom name="Atsumare! Pinata (Japan) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Zh,Ko,Pl,Cs,Hu,Sk).iso" size="7834892288" crc="016eedc2" md5="8c3a0c29c401c7b67683047f227b64d5" sha1="3f93b3ef964b2763bd2afd0d0ba36d3ddc696832"/>
 	</game>
 	<game name="Attack of the Movies 3-D (USA)" id="16280">
 		<category>Games</category>
@@ -4245,6 +4240,11 @@
 		<description>Disney Infinity 3.0 - Play Without Limits (Europe) (Fr,De,Nl)</description>
 		<rom name="Disney Infinity 3.0 - Play Without Limits (Europe) (Fr,De,Nl).iso" size="8738846720" crc="db35724c" md5="65718f4346cf73010946e458604907b6" sha1="dc26a8eb1ef8005aa0932e46532584c4a272fa7f"/>
 	</game>
+	<game name="Disney Infinity 3.0 - Play Without Limits (Scandinavia) (Sv,No,Da)" id="137437">
+		<category>Games</category>
+		<description>Disney Infinity 3.0 - Play Without Limits (Scandinavia) (Sv,No,Da)</description>
+		<rom name="Disney Infinity 3.0 - Play Without Limits (Scandinavia) (Sv,No,Da).iso" size="8738846720" crc="823a4e96" md5="db427ff7d1e2d9dd871419675c738f60" sha1="492cb870ae0cd9492383c207cc674479ff74a1a9"/>
+	</game>
 	<game name="Disney Infinity 3.0 Edition (USA) (En,Fr,Es)" id="38503">
 		<category>Games</category>
 		<description>Disney Infinity 3.0 Edition (USA) (En,Fr,Es)</description>
@@ -5095,10 +5095,10 @@
 		<description>Dynasty Warriors - Gundam 2 (USA)</description>
 		<rom name="Dynasty Warriors - Gundam 2 (USA).iso" size="7838695424" crc="0829bae8" md5="976397d6487b34824e48a224ea18e65a" sha1="3639f6201ef75d7d58aaeace268abc50953d8948"/>
 	</game>
-	<game name="Dynasty Warriors - Gundam 3 (USA, Europe)" id="72637">
+	<game name="Dynasty Warriors - Gundam 3 (World) (En,Fr,De,Es,It)" id="72637">
 		<category>Games</category>
-		<description>Dynasty Warriors - Gundam 3 (USA, Europe)</description>
-		<rom name="Dynasty Warriors - Gundam 3 (USA, Europe).iso" size="7838695424" crc="329acdc6" md5="3763b47464ef64e398797f0174bd30a8" sha1="e257c48e5ad65346bab94d22b48f6c5ee140d1b8"/>
+		<description>Dynasty Warriors - Gundam 3 (World) (En,Fr,De,Es,It)</description>
+		<rom name="Dynasty Warriors - Gundam 3 (World) (En,Fr,De,Es,It).iso" size="7838695424" crc="329acdc6" md5="3763b47464ef64e398797f0174bd30a8" sha1="e257c48e5ad65346bab94d22b48f6c5ee140d1b8"/>
 	</game>
 	<game name="Dynasty Warriors - Strikeforce (Asia) (En,Fr)" id="117497">
 		<category>Games</category>
@@ -5884,6 +5884,11 @@
 		<category>Games</category>
 		<description>Fable - The Journey (Russia) (En,Pl,Ru)</description>
 		<rom name="Fable - The Journey (Russia) (En,Pl,Ru).iso" size="8738846720" crc="726a81e9" md5="76e7efa800d2551d2745c0e644e79007" sha1="4d976ac5dfbde31181e7bde36fd9932f4a668056"/>
+	</game>
+	<game name="Fable - The Journey (Scandinavia)" id="137436">
+		<category>Games</category>
+		<description>Fable - The Journey (Scandinavia)</description>
+		<rom name="Fable - The Journey (Scandinavia).iso" size="8738846720" crc="943026e6" md5="f51eb988f4969f6d944a5a74cab124e8" sha1="71069eed94f51d1db6672adbd66b73d45e55bbd0"/>
 	</game>
 	<game name="Fable - The Journey (USA) (En,Fr,Es)" id="72219">
 		<category>Games</category>
@@ -7890,10 +7895,10 @@
 		<description>Gundam Musou 3 (Japan, Asia)</description>
 		<rom name="Gundam Musou 3 (Japan, Asia).iso" size="7838695424" crc="b260bdce" md5="cab510e22b33681c3641a5804ee97965" sha1="3fa5fceb3e9e216e7d5fd2a34d75c4d214e67ead"/>
 	</game>
-	<game name="Gundam Musou International (Japan)" id="61228">
+	<game name="Gundam Musou International (Japan, Asia)" id="61228">
 		<category>Games</category>
-		<description>Gundam Musou International (Japan)</description>
-		<rom name="Gundam Musou International (Japan).iso" size="7835492352" crc="02829bbf" md5="3375e71b4d8021ae93a84e0a96dcf926" sha1="6cd2d943f2c6894b94ce94ac8faca84e1dcebf5a"/>
+		<description>Gundam Musou International (Japan, Asia)</description>
+		<rom name="Gundam Musou International (Japan, Asia).iso" size="7835492352" crc="02829bbf" md5="3375e71b4d8021ae93a84e0a96dcf926" sha1="6cd2d943f2c6894b94ce94ac8faca84e1dcebf5a"/>
 	</game>
 	<game name="Gunstringer, The (World) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko)" id="57573">
 		<category>Games</category>
@@ -9116,6 +9121,11 @@
 		<description>Kinect Star Wars (Japan, Europe) (En,Ja,Zh,Ko,Pl,Ru)</description>
 		<rom name="Kinect Star Wars (Japan, Europe) (En,Ja,Zh,Ko,Pl,Ru).iso" size="8738846720" crc="49b08238" md5="d400a85beb64260fcdb49815ffa734b6" sha1="67b4585034b804e1008cd4a63d289b2b8c144dfe"/>
 	</game>
+	<game name="Kinect Star Wars (Scandinavia) (En,Sv,No,Da,Fi)" id="137348">
+		<category>Games</category>
+		<description>Kinect Star Wars (Scandinavia) (En,Sv,No,Da,Fi)</description>
+		<rom name="Kinect Star Wars (Scandinavia) (En,Sv,No,Da,Fi).iso" size="8738846720" crc="b1db9670" md5="833c620a5ddad3a3ef44e21a7c3309c4" sha1="75a2182debb9552f9c17260a4c669f631ab3cd42"/>
+	</game>
 	<game name="Kinect Star Wars (USA) (En,Fr,Es)" id="39351">
 		<category>Games</category>
 		<description>Kinect Star Wars (USA) (En,Fr,Es)</description>
@@ -9145,6 +9155,11 @@
 		<category>Games</category>
 		<description>King's Quest - The Complete Collection (USA) (En,Fr,De)</description>
 		<rom name="King's Quest - The Complete Collection (USA) (En,Fr,De).iso" size="8738846720" crc="e4864e54" md5="e2ac8e95c12d4585944fb72454c4e42b" sha1="94c6da22f7eff70a3f48980b26e75812f57e562a"/>
+	</game>
+	<game name="Kingdom Under Fire - Circle of Doom (Korea) (En,Ja,Fr,De,Es,It,Zh,Ko)" id="137539">
+		<category>Games</category>
+		<description>Kingdom Under Fire - Circle of Doom (Korea) (En,Ja,Fr,De,Es,It,Zh,Ko)</description>
+		<rom name="Kingdom Under Fire - Circle of Doom (Korea) (En,Ja,Fr,De,Es,It,Zh,Ko).iso" size="7835492352" crc="0c48cd87" md5="9b9c329b1b31729fc76fabbac3a148ce" sha1="4d86043391f383bacf869ad058dae0198a9aeb01"/>
 	</game>
 	<game name="Kingdom Under Fire - Circle of Doom (World) (Beta) (2007-09-07)" id="59292">
 		<category>Preproduction</category>
@@ -11096,6 +11111,11 @@
 		<description>N3 - Ninety-Nine Nights (Japan) (Demo)</description>
 		<rom name="N3 - Ninety-Nine Nights (Japan) (Demo).iso" size="7834892288" crc="823098a5" md5="ff431ca2cc3350eaba80be2cb11a3922" sha1="057477b6262205aa17e64a3371d44be33b3c792b"/>
 	</game>
+	<game name="N3 - Ninety-Nine Nights (Korea)" id="137574">
+		<category>Games</category>
+		<description>N3 - Ninety-Nine Nights (Korea)</description>
+		<rom name="N3 - Ninety-Nine Nights (Korea).iso" size="7834892288" crc="eedc8e14" md5="d8cf3acc8551356b841c752164b8afc9" sha1="dadffd0aec467c4992e3b5d906a0a95a8d55913e"/>
+	</game>
 	<game name="N3 - Ninety-Nine Nights (USA, Europe) (En,Fr,De,Es,It)" id="12506">
 		<category>Games</category>
 		<description>N3 - Ninety-Nine Nights (USA, Europe) (En,Fr,De,Es,It)</description>
@@ -11926,10 +11946,10 @@
 		<description>NHL 2K6 (USA)</description>
 		<rom name="NHL 2K6 (USA).iso" size="7834892288" crc="d25054e0" md5="7a2540c8c100df71060c96e49f1dff04" sha1="b51f829c9cf2c4c5c9f16c9701030384374567c8"/>
 	</game>
-	<game name="NHL 2K7 (Europe)" id="38937">
+	<game name="NHL 2K7 (Europe) (En,Fr,De,Es,It)" id="38937">
 		<category>Games</category>
-		<description>NHL 2K7 (Europe)</description>
-		<rom name="NHL 2K7 (Europe).iso" size="7834892288" crc="eefcfed2" md5="31343e9c953a315adbf593fc2e1e911d" sha1="9ec8c82846e637210f624d40f65e9771c31a54d3"/>
+		<description>NHL 2K7 (Europe) (En,Fr,De,Es,It)</description>
+		<rom name="NHL 2K7 (Europe) (En,Fr,De,Es,It).iso" size="7834892288" crc="eefcfed2" md5="31343e9c953a315adbf593fc2e1e911d" sha1="9ec8c82846e637210f624d40f65e9771c31a54d3"/>
 	</game>
 	<game name="NHL 2K7 (USA)" id="60058">
 		<category>Games</category>
@@ -15849,10 +15869,10 @@
 		<description>Thief (Europe) (En,De,It)</description>
 		<rom name="Thief (Europe) (En,De,It).iso" size="7838695424" crc="a0010605" md5="6563bbcfd01ff5a63199c12da4087f9e" sha1="5028e88a7987035c7b3533e984046c057e61dc9c"/>
 	</game>
-	<game name="Thief (Russia) (Pl,Ru)" id="110055">
+	<game name="Thief (Europe) (Pl,Ru)" id="110055">
 		<category>Games</category>
-		<description>Thief (Russia) (Pl,Ru)</description>
-		<rom name="Thief (Russia) (Pl,Ru).iso" size="7838695424" crc="50d2c2c2" md5="94950558c0056ba12af81a62e0639a19" sha1="e661ef2849fc9675fa5d2fe24eceec299fe80ae9"/>
+		<description>Thief (Europe) (Pl,Ru)</description>
+		<rom name="Thief (Europe) (Pl,Ru).iso" size="7838695424" crc="50d2c2c2" md5="94950558c0056ba12af81a62e0639a19" sha1="e661ef2849fc9675fa5d2fe24eceec299fe80ae9"/>
 	</game>
 	<game name="Thief (World) (En,Fr,Es)" id="50634">
 		<category>Games</category>
@@ -16869,6 +16889,11 @@
 		<description>Viva Pinata (Europe) (Bonus Disc)</description>
 		<rom name="Viva Pinata (Europe) (Bonus Disc).iso" size="7834892288" crc="34cb5fd6" md5="4c00e02f2634f3788e37723d3ea4c30b" sha1="c1c864951c5b369c9809bff9bc0910c2920785f6"/>
 	</game>
+	<game name="Viva Pinata (Japan, Korea) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Zh,Ko,Pl,Cs,Hu,Sk)" id="76147">
+		<category>Games</category>
+		<description>Viva Pinata (Japan, Korea) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Zh,Ko,Pl,Cs,Hu,Sk)</description>
+		<rom name="Viva Pinata (Japan, Korea) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Zh,Ko,Pl,Cs,Hu,Sk).iso" size="7834892288" crc="016eedc2" md5="8c3a0c29c401c7b67683047f227b64d5" sha1="3f93b3ef964b2763bd2afd0d0ba36d3ddc696832"/>
+	</game>
 	<game name="Viva Pinata (USA) (En,Ja,Fr,De,Es,It,Ko) (Bonus Disc)" id="22602">
 		<category>Bonus Discs</category>
 		<description>Viva Pinata (USA) (En,Ja,Fr,De,Es,It,Ko) (Bonus Disc)</description>
@@ -17671,15 +17696,10 @@
 		<description>Xbox 360 - Das Offizielle Xbox-Magazin - Demo Disk 13-2006 (Germany)</description>
 		<rom name="Xbox 360 - Das Offizielle Xbox-Magazin - Demo Disk 13-2006 (Germany).iso" size="7834892288" crc="2ad99319" md5="17ebb89a0f07950d81adcdbb7f17cf5d" sha1="69e64de6b0b9a935eeb81510bba738926b9741b9"/>
 	</game>
-	<game name="Xbox 360 - Den Officiella Xbox-Tidningen Nr 5 - November 06 (Sweden)" id="85414">
+	<game name="Xbox 360 - Den officiella Xbox-tidningen Nr 5 - November 06 (Sweden)" id="85414">
 		<category>Coverdiscs</category>
-		<description>Xbox 360 - Den Officiella Xbox-Tidningen Nr 5 - November 06 (Sweden)</description>
-		<rom name="Xbox 360 - Den Officiella Xbox-Tidningen Nr 5 - November 06 (Sweden).iso" size="7834892288" crc="7c0e8fbb" md5="08a3c447f9ea7475b674cb567fe37345" sha1="201fed46df3b31e00a0b80a40f1bd5bd8f6a08e4"/>
-	</game>
-	<game name="Xbox 360 - La Revista Oficial De Xbox - No 02 (Spain)" id="93367">
-		<category>Coverdiscs</category>
-		<description>Xbox 360 - La Revista Oficial De Xbox - No 02 (Spain)</description>
-		<rom name="Xbox 360 - La Revista Oficial De Xbox - No 02 (Spain).iso" size="7834892288" crc="01aa8e04" md5="fdd11133968388090e63a4ef6aabfa9a" sha1="20fbaefcc0f05a18c7535c8527729336c0b2cd87"/>
+		<description>Xbox 360 - Den officiella Xbox-tidningen Nr 5 - November 06 (Sweden)</description>
+		<rom name="Xbox 360 - Den officiella Xbox-tidningen Nr 5 - November 06 (Sweden).iso" size="7834892288" crc="7c0e8fbb" md5="08a3c447f9ea7475b674cb567fe37345" sha1="201fed46df3b31e00a0b80a40f1bd5bd8f6a08e4"/>
 	</game>
 	<game name="Xbox 360 - Le Magazine Officiel - Les Demos Jouables - Decembre 2006 - Janvier 2007 (Europe)" id="63455">
 		<category>Coverdiscs</category>
@@ -17795,6 +17815,11 @@
 		<category>Coverdiscs</category>
 		<description>Xbox 360 - The Official Xbox Magazine Issue 14 - December 2006 (Europe, Australia) (En,Fr,It,Pt)</description>
 		<rom name="Xbox 360 - The Official Xbox Magazine Issue 14 - December 2006 (Europe, Australia) (En,Fr,It,Pt).iso" size="7834892288" crc="dfaf3095" md5="299fe22559cdf5262a376f3fa984e4fe" sha1="592ebf8fb8a93ff45bb8c396e3928520b62b6409"/>
+	</game>
+	<game name="Xbox 360 - The Official Xbox Magazine Issue 15 - Christmas 2006 (Europe)" id="93367">
+		<category>Coverdiscs</category>
+		<description>Xbox 360 - The Official Xbox Magazine Issue 15 - Christmas 2006 (Europe)</description>
+		<rom name="Xbox 360 - The Official Xbox Magazine Issue 15 - Christmas 2006 (Europe).iso" size="7834892288" crc="01aa8e04" md5="fdd11133968388090e63a4ef6aabfa9a" sha1="20fbaefcc0f05a18c7535c8527729336c0b2cd87"/>
 	</game>
 	<game name="Xbox 360 - The Official Xbox Magazine Issue 15 - Christmas 2006 (Europe, Australia) (En,Fr,It)" id="60873">
 		<category>Coverdiscs</category>
