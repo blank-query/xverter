@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 — the format it could only read
 
 **New writer: STFS (`.stfs`) output — write LIVE packages from any input.**
 STFS was the one format xVerter read but could not write. Now every input
@@ -27,9 +27,9 @@ modal to choose the type; an STFS source skips it and preserves its own. The
 
 **Matrix: STFS is a normal output column for every input.** Each input now
 runs the STFS output family — write, round-trip to a directory, content-check
-against the baseline, and `verify` to the descriptor root. Image input **67
-edges** (was 62); STFS input **62** (it lacks the five pressed-byte audits an
-image earns: `67 − 5 = 62`).
+against the baseline, and `verify` to the descriptor root. Image input **68
+edges** (was 62); STFS input **63** (it lacks the five pressed-byte audits an
+image earns: `68 − 5 = 63`).
 
 **STFS packages carry real, derived metadata (and you can override it).**
 A synthesized STFS package used to be a title_id=0 shell a console can't
