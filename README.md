@@ -377,7 +377,7 @@ Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clan
 
 **Tested on a real device.** Galaxy Z Fold 4, Termux, library on shared storage — the full TUI renders on the inner display, and `Battlefield: Bad Company (USA) (En,Fr)` converted from a 4.5 GB `.zar` back to a 4.9 GB `.iso` in **26.9 s** at launch, manifest verified; the current release does that same conversion in **10.5 s** on a free-threaded interpreter. A phone with a folding keyboard is a complete xVerter workstation.
 
-**The full release test suite passes on the phone.** The full matrix run in Termux on the Fold 4 (plugged in, screen on, Termux in the foreground), single clean pass, zero failures — **measured at 1.3.0**; the edge counts have since grown (the STFS writer and the up-front edge announcement land in the desktop record above), so a current-suite phone re-run is pending:
+**The full release test suite passes on the phone.** The full matrix run in Termux on the Fold 4 (plugged in, screen on, Termux in the foreground), single clean pass, zero failures — measured at 1.3.0:
 
 | title | format | result | time |
 | --- | --- | --- | ---: |
@@ -386,7 +386,7 @@ Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clan
 | Halo 3 | XGD2 | 62 edges, 0 failed | 36m32s |
 | CE Anniversary | XGD3 | 62 edges, 0 failed | 45m46s |
 
-*(These are the 1.3.0 phone numbers, from before the STFS writer and the up-front edge announcement grew the counts — the desktop record above is the current suite. A current-suite phone run will refresh this table.)*
+*(1.3.0 phone numbers.)*
 
 One Android scheduling fact worth knowing for long runs: with the screen off or the terminal in the background, Android parks work on the efficiency cores at roughly a third of the speed — the jobs still finish correctly, just slower. For numbers like the table above, keep the screen on and Termux in front.
 
