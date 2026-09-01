@@ -22,6 +22,7 @@ import time
 
 from textual import work
 from textual.app import App, ComposeResult
+from textual.screen import ModalScreen
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import (Button, DataTable, Header, Label,
                              ProgressBar, RichLog, Static, Switch,
@@ -41,6 +42,7 @@ CONVERT_TARGETS = [
     ("to-zar", "→ ZAR", "zar", "primary"),
     ("to-god", "→ GoD", "god", "primary"),
     ("to-chd", "→ CHD", "chd", "primary"),
+    ("to-stfs", "→ STFS", "stfs", "default"),
     ("to-xiso", "→ XISO", "xiso", "default"),
     ("to-cci", "→ CCI", "cci", "default"),
     ("to-cso", "→ CSO", "cso", "default"),
@@ -49,13 +51,14 @@ CONVERT_TARGETS = [
     ("to-dir", "→ Folder", "dir", "default"),
 ]
 
-# The button rows are grouped by console: Xbox 360 formats first,
-# Original Xbox formats second (xiso for xemu; CCI/CSO were only ever
-# XGD1 containers), general transport/extract third, utilities last.
+# The button rows group by role: Xbox 360 native formats first (STFS
+# joins its console family), emulation and Original Xbox targets second
+# (CHD for future emulators, xiso for xemu, CCI/CSO for OG modded
+# hardware), general transport/extract third, utilities last.
 BUTTON_ROWS = [
-    ("to-iso", "to-zar", "to-god", "to-chd"),      # Xbox 360
-    ("to-xiso", "to-cci", "to-cso"),               # Original Xbox
-    ("to-zip", "to-7z", "to-dir"),                 # transport / extract
+    ("to-iso", "to-zar", "to-god", "to-stfs"),         # Xbox 360
+    ("to-chd", "to-xiso", "to-cci", "to-cso"),         # emulation / OG Xbox
+    ("to-zip", "to-7z", "to-dir"),                     # transport / extract
 ]
 
 
@@ -121,6 +124,36 @@ def _newer(latest, current):
     return bool(a) and bool(b) and a > b
 
 
+class ContentTypeScreen(ModalScreen):
+    """Pick the STFS content type for a non-STFS source. STFS carries its
+    type (XBLA/DLC/TU/...) in the header and xVerter never guesses one, so
+    a source that has no type of its own asks here instead of being refused.
+    Dismisses with the chosen type key, or None on cancel."""
+
+    CHOICES = [("XBLA arcade", "xbla"),
+               ("DLC / marketplace", "dlc"),
+               ("Title update", "title-update"),
+               ("Xbox Original", "xbox-original")]
+
+    def __init__(self, subject):
+        super().__init__()
+        self._subject = subject
+
+    def compose(self):
+        with Vertical(id="ctmodal"):
+            yield Label("STFS content type", id="cttitle")
+            yield Label("%s has no STFS type to carry — pick what to "
+                        "stamp:" % self._subject, id="ctsub")
+            for lbl, key in self.CHOICES:
+                yield Button(lbl, id="ct-" + key, variant="primary")
+            yield Button("Cancel", id="ct-cancel")
+
+    def on_button_pressed(self, event):
+        event.stop()                          # the modal owns its buttons
+        bid = event.button.id or ""
+        self.dismiss(None if bid == "ct-cancel" else bid[len("ct-"):])
+
+
 class XVerterApp(App):
     TITLE = "xVerter"
     SUB_TITLE = "any format in, any format out, verified"
@@ -159,20 +192,20 @@ class XVerterApp(App):
         background: transparent;
         text-style: bold;
     }
-    /* rows are console families: 360 / OG Xbox / transport */
-    #to-iso, #to-zar, #to-god, #to-chd {
+    /* rows: 360 native / emulation & OG Xbox / transport */
+    #to-iso, #to-zar, #to-god, #to-stfs {
         border: round #2196f3;
         color: #64b5f6;
     }
-    #to-iso:hover, #to-zar:hover, #to-god:hover, #to-chd:hover {
+    #to-iso:hover, #to-zar:hover, #to-god:hover, #to-stfs:hover {
         background: #1565c0;
         color: #eaf4fe;
     }
-    #to-xiso, #to-cci, #to-cso {
+    #to-chd, #to-xiso, #to-cci, #to-cso {
         border: round #12b096;
         color: #3cd0b5;
     }
-    #to-xiso:hover, #to-cci:hover, #to-cso:hover {
+    #to-chd:hover, #to-xiso:hover, #to-cci:hover, #to-cso:hover {
         background: #0d8f7a;
         color: #eafcf8;
     }
@@ -180,6 +213,15 @@ class XVerterApp(App):
         border: round #9575e0;
         color: #b39ddb;
     }
+    ContentTypeScreen { align: center middle; }
+    #ctmodal {
+        width: 56; height: auto; padding: 1 2;
+        background: $panel; border: round #2196f3;
+    }
+    #cttitle { text-style: bold; color: #64b5f6; width: 100%; }
+    #ctsub { margin-bottom: 1; width: 100%; }
+    #ctmodal Button { width: 100%; margin-bottom: 1; }
+    #ct-cancel { color: #b39ddb; }
     #to-dir:hover, #to-7z:hover, #to-zip:hover {
         background: #6a4fc0;
         color: #f2eefc;
@@ -464,7 +506,7 @@ class XVerterApp(App):
         bid = event.button.id
         targets = {b: t for b, _l, t, _v in CONVERT_TARGETS}
         if bid in targets:
-            self.do_convert(targets[bid])
+            self._convert_clicked(targets[bid])
         elif bid == "do-verify":
             self.do_verify()
         elif bid == "do-rescan":
@@ -479,7 +521,13 @@ class XVerterApp(App):
             self._install_desktop_entry()
         elif bid == "remove-desktop":
             self._remove_desktop_entry()
-        elif event.switch.id == "opt-ram":
+
+    def on_switch_changed(self, event):
+        # Switch.Changed has its own handler - these used to sit inside
+        # on_button_pressed guarded by event.switch, where a Button press
+        # never carries one: the toggles did nothing and an unrecognized
+        # button id crashed. Now they actually take effect.
+        if event.switch.id == "opt-ram":
             self.ram_scratch = event.value
             if event.value:
                 self._log("RAM scratch ON - pivot files go to a tmpfs "
@@ -504,7 +552,42 @@ class XVerterApp(App):
 
     # ------------------------------------------------------------ actions
 
-    def do_convert(self, target):
+    def _convert_clicked(self, target):
+        """Button entry for a convert. STFS output from a non-STFS source
+        needs a content type, so pop the picker first; everything else
+        (and an STFS source, which preserves its own type) goes straight
+        through."""
+        if target != "stfs":
+            self.do_convert(target)
+            return
+        if self.batch:
+            paths = [os.path.join(self.library, n) for n in self.batch]
+        else:
+            p = self._selected_path()
+            paths = [p] if p and os.path.basename(p) != ".." else []
+        needs_type = False
+        for p in paths:
+            try:
+                k, _ = detect_mod.detect(p)
+            except Exception:                        # noqa: BLE001
+                k = None
+            if k != "stfs":
+                needs_type = True
+                break
+        if not paths or not needs_type:
+            self.do_convert(target, None)            # source(s) carry a type
+            return
+        subject = ("%d games" % len(paths)) if self.batch \
+            else os.path.basename(paths[0])
+
+        def _chosen(ct):
+            if ct:
+                self.do_convert(target, ct)
+            else:
+                self._log("STFS convert cancelled")
+        self.push_screen(ContentTypeScreen(subject), _chosen)
+
+    def do_convert(self, target, content_type=None):
         if self.batch:
             names = sorted(self.batch, key=str.lower)
             # Key _busy on the full path, exactly as the single-file
@@ -523,7 +606,7 @@ class XVerterApp(App):
             # Pin the library HERE, on the UI thread, where the busy
             # keys were just computed - the worker body starts later and
             # self.library may have changed by then.
-            self._run_batch(target, names, self.library)
+            self._run_batch(target, names, self.library, content_type)
             return
         path = self._selected_path()
         if not path:
@@ -533,11 +616,7 @@ class XVerterApp(App):
             self._log("that's the parent-directory row - select a game")
             return
         base = os.path.basename(path)
-        stem = os.path.splitext(base)[0] if os.path.isfile(path) else base
-        if target == "dir":
-            out = os.path.join(self.library, stem + "_extracted") + os.sep
-        else:
-            out = os.path.join(self.library, stem + "." + target)
+        out = self._out_path_for(path, target)
         if os.path.exists(out.rstrip(os.sep)):
             self._log("SKIP: output exists: %s"
                       % os.path.basename(out.rstrip(os.sep)))
@@ -553,6 +632,8 @@ class XVerterApp(App):
             argv += ["--scratch", "ram"]
         if self.split_4gib:
             argv += ["--split"]
+        if content_type:
+            argv += ["--content-type", content_type]
         self._log("convert %s -> %s ...%s%s%s"
                   % (base, os.path.basename(out.rstrip(os.sep)),
                      " [ram scratch]" if self.ram_scratch else "",
@@ -988,10 +1069,15 @@ class XVerterApp(App):
         stem = os.path.splitext(base)[0] if os.path.isfile(path) else base
         if target == "dir":
             return os.path.join(self.library, stem + "_extracted") + os.sep
-        return os.path.join(self.library, stem + "." + target)
+        out = os.path.join(self.library, stem + "." + target)
+        if os.path.abspath(out) == os.path.abspath(path):
+            # A faithful rebuild whose input already wears the target
+            # extension (stfs -> stfs): never overwrite the source.
+            out = os.path.join(self.library, stem + "_rebuilt." + target)
+        return out
 
     @work(thread=True, group="jobs")
-    def _run_batch(self, target, names, lib):
+    def _run_batch(self, target, names, lib, content_type=None):
         # `lib` is the library pinned at dispatch time - the same value
         # the busy keys were built from - so navigating elsewhere before
         # or during the batch neither redirects a member nor leaks a
@@ -1014,11 +1100,20 @@ class XVerterApp(App):
                         self._log, "SKIP %s: not a recognized game (%s)"
                         % (name, str(e).splitlines()[0][:60]))
                     continue
-                if kind == target or (target == "dir"
-                                      and kind == "gamedir"):
+                if ((kind == target and target != "stfs")
+                        or (target == "dir" and kind == "gamedir")):
                     skipped += 1
                     self.call_from_thread(
                         self._log, "SKIP %s: already %s" % (name, kind))
+                    continue
+                if target == "stfs" and kind != "stfs" and not content_type:
+                    # A non-STFS source needs a content type and none was
+                    # chosen (all-STFS batch, then a non-STFS member): skip
+                    # rather than guess. Never a failure.
+                    skipped += 1
+                    self.call_from_thread(
+                        self._log,
+                        "SKIP %s: STFS output needs a content type" % name)
                     continue
                 if target == "xiso" and kind == "iso":
                     # A bare image IS an xiso; only a full redump has a
@@ -1047,6 +1142,8 @@ class XVerterApp(App):
                     argv += ["--scratch", "ram"]
                 if self.split_4gib:
                     argv += ["--split"]
+                if target == "stfs" and kind != "stfs" and content_type:
+                    argv += ["--content-type", content_type]
                 t0 = time.monotonic()
                 rc, tail = self._stream_cmd(argv)
                 dt = time.monotonic() - t0

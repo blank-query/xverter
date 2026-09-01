@@ -27,6 +27,7 @@ Usage: python3 -m xverter.matrix <input-game> <workdir>
 Exit 0 = all edges PASS.
 """
 
+import glob
 import hashlib
 import html as html_mod
 import json
@@ -216,6 +217,25 @@ def run(edge, argv):
     return ok
 
 
+def discard(*paths):
+    """Delete a transient artifact - and any split siblings - the moment
+    the last edge that reads it is done, so peak scratch stays bounded on
+    a dual-layer game (XGD3 held ~100G of containers at once otherwise).
+    The a.* family is deliberately NEVER passed here: the report's
+    artifact table is scanned from it at the end (scan_artifacts), and the
+    workdir is removed wholesale after the report is delivered."""
+    for pth in paths:
+        if os.path.isdir(pth):
+            shutil.rmtree(pth, ignore_errors=True)
+            continue
+        base, ext = os.path.splitext(pth)
+        for sp in [pth] + glob.glob("%s.[0-9]*%s" % (glob.escape(base), ext)):
+            try:
+                os.unlink(sp)
+            except OSError:
+                pass
+
+
 def check_dir(edge, path, baseline):
     t0 = time.monotonic()
     with _LiveBar(edge):
@@ -232,6 +252,49 @@ def check_dir(edge, path, baseline):
     # The digest is recorded - the extracted tree is dead weight from
     # here, and keeping all of them can eat ~60G on a dual-layer game.
     shutil.rmtree(path, ignore_errors=True)
+    return ok
+
+
+def _read_content_type(path):
+    """The 32-bit STFS content type at offset 0x344."""
+    with open(path, "rb") as f:
+        f.seek(0x344)
+        return int.from_bytes(f.read(4), "big")
+
+
+def check_stfs_title_id(edge, path):
+    """The written STFS package must carry a real (nonzero) title id -
+    proof the writer derived it from the payload default.xex (or preserved
+    it on a rebuild) rather than shipping a title_id=0 shell a console
+    can't index."""
+    t0 = time.monotonic()
+    tid = int.from_bytes(open(path, "rb").read(0x364)[0x360:0x364], "big")
+    dt = time.monotonic() - t0
+    ok = tid != 0
+    RESULTS.append({"edge": edge, "type": "stfs-title-id", "ok": ok,
+                    "seconds": round(dt, 1), "title_id": "0x%08X" % tid})
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok else "FAIL (title_id is zero)", dt),
+          flush=True)
+    return ok
+
+
+def check_content_type(edge, path, want):
+    """The written STFS package must carry exactly the content type it was
+    asked for (a chosen --content-type, or a preserved source type) - not
+    merely a structurally valid header. Without this the flag could be
+    ignored or mis-stamped and every other check would still pass."""
+    t0 = time.monotonic()
+    got = _read_content_type(path)
+    dt = time.monotonic() - t0
+    ok = (got == want)
+    RESULTS.append({"edge": edge, "type": "content-type", "ok": ok,
+                    "seconds": round(dt, 1),
+                    "want": "0x%08X" % want, "got": "0x%08X" % got})
+    say("%-24s %s  %7.1fs"
+          % (edge, "PASS" if ok
+             else "FAIL (want 0x%08X, got 0x%08X)" % (want, got), dt),
+          flush=True)
     return ok
 
 
@@ -609,6 +672,39 @@ def god_header_in(tree):
     raise MatrixError("no GoD header found under %s" % tree)
 
 
+def _stfs_offender_of(baseline):
+    """First path component STFS's 40-byte ASCII file-table field cannot
+    hold, or None if every name fits. Decides whether the STFS output
+    edges run."""
+    for p in baseline:
+        for c in p.split("/"):
+            e = c.encode("ascii", "replace")
+            if len(e) > 0x28 or e.decode("ascii") != c:
+                return c
+    return None
+
+
+def _planned_edges(kind, full_disc, stfs_ok):
+    """The exact edge count this matrix will run for `kind`, from the two
+    conditions knowable before any edge runs: a video partition to slice
+    (the xiso family) and whether the tree's names fit STFS. Announced up
+    front so a live outer progress bar can fill, and asserted against the
+    real total at the end so it can never silently drift from the run.
+
+    Derived from and checked against the pressed-media gate: iso full
+    disc 68, iso with an over-long name 62, STFS source 63."""
+    n = 48                                   # unconditional edges
+    if kind == "iso":
+        n += 9                               # pressed-source byte audits
+        if full_disc:
+            n += 5                           # xiso family
+    else:
+        n += 3 * sum(1 for t in ("iso", "zar", "xiso") if t != kind)
+    if stfs_ok:
+        n += 6                               # STFS output family
+    return n
+
+
 def main(argv=None):
     global LEEROY
     argv = sys.argv[1:] if argv is None else argv
@@ -661,6 +757,20 @@ def main(argv=None):
     with _LiveBar("baseline"):
         baseline = xdvdfs_mod.hash_tree(d("base"))
     say("baseline: %d files\n" % len(baseline))
+
+    # The edge count is settled the moment the baseline exists: kind is
+    # known, and the two count-affecting conditions - a video partition to
+    # slice, and whether the names fit STFS - are readable now. Announce
+    # it so a live outer bar can fill; checked against the real total at
+    # the end. _stfs_offender and _full_disc are reused by the edges below.
+    _stfs_offender = _stfs_offender_of(baseline)
+    _full_disc = False
+    if kind == "iso":
+        from .formats.cci import xbox_image_offset as _xio
+        with open(src, "rb") as _sf:
+            _full_disc = _xio(_sf) > 0
+    _edge_total = _planned_edges(kind, _full_disc, _stfs_offender is None)
+    say("EDGES %d" % _edge_total)
 
     # dir -> iso -> dir
     run("dir->iso", ["convert", d("base"), "-o", d("a.iso")])
@@ -726,8 +836,10 @@ def main(argv=None):
         # one build per wrapper, from reality, byte-audited both ways.
         run("cci(src)->iso", ["convert", d("a.cci"), "-o", d("back_cci.iso")])
         check_partition("  bytes(cci-iso)", d("back_cci.iso"), src)
+        discard(d("back_cci.iso"))
         run("cso(src)->iso", ["convert", d("a.cso"), "-o", d("back_cso.iso")])
         check_partition("  bytes(cso-iso)", d("back_cso.iso"), src)
+        discard(d("back_cso.iso"))
         run("cci(src)->god", ["convert", d("a.cci"), "-o", d("s.god")])
         check_god_data("  bytes(cci-god)", god_header_in(d("s.god")), src)
         shutil.rmtree(d("s.god"), ignore_errors=True)
@@ -768,6 +880,7 @@ def main(argv=None):
     run("cci->cso", ["convert", d("a.cci"), "-o", d("x.cso")])
     run("cso(x)->dir", ["convert", d("x.cso"), "-o", d("from_xcso") + "/"])
     check_dir("  content(cci-cso)", d("from_xcso"), baseline)
+    discard(d("x.cso"), d("g.cci"))
 
     # split wrappers: opt-in 4GiB console slices (--split)
     _s, _l = hop("cci")
@@ -789,6 +902,44 @@ def main(argv=None):
     if kind == "iso":
         run("chd(src)->iso", ["convert", d("a.chd"), "-o", d("back_chd.iso")])
         check_identical("  bytes(chd-iso)", d("back_chd.iso"), src)
+        discard(d("back_chd.iso"))
+
+    # stfs: a normal output column for every input kind - no container is
+    # exempt because of what the input was. An STFS source rebuilds and
+    # preserves its own content type; any other source has none to carry,
+    # so the writer stamps a chosen one (--content-type). Either way the
+    # package is round-tripped, content-checked against the baseline, and
+    # `verify` walks our own output's hash tree to the descriptor root.
+    # Precondition: STFS file-table names are a hard 40 bytes of ASCII. A
+    # tree with a longer or non-ASCII name genuinely cannot be packed as
+    # STFS (the writer refuses rather than corrupt), so skip the edge with
+    # a note - a real limitation, not a failure. Same posture as the xiso
+    # precondition. STFS-source names are reader-produced (always fit), so
+    # a rebuild never trips this.
+    # _stfs_offender was computed up front (for the edge total); reuse it.
+    if _stfs_offender is not None:
+        say("  stfs: SKIP - a name is too long or non-ASCII for STFS "
+            "(%r, %d bytes); this tree cannot be packed as STFS\n"
+            % (_stfs_offender, len(_stfs_offender.encode("ascii", "replace"))))
+    else:
+        if kind == "stfs":
+            # Preserve: the rebuilt package must carry the SOURCE's own
+            # type - read it off the source and assert it survives.
+            want_ct = _read_content_type(src)
+            run("stfs(src)->stfs", ["convert", src, "-o", d("a.stfs")])
+        else:
+            # A non-default type on purpose (DLC, not the XBLA a lazy
+            # writer might fall back to): proves --content-type is
+            # actually honoured, not merely accepted.
+            want_ct = 0x00000002                     # dlc
+            run("%s(src)->stfs" % kind,
+                ["convert", src, "-o", d("a.stfs"), "--content-type", "dlc"])
+        check_content_type("  stfs content-type", d("a.stfs"), want_ct)
+        check_stfs_title_id("  stfs title-id", d("a.stfs"))
+        run("stfs(r)->dir", ["convert", d("a.stfs"), "-o", d("from_stfs") + "/"])
+        check_dir("  content(stfs)", d("from_stfs"), baseline)
+        run("verify stfs", ["verify", d("a.stfs")])
+        os.unlink(d("a.stfs"))
 
     # xiso: the trimmed bare image (what xemu consumes). A byte SLICE of
     # the source's game partition, so it only exists when the source has
@@ -797,10 +948,7 @@ def main(argv=None):
     # exactly the right audit: output == src[partition_base:], byte for
     # byte.
     if kind == "iso":
-        from .formats.cci import xbox_image_offset as _xio
-        with open(src, "rb") as _sf:
-            _full_disc = _xio(_sf) > 0
-        if _full_disc:
+        if _full_disc:                       # computed up front for the total
             run("iso(src)->xiso", ["convert", src, "-o", d("a.xiso")])
             run("xiso->dir", ["convert", d("a.xiso"),
                               "-o", d("from_xiso") + "/"])
@@ -817,7 +965,9 @@ def main(argv=None):
     run("verify cci", ["verify", d("a.cci")])
     run("verify cso", ["verify", d("a.cso")])
     run("verify cci(split)", ["verify", d("u.cci")])
+    discard(d("u.cci"))
     run("verify cso(split)", ["verify", d("u.cso")])
+    discard(d("u.cso"))
     run("verify chd", ["verify", d("a.chd")])
 
     failed = [r["edge"] for r in RESULTS if not r["ok"]]
@@ -832,6 +982,10 @@ def main(argv=None):
         write_report(w, src, kind, baseline, total, 1 if failed else 0)
     say("\n%d edges, %d failed, %dm%02ds total"
           % (len(RESULTS), len(failed), total // 60, total % 60))
+    if _edge_total != len(RESULTS):
+        say("WARNING: announced %d edges but ran %d - _planned_edges has "
+            "drifted from the matrix body and needs updating"
+            % (_edge_total, len(RESULTS)))
     if failed:
         say("FAILED: " + ", ".join(failed))
         return 1

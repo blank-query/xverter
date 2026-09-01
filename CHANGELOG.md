@@ -1,5 +1,66 @@
 # Changelog
 
+## 1.4.0 — the format it could only read
+
+**New writer: STFS (`.stfs`) output — write LIVE packages from any input.**
+STFS was the one format xVerter read but could not write. Now every input
+writes it, held to the same standard as every other writer: the package is
+re-read by xVerter's own reader and its entire interleaved SHA-1 hash chain
+re-verified block-by-block to the volume descriptor's root before success is
+reported. Content is byte-equal to source, proven at all three hash-tree
+levels — including a full-scale run on the real 2.34 GB Halo: Spartan Assault
+retail package.
+
+**Content type is chosen, never guessed.** A LIVE package carries its type
+(XBLA `0x000D0000`, DLC `0x00000002`, title update `0x000B0000`, Xbox Original
+`0x00005000`) in its header. An STFS **source** already has one, so
+`stfs → stfs` is a faithful rebuild that preserves it. Any **other** source
+has none to carry, so you name it with `--content-type
+xbla|dlc|title-update|xbox-original` (or a raw value). Without it, a non-STFS
+source is a clear error — never a silent XBLA stamp. The junk RSA signature
+bytes are the same convention xVerter's GoD output (and iso2god's) already
+ships.
+
+**TUI: a content-type picker.** Clicking **→ STFS** on a non-STFS game pops a
+modal to choose the type; an STFS source skips it and preserves its own. The
+`→ STFS` button joins the Xbox 360 row.
+
+**Matrix: STFS is a normal output column for every input.** Each input now
+runs the STFS output family — write, round-trip to a directory, content-check
+against the baseline, and `verify` to the descriptor root. Image input **68
+edges** (was 62); STFS input **63** (it lacks the five pressed-byte audits an
+image earns: `68 − 5 = 63`).
+
+**STFS packages carry real, derived metadata (and you can override it).**
+A synthesized STFS package used to be a title_id=0 shell a console can't
+index. Now `X -> stfs` derives the game's identity from the source: the
+title id / media id / disc number come from the payload executable -
+`default.xex` (360) or `default.xbe` (OG Xbox), the same exec-info GoD reads.
+The display name is resolved from the **title id** against a bundled Xbox 360
+title database (distilled from xenia-manager/x360db, ~6500 titles) - so a 360
+game names itself even from a stripped ZAR, since a XEX carries no name of its
+own. OG Xbox games take their name from the XBE certificate; a full retail iso
+can also fall back to the redump DAT; and the source filename is the last
+resort. `--content-type`, `--title`, `--title-id` and
+`--media-id` fill or override any of it. On an `stfs -> stfs` rebuild those
+flags *edit* the preserved header - rename a package or re-stamp an id by
+converting with a flag, no metadata editor needed. (Deriving from the source
+is conversion; a convert-with-override is the edit.)
+
+**STFS names over 40 bytes are refused, not truncated.** STFS's file-table
+name field is a hard 40 bytes of ASCII; some disc games carry longer asset
+names (a real XGD3 shader is `transparent_generic_viewer_centered_m.vsh`,
+41 chars). The writer now scans names up front and raises a clear error
+naming the offender before writing anything, rather than truncating into a
+valid-looking package with corrupted names. The matrix skips the STFS edge
+for such a tree, like the xiso slice on a bare image.
+
+**Fixed: the TUI RAM-scratch and 4GiB-split toggles did nothing.** Their
+handler sat inside `on_button_pressed` guarded by `event.switch`, which a
+button press never carries — so the switches were dead and an unrecognized
+button id crashed. Moved to a proper `on_switch_changed`; the toggles now
+take effect.
+
 ## 1.3.0 — the missing conversion, and three sweeps deeper
 
 **New format: `.xiso` output — the trimmed bare image emulators actually want.**

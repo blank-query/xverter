@@ -17,7 +17,7 @@ GoD containers, XDVDFS ISOs (bare or full redump), ZArchive `.zar`, STFS content
 | Linux ARM64 (Raspberry Pi etc.) | `xverter-linux-arm64` | same — works headless over SSH, mouse included |
 | macOS (Apple Silicon) | `xverter-macos-arm64` | same |
 
-Launching with no arguments opens the TUI on the current folder. Testing status, stated honestly: the Windows and Linux x86_64 binaries are click-tested (real conversions driven through the TUI); the ARM64 binary is tested on a Raspberry Pi 5 (TUI renders, conversions verified); the macOS binary is built by CI from the identical code and recipe but **untested — it *should* work**, and a report either way earns you a place in the changelog. (Linux file managers refuse to run terminal programs by double-click — that's a desktop-environment policy, not an xverter quirk; the TUI's Setup tab can install an app-menu launcher entry if you want one.)
+Launching with no arguments opens the TUI on the current folder. Testing status, stated honestly: the Windows binary is click-tested this release (a real conversion driven through the TUI, output verified by our own reader); the Linux x86_64 and ARM64 binaries render and convert (ARM64 on a Raspberry Pi 5); the macOS binary is built by CI from the identical code and recipe but **untested — it *should* work**, and a report either way earns you a place in the changelog. (Linux file managers refuse to run terminal programs by double-click — that's a desktop-environment policy, not an xverter quirk; the TUI's Setup tab can install an app-menu launcher entry if you want one.)
 
 **The pip way**, if you'd rather have it as a command:
 
@@ -39,14 +39,14 @@ xverter convert <anything> -o out.zar      # or out.iso, out.god, outdir/
 
 | from \ to              | `dir` | `.iso`   | `.zar` | `.god` | `.cci`   | `.cso`   | `.chd`   | `stfs` |
 | ---------------------- |:-----:|:--------:|:------:|:------:|:--------:|:--------:|:--------:|:------:|
-| `dir`                  | —     | ✅        | ✅      | ✅      | ✅        | ✅        | ✅        | ❌      |
-| `iso`                  | ✅     | —        | ✅      | ✅      | ✅ direct | ✅ direct | ✅ direct | ❌      |
-| `zar`                  | ✅     | ✅        | —      | ✅      | ✅        | ✅        | ✅        | ❌      |
-| `god`                  | ✅     | ✅ direct | ✅      | —      | ✅ direct | ✅ direct | ✅ direct | ❌      |
-| `cci`                  | ✅     | ✅        | ✅      | ✅      | —        | ✅ direct | ✅ direct | ❌      |
-| `cso`                  | ✅     | ✅        | ✅      | ✅      | ✅ direct | —        | ✅ direct | ❌      |
-| `chd`                  | ✅     | ✅ direct | ✅      | ✅      | ✅        | ✅        | —        | ❌      |
-| `stfs` (XBLA/DLC/TU)   | ✅     | ✅*       | ✅      | ✅*     | ✅*       | ✅*       | ✅*      | —      |
+| `dir`                  | —     | ✅        | ✅      | ✅      | ✅        | ✅        | ✅        | ✅ †     |
+| `iso`                  | ✅     | —        | ✅      | ✅      | ✅ direct | ✅ direct | ✅ direct | ✅ †     |
+| `zar`                  | ✅     | ✅        | —      | ✅      | ✅        | ✅        | ✅        | ✅ †     |
+| `god`                  | ✅     | ✅ direct | ✅      | —      | ✅ direct | ✅ direct | ✅ direct | ✅ †     |
+| `cci`                  | ✅     | ✅        | ✅      | ✅      | —        | ✅ direct | ✅ direct | ✅ †     |
+| `cso`                  | ✅     | ✅        | ✅      | ✅      | ✅ direct | —        | ✅ direct | ✅ †     |
+| `chd`                  | ✅     | ✅ direct | ✅      | ✅      | ✅        | ✅        | —        | ✅ †     |
+| `stfs` (XBLA/DLC/TU)   | ✅     | ✅*       | ✅      | ✅*     | ✅*       | ✅*       | ✅*      | ✅ rebuild |
 
 **CCI** (Cerbios) and **CSO** (Project Stellar) are the compressed playable formats of the modded original-Xbox hardware scene — block-compressed ISO wrappers, LZ4 throughout. xVerter's writers are **byte-identical to the reference implementations** (Repackinator for CCI, MakeMHz's stellar-cso for CSO) on the original-Xbox discs those tools were built for, so that output inherits the hardware validation they have earned; cross-reads with Repackinator pass in both directions. Writing CCI/CSO for XGD2/XGD3 discs is an xVerter extension — no reference tool does it — and both are **optimized containers**: they keep the game partition and drop the rest, on every disc generation. The wrappers are content-agnostic (the cursed corner below explores what that implies). Reading CCI/CSO needs nothing; writing them uses the `lz4` package, which installs with xverter automatically.
 
@@ -60,23 +60,27 @@ Formats that hold a disc image convert **directly, stream to stream** — no int
 
 **Original Xbox works too, at the same standard.** XDVDFS is the same filesystem on both consoles, so OG Xbox games flow through every edge of the matrix — including GoD output, which correctly produces Xbox Originals containers (content type `0x5000`, the 360's backward-compat install format). The full matrix is tested on a real XGD1 redump (Halo: Combat Evolved) alongside the 360 runs. One expectation to set straight: **repacking an OG game as GoD/zar does not make it playable on a 360 emulator.** Real 360s play OG games through Microsoft's own built-in emulator (which supported only ~460 titles); Xenia/XenDroid don't implement that layer. GoD `0x5000` output is for real modded 360 hardware — for OG emulation, use xemu with a bare **xiso**: `xverter convert "Game (redump).iso" -o Game.xiso` slices the game partition out of a full redump byte-for-byte (the original pressed layout, not a rebuild — verified by readback and boot-tested in xemu), and any other readable format converts to `.xiso` the same way.
 
-**Two deliberate exclusions, stated rather than hidden:** **FATX** (the filesystem inside console hard drives and Xemu's qcow2 HDD images — a storage medium, not a distribution format) and **STFS as *output*.** Rebuilt LIVE packages only matter to modded consoles filling a `Content` folder — emulators are happier with every other format here — and a writer held to this project's verification standard (hash-chain-validated structure, round-trip content equality, a real consumer booting the result) isn't built yet. Shipping it half-checked would be the one thing this tool never does. Note the signature honesty applies across the board: LIVE/PIRS signatures are Microsoft-private-key RSA, so *every* tool that writes these container families — including iso2god, whose GoD output the whole scene runs on — ships junk signature bytes that modded consoles and emulators simply don't check.
+**One deliberate exclusion, stated rather than hidden.** **FATX** — the filesystem inside console hard drives and Xemu's qcow2 HDD images — is a storage medium, not a distribution format, and stays out. Everything else writes STFS. **STFS output is held to the same standard as every other writer here**: the LIVE package is re-read by xVerter's own STFS reader, its entire interleaved SHA-1 hash chain re-verified block-by-block up to the volume descriptor's root, and its file content compared against the source before the write is ever called done.
+
+**† The one thing STFS asks that other outputs don't: a content type.** A LIVE package carries its type — XBLA `0x000D0000`, DLC `0x00000002`, title update `0x000B0000`, Xbox Original `0x00005000` — in its header, and xVerter *never guesses* it. An STFS **source** already has one, so `stfs → stfs` is a faithful rebuild that preserves it. Any **other** source has none to carry, so you name it: `--content-type xbla|dlc|title-update|xbox-original` (or a raw value). That is the one decision only you can make — surfaced, not invented, and not refused. The TUI pops a picker; the CLI takes the flag. This is exactly your call to make, which is why turning `iso → stfs` without a type is an error rather than a silent XBLA stamp. One hard limit comes from the format itself: an STFS file-table name is **40 bytes of ASCII**, and some disc games carry longer or non-ASCII asset names (a real XGD3 shader is `transparent_generic_viewer_centered_m.vsh` — 41). Such a tree simply cannot be packed as STFS, so xVerter **refuses with a clear error naming the offender** rather than truncate it into a valid-looking package with broken names — the one failure mode that would get blamed on the tool instead of the format.
+
+The signature honesty is the same as everywhere, and it applies to our own STFS output too: LIVE/PIRS signatures are Microsoft-private-key RSA, so *every* tool that writes these container families — iso2god included, whose GoD output the whole scene runs on — ships junk signature bytes that modded consoles and emulators simply don't check. Writing STFS to that identical convention is no different from the GoD we already ship.
 
 ## The cursed corner
 
 xVerter detects formats by magic bytes (never extensions), its wrappers are content-agnostic, and everything routes through the same pivot — so conversion edges exist wholesale, not by curated whitelist. Some of the resulting combinations are technically valid, fully verified, and deeply wrong. They are supported anyway. The tool converts; you decide.
 
-- **XBLA arcade title → disc image or GoD container** (the `*` in the matrix). A 50 MB downloadable arcade game dressed up as a full disc. It boots nowhere a plain STFS package wouldn't — it exists because the pivot architecture makes it free, and refusing it would mean writing code to say no.
+- **XBLA arcade title → GoD container** (the `*` in the matrix). A downloadable arcade game dressed up as a full disc — and cursed in this section's truest sense, because it *looks* like it works. The GoD verifies byte-perfect (full hash tree, every block), boots on real RGH hardware, plays its startup movies, and reaches the main menu — then the game runs its XBLA license check, which expects content-package (STFS) media and instead goes hunting for the physical disc a GoD claims to be: the drive **audibly spins up**, the entitlement check fails, and it dies with *"this disc is unreadable — clean the disc."* Confirmed on hardware with Halo: Spartan Assault; some collections (Sega Vintage) instead boot straight into trial mode — the same broken license path. The identical title as native **STFS (`000D0000`)** plays perfectly, and a real *disc* game → GoD is exactly what GoD is for (Castlevania: Lords of Shadow streamed over the network and played flawlessly). Only **XBLA → GoD** is the trap, because only an arcade title carries that license check. Deliver arcade/XBLA titles as native STFS, never GoD.
 - **Xbox 360 game inside a CCI or CSO** — compressed wrappers that only modded *original* Xbox hardware (Cerbios, Project Stellar) will ever open, wrapped around a console generation that hardware cannot run. Round-trips bit-perfect.
 - **XBLA title → CHD** — a format no Xbox emulator reads yet, wrapping a container that never saw a disc. xVerter builds it happily, verifies it, and nothing on Earth boots it.
 
-Every cursed edge passes through the same verification as the sane ones — several of them run in the 62-edge matrix on every `xverter test`. Cursed, but checked.
+Every cursed edge passes through the same verification as the sane ones — several of them run in the 68-edge matrix on every `xverter test`. Cursed, but checked.
 
 And sometimes the cursed-looking edge turns out to be the killer feature: **XBLA → `.zar`** reads like it belongs on the list above, but it's the cleanest way to run arcade titles in Xenia — the emulator reads the zar directly, one flat file per game instead of STFS's nested `Content/.../` tree or a GoD container's hash-named directories. ZAR is also routinely the smallest thing in the matrix: it archives the game's *files* rather than the disc image (redump padding never gets stored at all) and compresses with zstd — measured on the Halo CE redump, the zar is **46% of the source ISO** while CCI, CSO, and CHD all land near 88%. On games whose assets ship pre-compressed the formats converge; where there's slack, zar takes it. Tested on real hardware-dumped games, played in Xenia. Yesterday's cursed conversion is tomorrow's workflow — which is exactly why the tool converts and you decide.
 
 ## The test record — three generations of Halo, one hash each
 
-The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 62-edge matrix (57 for STFS: it has no pressed disc to byte-compare against, so the byte-audits an image input earns - including the xiso slice, which only exists where there is a video partition to trim - become round-trip content checks instead), every edge verified one way or the other. Every first-hop conversion starts from the pressed source — optimized formats prove they strip the real disc correctly, archival formats that they preserve it — and nothing is converted from the suite's own rebuilt intermediate when the original is on hand. Three numbers per game tell the whole story:
+The release gate is the full test suite: real media, one franchise, every format Microsoft pressed — **XGD1, XGD2, XGD3 and STFS**. Each game is a Redump-authenticated dump and runs a full 68-edge matrix (63 for STFS: it has no pressed disc to byte-compare against, so the five image-only byte-audits - the GoD/CCI/CSO/CHD data regions and the xiso slice - become round-trip content checks instead. Every input, STFS included, now writes and round-trips a full STFS package - except a game whose tree holds a name STFS's 40-byte field cannot store, where the STFS edge is skipped with a note, exactly as the xiso slice is skipped when there is no video partition to trim), every edge verified one way or the other. Every first-hop conversion starts from the pressed source — optimized formats prove they strip the real disc correctly, archival formats that they preserve it — and nothing is converted from the suite's own rebuilt intermediate when the original is on hand. Three numbers per game tell the whole story:
 
 - **Source SHA-1** — the whole input file; matches Redump's canonical dump.
 - **Content digest** — a canonical SHA-1 over every file's path + hash inside the game. This is the *format-invariant* fingerprint: identical across all seven formats, immune to compressor versions and container layout. It even survived xVerter's own writers being replaced wholesale — the digest below for Anniversary is byte-for-byte the one measured back when output ran through delegated third-party tools.
@@ -93,32 +97,44 @@ One franchise, every format Microsoft pressed — XGD1/2/3 — plus the download
 
 ## Benchmarks
 
-Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, CachyOS Linux, free-threaded Python 3.14t. **Every conversion time includes full verification** (round-trip hash checks are not optional in these numbers). Seconds, with the 1.0.2 launch figure in parentheses:
+Test machine: AMD Ryzen 9 7900X (12c/24t), 64GB DDR5, Samsung 990 PRO NVMe, CachyOS Linux, free-threaded Python 3.14t. **Every conversion time includes full verification** (round-trip hash checks are not optional in these numbers). Seconds, with **1.0.2 on the identical full pressed disc (its GIL build)** in parentheses — an honest like-for-like: the same bytes in, the same verified conversion, old code vs new:
 
 | Conversion (from the pressed source) | Spartan Assault (2.3GB) | Halo CE (7.3GB) | Halo 3 (7.8GB) | Anniversary (8.7GB) |
 | ----------------------- | -----------------------:| ---------------:| --------------:| -------------------:|
 | dir → iso               | 3.1 (3.1)               | 4.2 (4.5)       | 6.6 (7.7)      | 10.7 (10.3)         |
 | dir → zar               | 6.3 (17.2)              | 5.8 (10.5)      | 11.3 (25.2)    | 15.6 (34.1)         |
-| iso → god               | —                       | 3.2 (5.1)       | 5.3 (8.4)      | 5.0 (10.9)          |
-| iso → zar               | —                       | 5.6 (10.5)      | 11.0 (25.2)    | 15.7 (34.1)         |
-| iso → cci               | —                       | 15.4 (15.1)     | 16.6 (26.5)    | 18.2 (34.5)         |
-| iso → cso               | —                       | 13.5 (14.8)     | 15.2 (26.4)    | 16.6 (34.2)         |
-| iso → chd               | —                       | 43.6 (48.0)     | 55.0 (84.0)    | 61.4 (123.9)        |
+| iso → god               | —                       | 3.2 (12.1)      | 5.3 (12.2)     | 5.0 (14.0)          |
+| iso → zar               | —                       | 5.6 (12.4)      | 11.0 (27.7)    | 15.7 (37.5)         |
+| iso → cci               | —                       | 15.4 (25.2)     | 16.6 (28.3)    | 18.2 (31.2)         |
+| iso → cso               | —                       | 13.5 (24.2)     | 15.2 (27.4)    | 16.6 (30.6)         |
+| iso → chd               | —                       | 21.1 (107.5)    | 32.8 (119.2)   | 35.5 (152.9)        |
 | iso → xiso              | —                       | 9.5             | 9.9            | 11.3                |
-| **full matrix**         | **4m49s** (5m49s, 48 edges) | **6m21s** (5m55s, 48 edges) | **8m39s** (10m47s, 48 edges) | **10m36s** (14m48s, 48 edges) |
+| **full matrix**         | **3m46s** (6m15s, 48 edges) | **6m08s** (7m54s, 48 edges) | **8m10s** (12m19s, 48 edges) | **9m42s** (16m40s, 48 edges) |
 
 Spartan Assault is a download-era title — no pressed disc exists, so its first hops run from
 the STFS package itself: → iso 9.4s, → xiso 9.3s, → god 10.4s, → zar 11.3s, → cci 16.3s,
-→ cso 16.0s, → chd 36.3s. The xiso row has no launch figure because the format is new in this
-release; its time includes the byte-for-byte readback of the whole sliced partition. One
-honesty note on the parentheses: the launch suite built its containers from its own trimmed
-rebuild, while every current number converts the full pressed disc — more data in, and still
-faster nearly everywhere.
+→ cso 16.0s, → chd 36.3s. The xiso row has no 1.0.2 figure because the format is new in this
+release; its time includes the byte-for-byte readback of the whole sliced partition. Both
+columns convert the **same full pressed disc** — no trimmed-rebuild shortcut on either side —
+so the parentheses are a straight old-code-vs-new-code read. The `dir →` rows build from the
+extracted files, which are identical whichever way you got them, so those parentheses are
+unchanged; every `iso →` row reads the whole pressed image, and that is where the gap shows —
+`iso → chd` most of all, where 1.0.2 shelled out to `chdman` (107–153s) and the native writer
+now does it in 21–36s.
 
-The current column runs **62 edges (57 for Spartan)** — a third more coverage than the launch
-column — and still beats it on the quartet: 37m07s at launch, 30m25s now, 238 edges against
-192 (single uncontended runs; the suite's run-to-run noise is about ±4%). CHD went native in
-1.2.0, which is where its column's savings come from.
+### How far we've come — seconds per edge, pressed disc, 1.0.2 vs now
+
+One number captures the whole tool at once: **seconds per edge** — total suite time ÷ edges run. It is the fair yardstick precisely because coverage keeps growing (the suite runs *more* edges every release), so raw wall-clock flatters older, thinner builds; per-edge does not. Below is the launch build (**1.0.2**, on a stock **GIL** interpreter) against the current build (native everything, no-middleman streaming, **free-threaded 3.14t**) — both converting the **same full pressed discs**, no trimmed-rebuild shortcut on either side:
+
+| Disc | 1.0.2 · GIL | current · 3.14t | **per edge** |
+| --------------------- | -----------:| ---------------:| -----------:|
+| Halo CE (XGD1)        | 9.9 s/edge  | 5.4 s/edge      | **1.8× faster** |
+| Halo 3 (XGD2)         | 15.4 s/edge | 7.2 s/edge      | **2.1× faster** |
+| Anniversary (XGD3)    | 20.8 s/edge | 9.4 s/edge      | **2.2× faster** |
+| Spartan Assault (STFS)| 7.8 s/edge  | 3.6 s/edge      | **2.2× faster** |
+| **whole quartet**     | **13.5 s/edge** | **6.4 s/edge** | **≈ 2× faster** |
+
+Quartet totals behind those averages: **43m08s over 192 edges** for 1.0.2 → **27m46s over 261 edges** now — *less* wall-clock for a *third more* coverage. And the win **widens with disc size** (1.8× on the smallest game up to 2.2× on the largest), because the bigger the disc, the more the free-threaded compression scaling and the native CHD writer have to work with. Two things compound here: the code got faster (native CHD, direct streaming with no pivot ISO), and the interpreter got faster (free-threaded Python runs the compression pools across every core). Same games, same full pressed discs, every edge verified — just over half the time per unit of work.
 
 Compression, as a fraction of the raw ISO (content-dependent — Anniversary's assets are already compressed, Spartan's aren't): CHD 60–90%, ZAR 60–93%, CCI/CSO 70–96%, GoD ~100.5% (its SHA-1 hash tree costs half a percent).
 
@@ -260,11 +276,11 @@ xverter test "Some Game.zar"
 (Or select a game in the TUI and click **Test** — the edges stream into the log under the dual progress bars.) Every container round-trips through extraction with hashes diffed against the baseline, every artifact kind gets a `verify` pass, and the run ends by writing a single self-contained `<game>_matrix_report.html` next to your game: verdict, per-edge timings, artifact sizes and compression ratios, decoded-stream SHA-1s, tool versions — with the complete machine-readable JSON embedded inside the page. Expected final lines:
 
 ```
-62 edges, 0 failed
+68 edges, 0 failed
 MATRIX: ALL PASS
 ```
 
-**Why STFS runs 57 edges instead of 62.** The five missing edges are not conversions — they are *verifications that need ground truth an STFS package cannot provide*. A pressed-disc input carries the original factory bytes, so the suite byte-audits its outputs against them: the GoD data region, decompressed CCI/CSO/CHD, and the xiso slice are each compared byte-for-byte with the real disc. A download title has no pressed disc — there is nothing those five audits could compare against, and the xiso *slice* doubly cannot exist (slicing means cutting the video partition off a pressed image; an STFS package has neither). Every **conversion** still runs: an STFS package streams straight into ISO, ZAR, GoD, CCI, CSO, CHD, and a rebuilt xiso without an intermediate image on disk, and each output is extracted and content-checked against the baseline — the strongest verification the input's nature permits. Fewer edges here means fewer *possible checks*, never less coverage.
+**Why STFS runs 63 edges, not the 68 an image input runs.** Five of an image's edges are not conversions — they are *byte-audits that need ground truth an STFS package cannot provide*. A pressed-disc input carries the original factory bytes, so the suite compares its outputs against them: the GoD data region, decompressed CCI/CSO/CHD, and the xiso slice are each checked byte-for-byte with the real disc. A download title has no pressed disc — there is nothing those five audits could compare against, and the xiso *slice* doubly cannot exist (slicing means cutting the video partition off a pressed image; an STFS package has neither). So `68 − 5 = 63`. Every **conversion** still runs — an STFS package streams straight into ISO, ZAR, GoD, CCI, CSO, CHD, a rebuilt xiso, and a rebuilt STFS package, and each output is extracted and content-checked against the baseline — the strongest verification the input's nature permits. The STFS **output** family (write, round-trip, content-check, `verify`) runs for every input alike; only the pressed-byte audits are fewer. Fewer image-only audits means fewer *possible checks against factory bytes*, never less coverage.
 
 Anything less is a bug: file an issue with the report attached. This is the exact harness used for the release test-suite runs on real XGD1, XGD2, XGD3 and STFS dumps — and it narrates itself: per-edge results stream live with within-edge progress (no binaries required). Budget scratch space of ~4–5× the game's size (`--workdir` relocates it). **Do not run the matrix out of RAM scratch**: a full run's transient footprint is far beyond what any tmpfs survives — the TUI's RAM-scratch switch is deliberately ignored by Test, and if your system's `/tmp` is a tmpfs, point the run at a disk with `--workdir`.
 
@@ -361,7 +377,7 @@ Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clan
 
 **Tested on a real device.** Galaxy Z Fold 4, Termux, library on shared storage — the full TUI renders on the inner display, and `Battlefield: Bad Company (USA) (En,Fr)` converted from a 4.5 GB `.zar` back to a 4.9 GB `.iso` in **26.9 s** at launch, manifest verified; the current release does that same conversion in **10.5 s** on a free-threaded interpreter. A phone with a folding keyboard is a complete xVerter workstation.
 
-**The full release test suite passes on the phone.** The identical matrix from the desktop record — every edge, every byte-audit — run in Termux on the Fold 4 (plugged in, screen on, Termux in the foreground), single clean pass, zero failures:
+**The full release test suite passes on the phone.** The full matrix run in Termux on the Fold 4 (plugged in, screen on, Termux in the foreground), single clean pass, zero failures — **measured at 1.3.0**; the edge counts have since grown (the STFS writer and the up-front edge announcement land in the desktop record above), so a current-suite phone re-run is pending:
 
 | title | format | result | time |
 | --- | --- | --- | ---: |
@@ -369,6 +385,8 @@ Termux builds the two small native pieces (`lz4`, `zstandard`) with its own clan
 | Halo: CE | XGD1 | 62 edges, 0 failed | 26m28s |
 | Halo 3 | XGD2 | 62 edges, 0 failed | 36m32s |
 | CE Anniversary | XGD3 | 62 edges, 0 failed | 45m46s |
+
+*(These are the 1.3.0 phone numbers, from before the STFS writer and the up-front edge announcement grew the counts — the desktop record above is the current suite. A current-suite phone run will refresh this table.)*
 
 One Android scheduling fact worth knowing for long runs: with the screen off or the terminal in the background, Android parks work on the efficiency cores at roughly a third of the speed — the jobs still finish correctly, just slower. For numbers like the table above, keep the screen on and Termux in front.
 

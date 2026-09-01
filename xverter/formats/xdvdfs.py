@@ -24,6 +24,7 @@ XDVDFS layout:
 """
 
 import argparse
+import bisect
 import os
 import struct
 import sys
@@ -796,10 +797,17 @@ def tree_from_entries(entries, where="<stream>"):
     return root
 
 
-def pack_tree(root, out_iso, progress=None):
-    """Pack an already-built node tree. See pack() and
-    tree_from_entries() for the two ways to get one."""
+def _allocate(root):
+    """Assign XDVDFS sectors over a node tree - directory tables first
+    (depth-first from sector 33), then file data - deciding the whole
+    layout from names and sizes alone, before a byte is read. Mutates the
+    tree (each node's "sector", each dir entry's "start") and returns
+    (tables, file_runs, total_sectors).
 
+    This is the ONE layout authority: pack_tree writes an ISO from it, and
+    LazyImage synthesizes a seekable view from it, so a materialized image
+    and a lazy one are byte-identical by construction and cannot drift.
+    """
     tables = []
     file_runs = []
     next_sector = [33]
@@ -825,6 +833,14 @@ def pack_tree(root, out_iso, progress=None):
 
     alloc(root)
     alloc_files(root)
+    return tables, file_runs, next_sector[0]
+
+
+def pack_tree(root, out_iso, progress=None):
+    """Pack an already-built node tree. See pack() and
+    tree_from_entries() for the two ways to get one."""
+
+    tables, file_runs, _total = _allocate(root)
 
     files = 0
     total = 0
@@ -913,6 +929,183 @@ def pack_tree(root, out_iso, progress=None):
             pass
         raise
     return files, total
+
+
+# Region kinds in a LazyImage offset map.
+_LZ_ZERO = 0    # implicit zeros (sectors 0-31, file tail padding, gaps)
+_LZ_BYTES = 1   # literal bytes in RAM (volume descriptor, directory tables)
+_LZ_FILE = 2    # a file's data, pulled from its opener on demand
+
+
+def _close(h):
+    c = getattr(h, "close", None)
+    if c:
+        c()
+
+
+class LazyImage:
+    """A seekable, read-only view of the bare XDVDFS image for a node tree,
+    without materializing the ISO.
+
+    The layout is decided by `_allocate()` - the same authority `pack_tree`
+    writes an ISO from - so the bytes this serves are identical to a
+    materialized image, byte-for-byte, by construction. The small directory
+    tables are rendered into RAM at construction; file data is fetched from
+    each entry's opener only when a read lands inside its region. This is the
+    single-pass fast path for random-access tree sources (a zar, a folder):
+    god.build()/GodStream consume it directly through the file-like API below,
+    with no temporary ISO on disk.
+
+    `root` is a `tree_from_entries()` result whose file entries carry an
+    opener (an "open" callable returning a seekable handle, or a "src" path).
+    """
+
+    def __init__(self, root):
+        self._starts = []
+        self._regions = []
+        self._fh = None          # cached [opener, handle, pos] for streaming
+        self._build_layout(root)
+
+    def _add(self, start, kind, payload):
+        self._starts.append(start)
+        self._regions.append((kind, payload))
+
+    @staticmethod
+    def _file_opener(e):
+        if e.get("open"):
+            return e["open"]
+        src = e["src"]
+        return lambda: open(src, "rb")
+
+    def _build_layout(self, root):
+        tables, file_runs, total_sectors = _allocate(root)
+
+        desc = (MAGIC
+                + struct.pack("<IIQ", root["sector"], root["tsize"], 0)
+                + b"\x00" * DESC_PAD + MAGIC)
+        if len(desc) != SECTOR:
+            raise XdvdfsError("volume descriptor is %d bytes, expected %d"
+                              % (len(desc), SECTOR))
+
+        self._add(0, _LZ_ZERO, 32 * SECTOR)          # sectors 0-31
+        self._add(32 * SECTOR, _LZ_BYTES, desc)      # sector 32
+        for node in tables:
+            table = _render_table(node)
+            if len(table) != node["tsize"]:
+                raise XdvdfsError("rendered directory table size drift")
+            self._add(node["sector"] * SECTOR, _LZ_BYTES, table)
+        for e in file_runs:
+            start = e["start"] * SECTOR
+            self._add(start, _LZ_FILE, (self._file_opener(e), e["size"]))
+            pad = -e["size"] % SECTOR
+            if pad:
+                self._add(start + e["size"], _LZ_ZERO, pad)
+
+        self.size = total_sectors * SECTOR
+        self._pos = 0
+
+        # The map must be gapless and sorted; index its ends and verify -
+        # the same assert that catches layout drift in the writer.
+        self._starts, self._regions = zip(
+            *sorted(zip(self._starts, self._regions)))
+        self._starts = list(self._starts)
+        self._regions = list(self._regions)
+        self._ends = []
+        expect = 0
+        for start, (kind, payload) in zip(self._starts, self._regions):
+            if start != expect:
+                raise XdvdfsError("lazy region gap/overlap at 0x%X (want 0x%X)"
+                                  % (start, expect))
+            length = payload if kind == _LZ_ZERO else (
+                len(payload) if kind == _LZ_BYTES else payload[1])
+            self._ends.append(start + length)
+            expect = start + length
+        if expect != self.size:
+            raise XdvdfsError("lazy region map ends at 0x%X, image size 0x%X"
+                              % (expect, self.size))
+
+    def read_at(self, off, n):
+        """Read up to n bytes at absolute image offset off (may span regions)."""
+        if n <= 0 or off >= self.size:
+            return b""
+        n = min(n, self.size - off)
+        out = bytearray()
+        while n > 0:
+            i = bisect.bisect_right(self._starts, off) - 1
+            kind, payload = self._regions[i]
+            take = min(n, self._ends[i] - off)
+            local = off - self._starts[i]
+            if kind == _LZ_ZERO:
+                out += b"\x00" * take
+            elif kind == _LZ_BYTES:
+                out += payload[local:local + take]
+            else:
+                out += self._read_file(payload[0], local, take)
+            off += take
+            n -= take
+        return bytes(out)
+
+    def _read_file(self, opener, local, take):
+        # god.build streams the image in order, so reads within a file are
+        # sequential: keep one handle open and read forward, reopening only
+        # on a file change or a backward/random jump. This lets a
+        # forward-only source (an STFS block-chain reader, which cannot
+        # seek) be read in one pass instead of reopened per chunk, and still
+        # serves the occasional random read (a seekable handle seeks; a
+        # forward-only one skips forward).
+        fh = self._fh
+        if fh is None or fh[0] is not opener or fh[2] != local:
+            if fh is not None:
+                _close(fh[1])
+            h = opener()
+            if local:
+                seek = getattr(h, "seek", None)
+                if seek is not None:
+                    seek(local)
+                else:
+                    left = local
+                    while left > 0:
+                        b = h.read(min(left, 1 << 20))
+                        if not b:
+                            break
+                        left -= len(b)
+            fh = [opener, h, local]
+        data = fh[1].read(take)
+        fh[2] = local + len(data)
+        self._fh = fh
+        if len(data) < take:                     # tail inside a sector
+            data += b"\x00" * (take - len(data))
+        return data
+
+    # file-like API so god.find_base / _title_info / build consume it directly
+    def read(self, n=-1):
+        if n is None or n < 0:
+            n = self.size - self._pos
+        data = self.read_at(self._pos, n)
+        self._pos += len(data)
+        return data
+
+    def seek(self, off, whence=0):
+        if whence == 1:
+            off += self._pos
+        elif whence == 2:
+            off += self.size
+        self._pos = max(0, min(off, self.size))
+        return self._pos
+
+    def tell(self):
+        return self._pos
+
+    def close(self):
+        if self._fh is not None:
+            _close(self._fh[1])
+            self._fh = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
 
 
 def list_root(iso_path):

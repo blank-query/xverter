@@ -35,6 +35,7 @@ from .formats import archives as archives_mod
 from .formats import lz4compat as lz4compat_mod
 from .formats import zar_native as zar_native_mod
 from . import datcache
+from . import titledb as titledb_mod
 
 # One source of truth: the package defines it, everything else asks.
 # These drifted apart once (1.0.0 here against 1.0.3 in pyproject) with
@@ -168,7 +169,12 @@ class _Progress:
             if done < total and now - self._last < 0.25:
                 return
             self._last = now
-            if self.mode == "lines":
+            if callable(self.mode):
+                # Library callers (xverter.convert) pass a callback here
+                # instead of a rendering mode: forward the raw (done,
+                # total) for the stage, same throttling as every sink.
+                self.mode(done, max(total, 1))
+            elif self.mode == "lines":
                 sys.stderr.write("PROGRESS %s %d %d\n"
                                  % (stage, done, max(total, 1)))
             elif self.mode == "json":
@@ -306,6 +312,50 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
     return out
 
 
+def _stfs_source_entries(kind, path, w, manifest, prog):
+    """(entries, closer) of a source's files for the STFS writer.
+    An STFS source streams block-verified (no scratch copy); every other
+    kind is materialised to the game directory pivot and walked. CHD and
+    zip/7z inputs have already been turned into an image/kind upstream."""
+    if kind == "stfs":
+        return stfs_mod.file_entries(path, manifest=manifest)
+    gd = _to_gamedir(kind, path, w, manifest=manifest,
+                     progress=prog.cb("extract"))
+    entries = []
+    for dp, _dn, fns in os.walk(gd):
+        for fn in fns:
+            full = os.path.join(dp, fn)
+            rel = os.path.relpath(full, gd).replace(os.sep, "/")
+            entries.append((rel, os.path.getsize(full),
+                            (lambda f=full: open(f, "rb"))))
+    entries.sort(key=lambda e: e[0])
+    return entries, (lambda: None)          # pivot cleaned up with w
+
+
+def _derive_exe_info(entries):
+    """Identity (title/media id, disc, platform, and for an XBE a display
+    name) from the payload executable - default.xex (360) or default.xbe
+    (OG Xbox) - or None. The same source GoD reads its ids from, so an STFS
+    package synthesized from a game carries the game's real identity, not
+    zeros."""
+    for rel, _sz, opener in entries:
+        low = rel.lower().lstrip("/")
+        if low not in ("default.xex", "default.xbe"):
+            continue
+        f = opener()
+        try:
+            return (god_mod._parse_xex(f, 0) if low == "default.xex"
+                    else god_mod._parse_xbe(f, 0))
+        except Exception:                            # noqa: BLE001
+            return None
+        finally:
+            cl = getattr(f, "close", None)
+            if cl:
+                cl()
+    return None
+
+
+
 def _output_siblings(out_path):
     """Every path a writer might have created for this output: the one
     it was given, plus the Name.N.ext slices the split writers emit.
@@ -331,46 +381,63 @@ def _output_siblings(out_path):
     return found
 
 
-def _pivot_iso(kind, path, w, prog, verify):
-    """Materialise a source that is not already an image as one, and
-    return its path.
-
-    Only formats with no image of their own get here - an archive or a
-    folder - so an image has to be built rather than passed through. A
-    zar goes straight from the archive into the image; anything else is
-    extracted to a directory first, because it has no other way in."""
-    iso = os.path.join(w, "pivot_out.iso")
-    if kind == "zar" and zar_mod.can_stream():
-        man = {}
-        tree, closer = zar_mod.iso_tree(path, manifest=man)
-        try:
-            builders_mod.build_iso_from_tree(
-                tree, iso, verify=verify, manifest=man,
-                progress=prog.cb("iso-write"),
-                verify_progress=prog.cb("verify"))
-        finally:
-            closer()
-        return iso
+def _lazy_image_source(kind, path):
+    """A seekable XDVDFS LazyImage over a random-access tree source - a zar,
+    an STFS package, or a folder - so a target builds in a single pass with
+    no temp ISO written, or (None, None) if the source is not a tree.
+    Returns (image, closer). The image's bytes are identical to a
+    materialised ISO by construction - both come from xdvdfs._allocate - so
+    this only skips the scratch file, never changes the output."""
+    if kind == "zar":
+        zr = zar_native_mod.ZarReader(path)
+        entries = [(rel, size, (lambda r=rel: zr.open_read(r)))
+                   for rel, size in zr.files()]
+        root = xdvdfs_mod.tree_from_entries(entries, where=path)
+        return xdvdfs_mod.LazyImage(root), zr.close
     if kind == "stfs":
         man = {}
         entries, closer = stfs_mod.file_entries(path, manifest=man)
-        try:
-            tree = xdvdfs_mod.tree_from_entries(entries, where=path)
-            builders_mod.build_iso_from_tree(
-                tree, iso, verify=verify, manifest=man,
-                progress=prog.cb("iso-write"),
-                verify_progress=prog.cb("verify"))
-        finally:
-            closer()
-        return iso
-    manifest = {}
-    gamedir = _to_gamedir(kind, path, w, manifest=manifest,
-                          progress=prog.cb("extract"))
-    builders_mod.build_iso(gamedir, iso, verify=verify,
-                           manifest=manifest or None,
-                           progress=prog.cb("iso-write"),
-                           verify_progress=prog.cb("verify"))
-    return iso
+        root = xdvdfs_mod.tree_from_entries(entries, where=path)
+        return xdvdfs_mod.LazyImage(root), closer
+    if kind == "gamedir":
+        entries = []
+        for r, _d, fs in os.walk(path):
+            for f in fs:
+                full = os.path.join(r, f)
+                entries.append((os.path.relpath(full, path),
+                                os.path.getsize(full),
+                                (lambda p=full: open(p, "rb"))))
+        root = xdvdfs_mod.tree_from_entries(entries, where=path)
+        return xdvdfs_mod.LazyImage(root), None
+    return None, None
+
+
+def _source_image(kind, path, w):
+    """A seekable image for any source that holds or can synthesise one, so
+    every image target (god/cci/cso/chd) builds DIRECTLY from the source
+    with no pivot ISO on disk: the raw path for an iso, a decoding reader
+    for cci/cso/chd, a GodStream for a GoD, a synthesised LazyImage for a
+    tree (zar/gamedir). Returns (image, closer); closer is None when nothing
+    needs closing. Both an image reader and a LazyImage present the bare
+    game partition the writers consume, and LazyImage and the ISO writer
+    share xdvdfs._allocate, so the bytes are identical either way."""
+    if kind == "iso":
+        return path, None
+    if kind in ("cci", "cso", "chd"):
+        r = _wrapper_reader(kind, path)
+        return r, r.close
+    if kind == "god":
+        s = god_mod.GodStream(path)
+        return s, s.close
+    if kind in ("zar", "gamedir", "stfs"):
+        img, extra = _lazy_image_source(kind, path)
+
+        def _close():
+            img.close()
+            if extra:
+                extra()
+        return img, _close
+    raise CliError("cannot build an image from a %s source" % kind)
 
 
 def _output_kind(out_path):
@@ -387,6 +454,8 @@ def _output_kind(out_path):
         return "xiso"
     if ext == ".god":
         return "god"
+    if ext == ".stfs":
+        return "stfs"
     if ext == ".chd":
         return "chd"
     if ext == ".zip":
@@ -708,6 +777,37 @@ def _redump_check(path, progress=None):
                        "(crc %s) - modified, patched or damaged" % crc)
 
 
+def _user_thumbnail(arg):
+    """The --thumbnail PNG bytes, validated, or None."""
+    if not arg:
+        return None
+    with open(arg, "rb") as f:
+        png = f.read()
+    if png[:8] != b"\x89PNG\r\n\x1a\n":
+        raise CliError("--thumbnail must be a PNG image")
+    if len(png) > 0x4000:
+        raise CliError("--thumbnail too large (%d bytes; max %d)"
+                       % (len(png), 0x4000))
+    return png
+
+
+def _redump_name(path):
+    """The canonical redump game name for an image, or None. Reuses the
+    redump check, which only hashes when the file's size matches a known
+    redump size - so a non-redump source (trimmed image, homebrew, a
+    container) costs nothing and just returns None."""
+    if not os.path.isfile(path):
+        return None
+    try:
+        status, detail = _redump_check(path)
+    except Exception:                                 # noqa: BLE001
+        return None
+    if status != "match":
+        return None
+    # detail is "Game Name (Region) (...).iso [Xbox 360]"
+    return os.path.splitext(detail.rsplit(" [", 1)[0])[0] or None
+
+
 def _dat_lookup(dat_path, size, crc, sha1):
     # Prefer defusedxml (XXE/entity-expansion hardening) when available;
     # stdlib expat (Python >= 3.11 / libexpat >= 2.4) has built-in
@@ -728,6 +828,9 @@ def _dat_lookup(dat_path, size, crc, sha1):
 def _wrapper_reader(kind, path):
     if kind == "iso":
         return open(path, "rb")
+    if kind == "chd":
+        from .formats import chd_native
+        return chd_native.ChdReader(path)
     return (cci_mod.CciReader if kind == "cci" else cso_mod.CsoReader)(path)
 
 
@@ -873,8 +976,9 @@ class _SourceHashAhead:
         self._box = []
         self._err = []
         self._t = None
-        if in_kind not in ("iso", "god", "cci", "cso"):
-            return                       # pivot cases: let verify do it
+        if in_kind not in ("iso", "god", "cci", "cso", "chd",
+                            "zar", "gamedir", "stfs"):
+            return                       # nothing streamable to read ahead
         self._t = threading.Thread(
             target=self._run, args=(in_kind, in_path, w), daemon=True)
         self._t.start()
@@ -920,6 +1024,16 @@ def _source_stream_sha1(in_kind, in_path, w):
     if in_kind == "god":
         with god_mod.GodStream(in_path) as f:
             return _hash(f)
+    if in_kind in ("zar", "gamedir", "stfs"):
+        # An independent second synthesis of the same tree - a fresh
+        # LazyImage - so a transient read error during the build's stream
+        # is caught rather than faithfully carried into both.
+        img, closer = _source_image(in_kind, in_path, w)
+        try:
+            return _hash(img)
+        finally:
+            if closer:
+                closer()
     with _wrapper_reader(in_kind, in_path) as f:
         return _hash(f)
 
@@ -969,32 +1083,10 @@ def _verify_wrapper(out_kind, out_path, in_kind, in_path, w,
     got_t.start()
     if source_sha1 is not None:
         want = source_sha1               # computed during the build
-    elif in_kind == "iso":
-        with open(in_path, "rb") as f:
-            from .formats.cci import xbox_image_offset
-            off = xbox_image_offset(f)
-            if off:
-                import hashlib as _h
-                h = _h.sha1()
-                f.seek(off)
-                while True:
-                    b = f.read(1 << 22)
-                    if not b:
-                        break
-                    h.update(b)
-                want = h.hexdigest()
-            else:
-                want = stream_sha1(f)
-    elif in_kind == "god":
-        with god_mod.GodStream(in_path) as f:
-            want = stream_sha1(f)
-    elif in_kind in ("cci", "cso"):
-        with _wrapper_reader(in_kind, in_path) as f:
-            want = stream_sha1(f)
     else:
-        iso = os.path.join(w, "pivot_out.iso")
-        with open(iso, "rb") as f:
-            want = stream_sha1(f)
+        # Fallback if the ahead did not finish: recompute the source's
+        # image sha1 the one canonical way, for every source kind.
+        want = _source_stream_sha1(in_kind, in_path, w)
     got_t.join()
     if got_err:
         raise got_err[0]
@@ -1351,8 +1443,17 @@ def cmd_dat(args):
         if not installed:
             print("%s DAT already current: redump has %s, you have %s - "
                   "nothing written" % (args.system, version, have))
-            return 0
-        print("cached %s DAT version %s -> %s" % (args.system, version, path))
+        else:
+            print("cached %s DAT version %s -> %s"
+                  % (args.system, version, path))
+        # the 360 title-id -> name database rides along on the same update
+        if args.system == "xbox360":
+            try:
+                tpath, tcount = titledb_mod.update("xbox360")
+                print("cached xbox360 title database: %d titles -> %s"
+                      % (tcount, tpath))
+            except Exception as e:                    # noqa: BLE001
+                print("title database refresh skipped: %s" % e)
         return 0
     for system in sorted(datcache.SYSTEMS):
         cpath, age = datcache.cached(system)
@@ -1363,10 +1464,35 @@ def cmd_dat(args):
     return 0
 
 
+def _convert_store(args):
+    """--store: archive the input folder's files verbatim into a zar, with
+    NO format detection or conversion. Everything else in cmd_convert exists
+    to recognise a container and transform it; this is the one path that does
+    not - it wraps whatever bytes are in the folder, at their exact relative
+    paths, into a zar. That is how a package (STFS/GoD/...) gets stored
+    byte-for-byte at a chosen path instead of being detected and unpacked."""
+    out_kind = _output_kind(args.output)
+    if out_kind != "zar":
+        raise CliError(
+            "--store only writes a .zar archive; got %s output. It stores "
+            "files verbatim, which only the zar container does." % out_kind)
+    if not os.path.isdir(args.input):
+        raise CliError(
+            "--store archives a FOLDER verbatim; point it at a directory "
+            "whose files are the exact paths you want in the zar (e.g. "
+            "<TitleID>/<ContentType>/<contentid>), not a single file")
+    prog = _Progress(getattr(args, "progress", None)
+                     or ("tty" if sys.stderr.isatty() else None))
+    zar_mod.pack(args.input, args.output, progress=prog.cb("store"))
+    print("wrote %s (stored verbatim, round-trip verified)" % args.output)
+
+
 def cmd_convert(args):
+    if getattr(args, "store", False):
+        return _convert_store(args)
     kind, path = detect_mod.detect(args.input)
     out_kind = _output_kind(args.output)
-    if out_kind == kind and kind != "gamedir":
+    if out_kind == kind and kind not in ("gamedir", "stfs"):
         raise CliError("input is already %s" % kind)
     scratch_base = getattr(args, "workdir", None)
     if scratch_base is None and getattr(args, "scratch", "disk") == "ram":
@@ -1545,22 +1671,21 @@ def cmd_convert(args):
             _gil_hint()
             print("wrote %s" % args.output)
             return 0
-        if out_kind == "god" and kind in ("iso", "cci", "cso"):
-            # These sources already hold a pressed image, so the GoD gets
-            # that image and not one rebuilt out of its files. Without
-            # this, cci->god and iso->god disagreed about the same disc -
-            # each verifying happily against itself, because a GoD is
-            # checked against its own hash tree and the tree was built
-            # over whichever bytes it was handed.
-            god_src = path if kind == "iso" else _wrapper_reader(kind, path)
+        if out_kind == "god":
+            # Built DIRECTLY from the source's image stream - a reader for a
+            # pressed/compressed image, a synthesised LazyImage for a tree -
+            # with no pivot ISO on disk. A GoD is checked against its own
+            # hash tree over whichever bytes it was handed, and build_god
+            # re-reads and walks that tree, so verify needs no pivot either.
+            god_src, closer = _source_image(kind, path, w)
             try:
-                hdr = builders_mod.build_god(god_src, args.output,
-                                             verify=not args.no_verify,
-                                             progress=prog.cb("god-write"),
-                                             verify_progress=prog.cb("verify"))
+                hdr = builders_mod.build_god(
+                    god_src, args.output, verify=not args.no_verify,
+                    progress=prog.cb("god-write"),
+                    verify_progress=prog.cb("verify"))
             finally:
-                if kind != "iso":
-                    god_src.close()
+                if closer:
+                    closer()
             ident.report()
             _gil_hint()
             print("wrote GoD container (header: %s) (%s)"
@@ -1576,27 +1701,13 @@ def cmd_convert(args):
             # is already in hand. GodStream reads through the hash-
             # verifying container view, checked equivalent to the old
             # materialised route byte-for-byte.
+            chd_src, closer = _source_image(kind, path, w)
+            src_size = (os.path.getsize(path) if kind == "iso"
+                        else chd_src.size)
             ahead = None
-            closer = None
-            if kind == "iso":
-                chd_src = path
-                src_size = os.path.getsize(path)
-                if not args.no_verify:
-                    ahead = _FileHashAhead(path)
-            elif kind in ("god", "cci", "cso"):
-                chd_src = (god_mod.GodStream(path) if kind == "god"
-                           else _wrapper_reader(kind, path))
-                closer = chd_src.close
-                src_size = chd_src.size
-                if not args.no_verify:
-                    ahead = _SourceHashAhead(kind, path, w)
-            else:
-                src_iso = _pivot_iso(kind, path, w, prog,
-                                     not args.no_verify)
-                chd_src = src_iso
-                src_size = os.path.getsize(src_iso)
-                if not args.no_verify:
-                    ahead = _FileHashAhead(src_iso)
+            if not args.no_verify:
+                ahead = (_FileHashAhead(path) if kind == "iso"
+                         else _SourceHashAhead(kind, path, w))
             try:
                 chd_mod.build(chd_src, args.output,
                               progress=prog.cb("chd-write"))
@@ -1624,25 +1735,13 @@ def cmd_convert(args):
             # build produces, so it starts now and runs alongside it.
             ahead = (_SourceHashAhead(kind, path, w)
                      if not args.no_verify else None)
-            if kind == "iso":
-                written = build(path, args.output, split=split,
+            src, closer = _source_image(kind, path, w)
+            try:
+                written = build(src, args.output, split=split,
                                 progress=prog.cb("compress"))
-            elif kind == "god":
-                with god_mod.GodStream(path) as stream:
-                    written = build(stream, args.output, split=split,
-                                    progress=prog.cb("compress"))
-            elif kind == "cci" and out_kind == "cso":
-                with cci_mod.CciReader(path) as stream:
-                    written = build(stream, args.output, split=split,
-                                    progress=prog.cb("compress"))
-            elif kind == "cso" and out_kind == "cci":
-                with cso_mod.CsoReader(path) as stream:
-                    written = build(stream, args.output, split=split,
-                                    progress=prog.cb("compress"))
-            else:
-                iso = _pivot_iso(kind, path, w, prog, not args.no_verify)
-                written = build(iso, args.output, split=split,
-                                progress=prog.cb("compress"))
+            finally:
+                if closer:
+                    closer()
             if not args.no_verify:
                 _verify_wrapper(out_kind, written[0], kind, path, w,
                                 progress=prog.cb("verify"),
@@ -1694,6 +1793,98 @@ def cmd_convert(args):
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "round-trip verified"))
+            return 0
+        if out_kind == "stfs":
+            # STFS carries its content type (XBLA/DLC/TU/...) in the
+            # header, and the tool never GUESSES one. An STFS source keeps
+            # its own type (rebuild); --content-type overrides it. A
+            # non-STFS source has no type to carry, so --content-type is
+            # required there - the one decision only the user can make,
+            # surfaced rather than guessed.
+            ctype = (stfs_mod.parse_content_type(args.content_type)
+                     if getattr(args, "content_type", None) is not None
+                     else None)
+            tid = int(args.title_id, 0) if getattr(args, "title_id", None) else None
+            mid = int(args.media_id, 0) if getattr(args, "media_id", None) else None
+            title = getattr(args, "title", None)
+            retail_warn = None
+            man = {}
+            entries, closer = _stfs_source_entries(kind, path, w, man, prog)
+            try:
+                if kind == "stfs":
+                    # Faithful rebuild; the --* flags EDIT the preserved
+                    # header (content type / name / ids), else it is kept
+                    # verbatim.
+                    with open(path, "rb") as _hf:
+                        header = _hf.read(0xB000)
+                    header = stfs_mod.apply_metadata(
+                        header, content_type=ctype, title=title,
+                        title_id=tid, media_id=mid)
+                else:
+                    if ctype is None:
+                        raise CliError(
+                            "writing STFS from a %s source needs a content "
+                            "type - it is never guessed. Add --content-type "
+                            "xbla|dlc|title-update|xbox-original (or a raw "
+                            "value like 0x000D0000)." % kind)
+                    # Derive identity from the payload default.xex (as GoD
+                    # does); name from --title or the source filename.
+                    info = _derive_exe_info(entries)
+                    derived_tid = info.get("title_id") if info else None
+                    if title is not None:
+                        name = title
+                    else:
+                        # name priority: the 360 title-id -> marketplace
+                        # name (a XEX carries none; works for ANY source we
+                        # can read a title id from, incl. a stripped ZAR) >
+                        # an XBE cert's own title (OG Xbox games) > the
+                        # redump disc name (retail iso only) > filename.
+                        name = (titledb_mod.name_for_title_id(derived_tid)
+                                or (info.get("title") if info and
+                                    info.get("title") else None)
+                                or _redump_name(path)
+                                or os.path.splitext(os.path.basename(
+                                    path.rstrip(os.sep)))[0])
+                    # Convert regardless, but flag it: a game that matches
+                    # no retail release (auto-derivation only) is homebrew or
+                    # corrupt. Warned at the end, not before - no prompt.
+                    if (title is None and tid is None and not (derived_tid and
+                            titledb_mod.name_for_title_id(derived_tid))):
+                        _idpart = ("title id 0x%08X" % (derived_tid & 0xFFFFFFFF)
+                                   if derived_tid else "no title id")
+                        retail_warn = ("%s didn't match any retail game (%s) - "
+                                       "if it's not homebrew, it's corrupt"
+                                       % (os.path.basename(path.rstrip(os.sep)),
+                                          _idpart))
+                    header = stfs_mod.synth_header(ctype, display_name=name,
+                                                   info=info)
+                    if tid is not None or mid is not None:
+                        header = stfs_mod.apply_metadata(
+                            header, title_id=tid, media_id=mid)
+                _eff_tid = int.from_bytes(header[0x360:0x364], "big")
+                _thumb = _user_thumbnail(getattr(args, "thumbnail", None))
+                if _thumb is None and titledb_mod.XVERTER_TITLES.get(
+                        "%08X" % _eff_tid):
+                    _thumb = titledb_mod.xverter_icon()
+                if _thumb:
+                    header = stfs_mod.set_thumbnail(header, _thumb)
+                stfs_mod.build(entries, args.output, header,
+                               progress=prog.cb("stfs-write"))
+            finally:
+                closer()
+            if not args.no_verify:
+                # Never trust a writer: re-read the whole package and check
+                # every allocated block against its L0 entry, the tables
+                # against their parents, up to the descriptor's root hash.
+                stfs_mod.verify_chains(args.output,
+                                       progress=prog.cb("verify"))
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output, "NO GUARANTEES - --leeroy-jenkins"
+                     if args.no_verify else "hash chain verified to root"))
+            if retail_warn:
+                sys.stderr.write("warning: " + retail_warn + "\n")
             return 0
         if kind == "stfs" and out_kind == "iso":
             man = {}
@@ -1779,22 +1970,6 @@ def cmd_convert(args):
             print("wrote %s (%s)"
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
-            return 0
-        if out_kind == "god":
-            # Everything that holds an image already returned above, so
-            # what is left has none and needs one built. Ahead of the
-            # extraction rather than after it, because a zar can go
-            # straight into the pivot without touching a scratch copy.
-            iso = _pivot_iso(kind, path, w, prog, not args.no_verify)
-            hdr = builders_mod.build_god(iso, args.output,
-                                         verify=not args.no_verify,
-                                         progress=prog.cb("god-write"),
-                                         verify_progress=prog.cb("verify"))
-            ident.report()
-            _gil_hint()
-            print("wrote GoD container (header: %s) (%s)"
-                  % (hdr, "NO GUARANTEES - --leeroy-jenkins"
-                     if args.no_verify else "hash tree verified"))
             return 0
         manifest = {}
         gamedir = _to_gamedir(kind, path, w, manifest=manifest,
@@ -2018,6 +2193,38 @@ def main(argv=None):
                         "files at 4GiB). Default writes one file, which "
                         "PC emulators read fine but console drives can't "
                         "hold")
+    p.add_argument("--content-type", metavar="TYPE", default=None,
+                   help="for .stfs output from a NON-STFS source, the "
+                        "content type to stamp: xbla, dlc, title-update, "
+                        "xbox-original, god, or a raw value like 0x000D0000. "
+                        "Required for such sources (the type is never "
+                        "guessed); an STFS source preserves its own type "
+                        "unless this overrides it")
+    p.add_argument("--title", metavar="NAME", default=None,
+                   help="display name for .stfs output (what a console "
+                        "dashboard shows). Derived from the source when "
+                        "possible; this overrides it, and EDITS the name on "
+                        "an stfs->stfs rebuild")
+    p.add_argument("--title-id", metavar="HEX", default=None,
+                   help="override the title id for .stfs output (0x-hex or "
+                        "decimal). Normally read from the payload default.xex")
+    p.add_argument("--media-id", metavar="HEX", default=None,
+                   help="override the media id for .stfs output (0x-hex or "
+                        "decimal). Normally read from the payload default.xex")
+    p.add_argument("--thumbnail", metavar="PNG", default=None,
+                   help="embed this PNG as the package icon for .stfs "
+                        "output (what a dashboard shows). Max 16 KB. A "
+                        "reserved xVerter test disc carries the xVerter "
+                        "icon automatically")
+    p.add_argument("--store", "--raw", dest="store", action="store_true",
+                   help="archive the input FOLDER's files verbatim into a "
+                        ".zar with NO format detection or conversion. The "
+                        "way to wrap a package (STFS/GoD/...) into a zar "
+                        "byte-for-byte at a chosen path - lay the file out "
+                        "as <folder>/<TitleID>/<ContentType>/<contentid> "
+                        "and it lands there unchanged. Without this, xverter "
+                        "recognises the package by its magic and converts "
+                        "its contents instead")
     p.set_defaults(fn=cmd_convert)
 
     args = ap.parse_args(argv)

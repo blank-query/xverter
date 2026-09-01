@@ -23,9 +23,17 @@ against its L0 entry as it streams out, so a bit-rotted package fails
 loudly instead of extracting silently wrong. verify_chains() checks
 every allocated block including slack the files don't reference.
 
-STFS as an *output* format is not built yet (LIVE/PIRS signatures are
-Microsoft-private-key RSA; the ecosystem norm is junk signature bytes,
-which modded consoles and emulators don't check).
+STFS *writing* (build()) rebuilds a package faithfully: it preserves the
+source header verbatim - content type (XBLA 0x000D0000, DLC 0x00000002,
+title update 0x000B0000, ...), title, media id, the lot - and never
+invents one, so it cannot misrepresent what the package is. It lays the
+content out as a read-only single-width package (contiguous blocks,
+one L0 hash table per 170 blocks, higher tables above, root sealed into
+the volume descriptor and the header re-hashed). The signature bytes are
+the ecosystem-standard junk that modded consoles and emulators do not
+check - the same posture every writer in this family takes, GoD/iso2god
+included. Every build is re-read by the reader above and hash-verified
+to the root before success is reported.
 """
 
 import hashlib
@@ -46,6 +54,137 @@ DESCRIPTOR_OFFSET = 0x379
 TITLE_OFFSET = 0x411
 
 
+# Named content types for the writer's --content-type flag. The full 32-bit
+# value lives at CONTENT_TYPE_OFFSET; these are the ones a user actually
+# packages. A raw hex value is accepted too (parse_content_type).
+CONTENT_TYPES = {
+    "xbla": 0x000D0000,          # Arcade / XBLA downloadable title
+    "arcade": 0x000D0000,        # alias
+    "dlc": 0x00000002,           # Marketplace downloadable content
+    "marketplace": 0x00000002,   # alias
+    "title-update": 0x000B0000,  # Title update (patch)
+    "tu": 0x000B0000,            # alias
+    "xbox-original": 0x00005000, # Xbox Original (OG back-compat)
+    "god": 0x00007000,           # Games on Demand
+}
+
+
+def parse_content_type(text):
+    """A --content-type value: a known name (case-insensitive) or a raw
+    32-bit integer (0x-hex or decimal). Returns the int, or raises."""
+    key = str(text).strip().lower()
+    if key in CONTENT_TYPES:
+        return CONTENT_TYPES[key]
+    try:
+        return int(key, 0)
+    except ValueError:
+        raise StfsError(
+            "unknown content type %r - use one of {%s} or a raw value "
+            "like 0x000D0000" % (text, ", ".join(sorted(CONTENT_TYPES))))
+
+
+# XContentHeader metadata field offsets - identical in STFS and GoD
+# (both are CON/LIVE/PIRS packages), verified against a real Spartan header.
+MEDIA_ID_OFFSET = 0x354
+TITLE_ID_OFFSET = 0x360
+PLATFORM_OFFSET = 0x364          # platform, exec_type, disc_number, disc_count
+
+
+def synth_header(content_type, display_name="", info=None):
+    """Build a valid LIVE package header (0xB000 bytes) for a source that
+    carries no STFS header of its own. Sets the fields a console actually
+    indexes on - content type, and (from the payload default.xex, via
+    `info`) media id, title id, platform/exec type, disc number/count -
+    plus a display title. build() fills the volume descriptor and reseals
+    the header self-hash. Everything else is the ecosystem-standard junk
+    the signature bytes already are."""
+    h = bytearray(0xB000)
+    h[0:4] = b"LIVE"
+    struct.pack_into(">I", h, HEADER_SIZE_OFFSET, 0xB000)   # base -> 0xB000
+    struct.pack_into(">I", h, CONTENT_TYPE_OFFSET, int(content_type) & 0xFFFFFFFF)
+    struct.pack_into(">I", h, 0x348, 2)                     # metadata version
+    # Unrestricted "all-console" license entry. A zero license descriptor
+    # reads as unlicensed content and the console refuses to launch it
+    # ("couldn't start") - a native package and the GoD template both carry
+    # licenseID 0xFFFFFFFFFFFFFFFF with bits=1 here. This lives before the
+    # header self-hash region (0x344+), so build() does not reseal over it.
+    struct.pack_into(">Q", h, 0x22C, 0xFFFFFFFFFFFFFFFF)
+    struct.pack_into(">I", h, 0x234, 1)
+    if info:
+        struct.pack_into(">I", h, MEDIA_ID_OFFSET, int(info.get("media_id", 0)) & 0xFFFFFFFF)
+        struct.pack_into(">I", h, TITLE_ID_OFFSET, int(info.get("title_id", 0)) & 0xFFFFFFFF)
+        h[PLATFORM_OFFSET]     = int(info.get("platform", 0)) & 0xFF
+        h[PLATFORM_OFFSET + 1] = int(info.get("executable_type", 0)) & 0xFF
+        h[PLATFORM_OFFSET + 2] = int(info.get("disc_number", 0)) & 0xFF
+        h[PLATFORM_OFFSET + 3] = int(info.get("disc_count", 0)) & 0xFF
+    if display_name:
+        _set_title(h, display_name)
+    return bytes(h)
+
+
+def _set_title(h, title):
+    """Write the UTF-16-BE display name at TITLE_OFFSET, clearing the old
+    one first (so an edit does not leave a longer previous name trailing)."""
+    span = 0x80
+    h[TITLE_OFFSET:TITLE_OFFSET + span] = b"\x00" * span
+    enc = str(title).encode("utf-16-be")[:span - 2]
+    h[TITLE_OFFSET:TITLE_OFFSET + len(enc)] = enc
+
+
+def apply_metadata(header, content_type=None, title=None,
+                   title_id=None, media_id=None):
+    """Overlay chosen metadata onto an existing header (bytes) and return
+    the new bytes. Only fields that are not None are changed - the rest of
+    the header (a preserved STFS source, or a fresh synth_header) is kept.
+    This is how `--content-type/--title/--title-id/--media-id` both fill a
+    synthesized header and *edit* a preserved one on an stfs->stfs rebuild.
+    build() reseals the header self-hash afterwards, so raw field writes
+    are safe."""
+    h = bytearray(header)
+    if content_type is not None:
+        struct.pack_into(">I", h, CONTENT_TYPE_OFFSET, int(content_type) & 0xFFFFFFFF)
+    if media_id is not None:
+        struct.pack_into(">I", h, MEDIA_ID_OFFSET, int(media_id) & 0xFFFFFFFF)
+    if title_id is not None:
+        struct.pack_into(">I", h, TITLE_ID_OFFSET, int(title_id) & 0xFFFFFFFF)
+    if title is not None:
+        _set_title(h, title)
+    return bytes(h)
+
+
+# XContentHeader thumbnail slots (STFS and GoD share them): a content icon
+# and a title icon, each a PNG up to 0x4000 bytes, that a dashboard shows.
+THUMB_SIZE_OFFSET = 0x1712
+TITLE_THUMB_SIZE_OFFSET = 0x1716
+THUMB_OFFSET = 0x171A
+TITLE_THUMB_OFFSET = 0x571A
+THUMB_MAX = 0x4000
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def set_thumbnail(header, png):
+    """Embed a PNG as both the content and title thumbnail (the icon a
+    dashboard shows for the package). Returns new header bytes; build()
+    reseals the header hash afterward, so raw writes here are safe. A
+    None/empty image leaves the header unchanged."""
+    if not png:
+        return header
+    if png[:8] != _PNG_MAGIC:
+        raise StfsError("thumbnail must be a PNG image")
+    if len(png) > THUMB_MAX:
+        raise StfsError("thumbnail too large (%d bytes; the slot is %d)"
+                        % (len(png), THUMB_MAX))
+    h = bytearray(header)
+    if len(h) < TITLE_THUMB_OFFSET + THUMB_MAX:
+        raise StfsError("header too small to hold a thumbnail")
+    for size_off, img_off in ((THUMB_SIZE_OFFSET, THUMB_OFFSET),
+                              (TITLE_THUMB_SIZE_OFFSET, TITLE_THUMB_OFFSET)):
+        struct.pack_into(">I", h, size_off, len(png))
+        h[img_off:img_off + THUMB_MAX] = b"\x00" * THUMB_MAX
+        h[img_off:img_off + len(png)] = png
+    return bytes(h)
+
+
 class StfsError(Exception):
     pass
 
@@ -63,6 +202,12 @@ def _tables_through(c):
         n += c // (level_span * PER_TABLE) + 1
         level_span *= PER_TABLE
     return n
+
+
+def data_off(c, base, width=BLOCK):
+    """Absolute file offset of data block c in a single-width package
+    (module-level twin of _Package.data_off, used by the writer)."""
+    return base + width * _tables_through(c) + BLOCK * c
 
 
 class _Package:
@@ -260,6 +405,185 @@ class _Package:
         return out
 
 
+
+# --------------------------------------------------------------- writing
+
+def _hdr_base(header):
+    """Block-aligned end of the header (where L0 table #0 sits)."""
+    hsz = struct.unpack(">I", header[HEADER_SIZE_OFFSET:HEADER_SIZE_OFFSET + 4])[0]
+    return (hsz + BLOCK - 1) & ~(BLOCK - 1)
+
+
+def _plan(entries):
+    """Order (dirs before their children) and lay out records. entries is
+    [(relpath, size, opener)]. Returns (records, ft_blocks, nblocks) where
+    records is [(name, is_dir, parent_idx, start_block, nblk, size, opener)]."""
+    files = [(rel.replace(os.sep, "/").strip("/"), size, opener)
+             for rel, size, opener in entries]
+    dirset = set()
+    for rel, _s, _o in files:
+        parts = rel.split("/")
+        for i in range(1, len(parts)):
+            dirset.add("/".join(parts[:i]))
+    dirs = sorted(dirset, key=lambda d: (d.count("/"), d))
+    recs = []            # mutable rows
+    idx_of = {}
+    for d in dirs:
+        parent = d.rsplit("/", 1)[0] if "/" in d else None
+        idx_of[d] = len(recs)
+        recs.append([d.rsplit("/", 1)[-1], True, parent, 0, 0, 0, None])
+    for rel, size, opener in files:
+        parent = rel.rsplit("/", 1)[0] if "/" in rel else None
+        recs.append([rel.rsplit("/", 1)[-1], False, parent, 0, 0, size, opener])
+    ft_blocks = max(1, (FT_ENTRY * len(recs) + BLOCK - 1) // BLOCK)
+    nxt = ft_blocks
+    for r in recs:
+        if not r[1]:
+            n = (r[5] + BLOCK - 1) // BLOCK
+            r[3] = nxt if n else 0
+            r[4] = n
+            nxt += n
+    return recs, ft_blocks, nxt, idx_of
+
+
+def _ft_bytes(recs, idx_of, ft_blocks):
+    buf = bytearray()
+    # map each record to its full path so children find their parent index
+    for i, r in enumerate(recs):
+        name, is_dir, parent, start, nblk, size, _op = r
+        rec = bytearray(FT_ENTRY)
+        nb = name.encode("ascii", "replace")[:0x28]
+        rec[:len(nb)] = nb
+        rec[0x28] = len(nb) | (0x80 if is_dir else 0x40)
+        rec[0x29] = nblk & 0xFF; rec[0x2A] = (nblk >> 8) & 0xFF; rec[0x2B] = (nblk >> 16) & 0xFF
+        rec[0x2C] = nblk & 0xFF; rec[0x2D] = (nblk >> 8) & 0xFF; rec[0x2E] = (nblk >> 16) & 0xFF
+        rec[0x2F] = start & 0xFF; rec[0x30] = (start >> 8) & 0xFF; rec[0x31] = (start >> 16) & 0xFF
+        pid = 0xFFFF if parent is None else idx_of[parent]
+        struct.pack_into(">H", rec, 0x32, pid)
+        struct.pack_into(">I", rec, 0x34, 0 if is_dir else size)
+        buf += rec
+    buf += b"\x00" * (ft_blocks * BLOCK - len(buf))
+    return bytes(buf)
+
+
+def build(entries, out_path, header, progress=None):
+    """Write a read-only STFS package from `entries` [(relpath,size,opener)],
+    carrying `header` (>= a full 0xB000-ish header from a source package)
+    verbatim so content type/title are preserved. Streams file data; does
+    not hold the whole payload in memory. Returns (nblocks, record_count)."""
+    if len(header) < 0x344 + 4:
+        raise StfsError("header template too small")
+    # STFS file-table names are a hard 40 bytes (0x28) of ASCII. A longer
+    # or non-ASCII XDVDFS name cannot be stored: truncating it renames the
+    # file (transparent_..._m.vsh -> ...m.vs) and can collide two files
+    # onto one. Refuse loudly BEFORE writing anything rather than corrupt
+    # silently - some game trees simply cannot be packed as STFS.
+    _bad = []
+    for _rel, _sz, _op in entries:
+        for _comp in _rel.replace(os.sep, "/").strip("/").split("/"):
+            _enc = _comp.encode("ascii", "replace")
+            if len(_enc) > 0x28 or _enc.decode("ascii") != _comp:
+                _bad.append(_comp)
+    if _bad:
+        _ex = _bad[0]
+        raise StfsError(
+            "%d name(s) cannot be stored in STFS (file-table names are "
+            "limited to 40 bytes of ASCII): e.g. %r (%d bytes). This tree "
+            "cannot be packed as STFS without corrupting names."
+            % (len(_bad), _ex, len(_ex.encode("ascii", "replace"))))
+    base = _hdr_base(header)
+    recs, ft_blocks, nblocks, idx_of = _plan(entries)
+    ft = _ft_bytes(recs, idx_of, ft_blocks)
+
+    n_l0 = (nblocks + PER_TABLE - 1) // PER_TABLE
+    l0 = [bytearray(BLOCK) for _ in range(n_l0)]
+
+    def l0_put(c, digest):
+        nxt = c + 1
+        o = (c % PER_TABLE) * HASH_ENTRY
+        l0[c // PER_TABLE][o:o + HASH_ENTRY] = (
+            digest + bytes([0x80, (nxt >> 16) & 0xFF, (nxt >> 8) & 0xFF, nxt & 0xFF]))
+
+    filesize = data_off(nblocks - 1, base) + BLOCK
+    # Content size = every block after the 0xB000 header (data + hash tables
+    # + file table). A zero here leaves the console unable to size the
+    # content and it refuses to launch; native packages carry the real
+    # value (verified: filesize - base reproduces Spartan's 0x8B916000
+    # exactly). Patched into the header before its self-hash region is
+    # sealed below, so the digest covers the correct size.
+    header = bytearray(header)
+    struct.pack_into(">Q", header, 0x34C, filesize - base)
+    done = [0]
+    with open(out_path, "wb") as o:
+        o.truncate(filesize)
+        o.seek(0); o.write(header[:base])
+        # file-table blocks
+        for t in range(ft_blocks):
+            blk = ft[t * BLOCK:(t + 1) * BLOCK]
+            o.seek(data_off(t, base)); o.write(blk)
+            l0_put(t, hashlib.sha1(blk).digest())
+        # file data blocks, streamed through each opener
+        for r in recs:
+            name, is_dir, parent, start, nblk, size, opener = r
+            if is_dir:
+                continue
+            stream = opener()
+            try:
+                for k in range(nblk):
+                    chunk = stream.read(BLOCK)
+                    if len(chunk) < BLOCK:
+                        chunk = chunk + b"\x00" * (BLOCK - len(chunk))
+                    c = start + k
+                    o.seek(data_off(c, base)); o.write(chunk)
+                    l0_put(c, hashlib.sha1(chunk).digest())
+                    done[0] += 1
+                    if progress:
+                        progress(done[0], nblocks)
+            finally:
+                cl = getattr(stream, "close", None)
+                if cl:
+                    cl()
+        # higher-level tables from L0 upward
+        levels = [[bytes(t) for t in l0]]
+        child = levels[0]
+        while len(child) > 1:
+            parents = []
+            for j in range((len(child) + PER_TABLE - 1) // PER_TABLE):
+                tb = bytearray(BLOCK)
+                for i, ch in enumerate(child[j * PER_TABLE:(j + 1) * PER_TABLE]):
+                    tb[i * HASH_ENTRY:i * HASH_ENTRY + 20] = hashlib.sha1(ch).digest()
+                parents.append(bytes(tb))
+            levels.append(parents)
+            child = parents
+        top_hash = hashlib.sha1(child[0]).digest()
+        # place every table at its content-addressed site (single width)
+        for t in range(n_l0):
+            c0 = t * PER_TABLE
+            m = _tables_through(c0) - (_tables_through(c0 - 1) if c0 else 0)
+            first = data_off(c0, base)
+            for k in range(1, m + 1):
+                lvl = k - 1
+                tidx = t if lvl == 0 else (c0 // (PER_TABLE ** lvl) // PER_TABLE)
+                if lvl < len(levels) and tidx < len(levels[lvl]):
+                    o.seek(first - k * BLOCK)
+                    o.write(levels[lvl][tidx])
+        # volume descriptor + header self-hash
+        desc = bytearray(0x24)
+        desc[0] = 0x24
+        desc[2] = 0x01                               # single-width read-only
+        struct.pack_into("<H", desc, 3, ft_blocks)
+        desc[8:0x1C] = top_hash
+        struct.pack_into(">I", desc, 0x1C, nblocks)
+        o.seek(DESCRIPTOR_OFFSET); o.write(desc)
+        # Header self-hash covers [0x344:0xB000] with the NEW descriptor in
+        # place; build that region in memory (the file is write-only) and
+        # seal the digest at 0x32C.
+        region = bytearray(header[0x344:base])
+        region[DESCRIPTOR_OFFSET - 0x344:DESCRIPTOR_OFFSET - 0x344 + 0x24] = desc
+        o.seek(0x32C); o.write(hashlib.sha1(bytes(region)).digest())
+    return nblocks, len(recs)
+
+
 # ------------------------------------------------------------ public API
 
 def _open(path):
@@ -322,22 +646,24 @@ class _FileStream:
         self._left = entry["size"]
         nblocks = (entry["size"] + BLOCK - 1) // BLOCK
         self._chain = pkg.chain(entry["startclust"], nblocks)
-        self._buf = b""
+        self._buf = bytearray()
         self._manifest = manifest
         self._h = hashlib.sha1() if manifest is not None else None
 
     def read(self, n=-1):
         if n is None or n < 0:
             n = self._left + len(self._buf)
-        while len(self._buf) < n and self._left > 0:
+        buf = self._buf                       # bytearray: O(1) amortized append.
+        while len(buf) < n and self._left > 0:  # bytes += was O(n^2) on large n.
             c = next(self._chain)
             b = self._pkg.verified_block(c)
             chunk = b[:self._left] if self._left < BLOCK else b
             self._left -= len(chunk)
             if self._h is not None:
                 self._h.update(chunk)
-            self._buf += chunk
-        out, self._buf = self._buf[:n], self._buf[n:]
+            buf += chunk
+        out = bytes(buf[:n])
+        del buf[:n]
         return out
 
     def close(self):

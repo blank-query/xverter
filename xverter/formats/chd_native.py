@@ -31,6 +31,9 @@ they are not guessable:
 
 import hashlib
 import os
+import sysconfig
+import binascii
+import lzma
 import struct
 import zlib
 
@@ -56,52 +59,16 @@ def _tag(value):
 
 # --------------------------------------------------------------- crc16
 
-def _crc16_table():
-    table = []
-    for i in range(256):
-        crc = i << 8
-        for _ in range(8):
-            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 \
-                else (crc << 1) & 0xFFFF
-        table.append(crc)
-    return tuple(table)
-
-
-_CRC16 = _crc16_table()
-
-
-def _crc16_words():
-    """65536-entry table: T[x] is the CRC of the two bytes of x with a
-    zero initial state. For a CRC whose width equals the step size,
-    state' = T[state ^ word] - one lookup and one xor per two bytes,
-    which is the least Python per byte of any formulation tried (the
-    slice-by-8 classic was no faster here: Python pays per operation,
-    not per loop iteration)."""
-    table = [0] * 65536
-    for hi in range(256):
-        base = _CRC16[hi]
-        for lo in range(256):
-            table[(hi << 8) | lo] = ((base << 8) & 0xFFFF) \
-                ^ _CRC16[((base >> 8) ^ lo) & 0xFF]
-    return tuple(table)
-
-
-_CRC16W = _crc16_words()
-
-
 def crc16(data, crc=0xFFFF):
     """CRC-16/CCITT as MAME computes it: poly 0x1021, init 0xFFFF, no
-    reflection and no final xor. Runs once over every stored byte of an
-    image, so it is written for speed, not for looks."""
-    n = len(data)
-    table = _CRC16W
-    if n >= 2:
-        words = struct.unpack(">%dH" % (n // 2), data[:n - (n % 2)])
-        for w in words:
-            crc = table[crc ^ w]
-    if n % 2:
-        crc = ((crc << 8) & 0xFFFF) ^ _CRC16[((crc >> 8) ^ data[-1]) & 0xFF]
-    return crc
+    reflection and no final xor - which is exactly binascii.crc_hqx.
+    The C routine is ~100x the old pure-Python word-table loop and, on
+    the free-threaded build, does not contend: the Python loop indexed a
+    shared 64K int table per hunk and the atomic refcounts on those
+    ints serialised the compression pool (measured: it WAS the pool's
+    anti-scaling, and ~80% of per-hunk cost). Verified byte-identical to
+    the old table loop across sizes, odd lengths and chained state."""
+    return binascii.crc_hqx(data, crc)
 
 
 # ----------------------------------------------------------- bitstream
@@ -425,7 +392,6 @@ def _lzma_filters(hunkbytes):
     32 MiB dictionary, the reduce step shrinks it to the smallest
     2<<i or 3<<i that still covers a hunk, and lc/lp/pb keep the SDK
     defaults. MAME carries a FIXME about this being unupgradable."""
-    import lzma
     dict_size = 1 << 25                      # level 6
     if dict_size > hunkbytes:
         for i in range(11, 31):
@@ -452,7 +418,6 @@ class _Codecs:
         if tag == b"zlib":
             return zlib.decompress(data, -15, out_len)
         if tag == b"lzma":
-            import lzma
             dec = lzma.LZMADecompressor(format=lzma.FORMAT_RAW,
                                         filters=self._lzma_f)
             return dec.decompress(data, out_len)
@@ -701,7 +666,15 @@ def _canonical_codes(lengths, maxbits):
 #: four slots. zlib is the only one every CHD consumer has understood
 #: for the life of the format; zstd is faster and smaller but needs a
 #: reader from 2024 or later, so it is opt-in rather than default.
-DEFAULT_COMPRESSORS = (b"lzma", b"zlib", b"flac")
+#:
+#: FLAC is deliberately absent from the DVD default: on DVD images it is
+#: worth 0.0006% of file size, but the honest-Python encoder (and the
+#: _pcm_likely probe that gates it) cost 3.4-5x the whole build's wall
+#: time when game data false-positives the audio probe - measured. It
+#: stays defined in CD_COMPRESSORS for the PS1/PS2 CD path, whose content
+#: is wall-to-wall PCM and where FLAC actually pays.
+DEFAULT_COMPRESSORS = (b"lzma", b"zlib")
+CD_COMPRESSORS = (b"lzma", b"zlib", b"flac")
 DVD_HUNKBYTES = 4096
 DVD_UNITBYTES = 2048
 
@@ -759,14 +732,13 @@ def _lzma_effort(hunkbytes):
     lc/lp/pb/dict only, so match-finder settings are invisible to the
     decoder - MAME reconstructs the same props either way - and this is
     free speed, checked against a plain-props decode in the tests."""
-    import lzma as _lzma
     f = dict(_lzma_filters(hunkbytes)[0])
-    f["mode"] = _lzma.MODE_FAST
+    f["mode"] = lzma.MODE_FAST
     f["nice_len"] = 32
     return [f]
 
 
-def _compress_hunk(raw, tags, hunkbytes, level):
+def _compress_hunk(raw, tags, hunkbytes, level, lzma_filters):
     """Best of the configured codecs for one hunk, or None to store it
     raw. Returns (type_index, payload)."""
     best = None
@@ -792,10 +764,9 @@ def _compress_hunk(raw, tags, hunkbytes, level):
                 # Raw LZMA1 with exactly the properties MAME's decoder
                 # will reconstruct (it never reads them from the file):
                 # lc=3 lp=0 pb=2, dictionary normalised from hunkbytes.
-                import lzma as _lzma
-                comp = _lzma.compress(
-                    raw, format=_lzma.FORMAT_RAW,
-                    filters=_lzma_effort(hunkbytes))
+                comp = lzma.compress(
+                    raw, format=lzma.FORMAT_RAW,
+                    filters=lzma_filters)
             elif tag == b"zstd":
                 try:
                     from compression import zstd as _zstd
@@ -846,9 +817,19 @@ def write_dvd(src, out_path, compressors=DEFAULT_COMPRESSORS, level=6,
         logicalbytes = stream.tell()
         stream.seek(0)
         hunkbytes = DVD_HUNKBYTES
+        lzma_filters = _lzma_effort(hunkbytes)  # once, not per hunk
         hunkcount = (logicalbytes + hunkbytes - 1) // hunkbytes
         if workers is None:
-            workers = min(24, max(2, os.cpu_count() or 4))
+            # The pool's optimum flips with the interpreter, so pick by
+            # it. Free-threaded scales across all cores (measured on a chd
+            # slice: 1->16 workers is 33->289 MB/s, 8.8x); a GIL build
+            # anti-scales past ~2 because the per-hunk Python work
+            # serialises on the GIL (24 workers was 1.75x SLOWER than 2).
+            # Same interpreter-aware sizing the LZ4 pool uses.
+            if sysconfig.get_config_var("Py_GIL_DISABLED"):
+                workers = min(24, max(2, os.cpu_count() or 4))
+            else:
+                workers = 2
 
         meta_payload = b"\x00"
         meta_entry = (b"DVD " + bytes([0x01])
@@ -874,7 +855,7 @@ def write_dvd(src, out_path, compressors=DEFAULT_COMPRESSORS, level=6,
                 raw = bytes(view[i:i + hunkbytes])
                 results.append((hashlib.sha1(raw).digest(),
                                 _compress_hunk(raw, compressors, hunkbytes,
-                                               level),
+                                               level, lzma_filters),
                                 crc16(raw), raw))
             return results
 
