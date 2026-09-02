@@ -276,6 +276,32 @@ def _image_opener(kind, path):
     return None
 
 
+# The RAM-scratch (`--scratch ram`) benefit is not per-format, it is per
+# EDGE: a switch only helps a conversion that writes a game-sized pivot to
+# the scratch dir and then throws it away, so RAM saves a real disk
+# round-trip. Everything else either streams (no pivot at all) or writes
+# its scratch straight to the product (folder output stages, then MOVES to
+# disk - RAM there is a net loss, not a win). This is the one place that
+# knowledge lives; the TUI imports it and the `ram-scope` command hands the
+# same map to the GUI, so neither surface re-derives it.
+RAM_HELPED_TARGETS = ("god", "cci", "cso", "chd")
+
+
+def ram_helps_edge(src, dst):
+    """True if `--scratch ram` speeds up converting a `src` image to `dst` -
+    i.e. the edge stages a discarded pivot in the scratch dir. See
+    RAM_HELPED_TARGETS and the scratch writers in cmd_convert."""
+    if src == "gamedir":
+        return False                      # already extracted files, no pivot ever
+    if src in ("zip", "7z"):
+        return True                       # archive is extracted to w/archive_in
+    if dst == "stfs" and src != "stfs":
+        return True                       # cross-format -> STFS stages w/gamedir
+    if src == "chd" and dst in RAM_HELPED_TARGETS:
+        return True                       # CHD pivot w/chd_in.iso (not iso/zar)
+    return False
+
+
 def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
     """Read any supported input into an extracted game directory (the pivot).
     If manifest is a dict, per-file SHA-1s are captured inline where the
