@@ -265,11 +265,14 @@ def _image_opener(kind, path):
         return lambda: cci_mod.CciReader(path)
     if kind == "cso":
         return lambda: cso_mod.CsoReader(path)
-    # CHD is deliberately absent: its reader decodes hunks on the
-    # calling thread, so bulk consumers are faster through the
-    # materialised pivot, whose extraction is parallel. Measured, not
-    # assumed - streaming only wins when the stream is not the
-    # bottleneck.
+    # CHD is absent here on purpose, but not because streaming is slow:
+    # a whole-image target (god/cci/cso) carries the padding too, so its
+    # fidelity rests on the CHD's whole-image SHA-1, which the materialise
+    # step checks in the one decode it already does. Reproducing that on a
+    # stream would cost a second full decode - a real regression. The one
+    # target that carries no padding, zar, streams straight off a ChdReader
+    # at the pack site (measured ~17% faster, byte-identical), where the
+    # reader's per-hunk CRC covers every byte the container keeps.
     return None
 
 
@@ -1589,10 +1592,13 @@ def cmd_convert(args):
                      else "round-trip verified" if out_kind == "zip"
                      else "CRC verified"))
             return 0
-        if kind == "chd":
+        if kind == "chd" and out_kind != "zar":
             # CHD is a transparent decompression layer over an ISO:
             # materialize the wrapped image (verified against the CHD
             # header's internal data SHA-1), then continue as iso input.
+            # A zar target is the exception - it packs no padding, so it
+            # streams straight off the CHD at the pack site below with no
+            # pivot written; see the stream_op block and _image_opener.
             chd_iso = (args.output if out_kind == "iso"
                        else os.path.join(w, "chd_in.iso"))
             chd_mod.extract(path, chd_iso, progress=prog.cb("chd-read"))
@@ -1945,8 +1951,26 @@ def cmd_convert(args):
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
             return 0
-        stream_op = (_image_opener(kind, path)
-                     if out_kind == "zar" and zar_mod.can_stream() else None)
+        stream_op = None
+        if out_kind == "zar" and zar_mod.can_stream():
+            if kind == "chd":
+                # Stream straight off the CHD - no pivot ISO written. The
+                # materialise path's whole-image SHA-1 is skipped (it only
+                # covers padding a zar does not keep); in its place the
+                # structure is validated up front, exactly as an image
+                # source is at the top of convert, and the ChdReader
+                # CRC-checks every hunk it decodes into the pack - so every
+                # byte the zar carries is verified on the way in. The zar
+                # then round-trips like any other.
+                if not args.no_verify:
+                    try:
+                        with _wrapper_reader("chd", path) as _cimg:
+                            xdvdfs_mod.validate_image(_cimg)
+                    except xdvdfs_mod.XdvdfsError as e:
+                        raise CliError("source is INVALID: %s" % e)
+                stream_op = (lambda: _wrapper_reader("chd", path))
+            else:
+                stream_op = _image_opener(kind, path)
         if stream_op is not None:
             # The image feeds the archive writer directly. Unlike the
             # ISO case there is nothing given up by not having the files
