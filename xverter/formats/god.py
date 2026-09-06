@@ -643,8 +643,10 @@ def _read_exact(f, off, n, what):
 
 def _parse_xex(f, start):
     """Execution-info record (optional-header id 0x40006) of the XEX2 file
-    at absolute offset start: media/title ids, platform, executable type,
-    disc number/count. XEX2 headers carry no display title."""
+    at absolute offset start: media/title ids, version/base version,
+    platform, executable type, disc number/count. XEX2 headers carry no
+    display title. (The GoD header keeps iso2god's zeroed version fields
+    for parity; the STFS writer carries the XEX's real ones.)"""
     head = _read_exact(f, start, 0x18, "default.xex header")
     if head[:4] != b"XEX2":
         die("default.xex: missing XEX2 magic")
@@ -658,9 +660,10 @@ def _parse_xex(f, start):
         if key == 0x40006:
             rec = _read_exact(f, start + value, 24,
                               "default.xex execution info")
-            media_id, _ver, _base_ver, title_id = \
+            media_id, version, base_version, title_id = \
                 struct.unpack_from(">IIII", rec, 0)
             return {"media_id": media_id, "title_id": title_id,
+                    "version": version, "base_version": base_version,
                     "platform": rec[16], "executable_type": rec[17],
                     "disc_number": rec[18], "disc_count": rec[19],
                     "title": ""}

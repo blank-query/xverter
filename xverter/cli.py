@@ -820,6 +820,25 @@ def _user_thumbnail(arg):
     return png
 
 
+def _payload_icon(entries):
+    """The payload's own root-level icon.png as thumbnail bytes, if it is
+    a PNG that fits the header slot; else None."""
+    for rel, size, opener in entries:
+        if rel.lower().lstrip("/") != "icon.png":
+            continue
+        if size > stfs_mod.THUMB_MAX:
+            return None
+        f = opener()
+        try:
+            png = f.read()
+        finally:
+            cl = getattr(f, "close", None)
+            if cl:
+                cl()
+        return png if png[:8] == b"\x89PNG\r\n\x1a\n" else None
+    return None
+
+
 def _redump_name(path):
     """The canonical redump game name for an image, or None. Reuses the
     redump check, which only hashes when the file's size matches a known
@@ -1898,6 +1917,14 @@ def cmd_convert(args):
                 if _thumb is None and titledb_mod.XVERTER_TITLES.get(
                         "%08X" % _eff_tid):
                     _thumb = titledb_mod.xverter_icon()
+                if _thumb is None and kind != "stfs":
+                    # A synthesized header has no thumbnail of its own; a
+                    # native XBLA package carries the game's icon there,
+                    # and the same icon ships in the payload as a
+                    # root-level icon.png (an extracted package keeps it).
+                    # Reuse the game's own icon when it fits the slot -
+                    # nothing invented.
+                    _thumb = _payload_icon(entries)
                 if _thumb:
                     header = stfs_mod.set_thumbnail(header, _thumb)
                 stfs_mod.build(entries, args.output, header,
@@ -1915,6 +1942,15 @@ def cmd_convert(args):
             print("wrote %s (%s)"
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash chain verified to root"))
+            # The console names a content package by its content id - the
+            # header self-hash at 0x32C, which every header edit re-seals.
+            # Say what this package's id is, so a re-converted package is
+            # never filed under a stale name.
+            with open(args.output, "rb") as _hf:
+                _hf.seek(0x32C)
+                _cid = _hf.read(20).hex().upper()
+            print("content id %s (name the file this under <TitleID>/%08X/)"
+                  % (_cid, int.from_bytes(header[0x344:0x348], "big")))
             if retail_warn:
                 sys.stderr.write("warning: " + retail_warn + "\n")
             return 0

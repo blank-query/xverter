@@ -49,6 +49,17 @@ BLOCK = 0x1000
 FT_ENTRY = 0x40
 HASH_ENTRY = 0x18
 PER_TABLE = 170
+CHAIN_END = 0xFFFFFF             # next-block value that ends a file's chain
+# Hash-table tail: a native L1/L2 table carries, at 0xFF0, the number of
+# data blocks it covers (verified: a full L1 in a retail package holds
+# 0x70E4 = 170*170; L0 tables hold 0). The 360 SDK's STF_HASH_BLOCK names
+# it NumberOfCommittedBlocks.
+TABLE_COMMITTED_OFFSET = 0xFF0
+# File-table entries carry FAT update/access stamps; a retail packager
+# writes one fixed stamp into every entry (never zero). Ours is fixed too,
+# so a rebuild stays byte-identical: 2005-11-22 00:00:00, FAT-encoded
+# (date<<16 | time), the day the console launched.
+FT_TIMESTAMP = ((2005 - 1980) << 9 | 11 << 5 | 22) << 16
 HEADER_SIZE_OFFSET = 0x340
 DESCRIPTOR_OFFSET = 0x379
 TITLE_OFFSET = 0x411
@@ -86,23 +97,55 @@ def parse_content_type(text):
 # XContentHeader metadata field offsets - identical in STFS and GoD
 # (both are CON/LIVE/PIRS packages), verified against a real Spartan header.
 MEDIA_ID_OFFSET = 0x354
+VERSION_OFFSET = 0x358           # title version, then base version at 0x35C
 TITLE_ID_OFFSET = 0x360
 PLATFORM_OFFSET = 0x364          # platform, exec_type, disc_number, disc_count
+TITLE_NAME_OFFSET = 0x1691       # second UTF-16-BE name slot (dashboards read it)
+TRANSFER_FLAGS_OFFSET = 0x1711
+# Native marketplace/XBLA packages carry 0xC0 here (device transfer 0x40 +
+# profile transfer 0x80 allowed = plays on any console/profile); a zero
+# byte is "no transfer allowed", which is not what a game package is.
+TRANSFER_FLAGS_ANY = 0xC0
+# The header-size field of every native LIVE/PIRS package (and iso2god's GoD
+# template) is 0xAD0E - the end of the last metadata field; readers round
+# it up to the 0xB000 block boundary where L0 table #0 sits.
+NATIVE_HEADER_SIZE = 0xAD0E
+SIGNATURE_OFFSET = 0x4           # 256-byte RSA slot after the magic
+SIGNATURE_SIZE = 0x100
+
+
+def _placeholder_signature(seed):
+    """256 deterministic non-zero bytes for the LIVE signature slot. No
+    tool outside Microsoft can produce a real signature (the private key
+    is theirs); modded consoles do not check it. A native package always
+    carries SOME signature though, and an all-zero slot is the one shape
+    no signed package ever has - so fill it with a fixed pseudo-random
+    pattern derived from the package identity, the same every time the
+    same package is built (byte-identical re-runs), never mistaken for a
+    blank header."""
+    out = bytearray()
+    counter = 0
+    while len(out) < SIGNATURE_SIZE:
+        out += hashlib.sha256(b"xverter-stfs-sig:" + seed
+                              + counter.to_bytes(4, "big")).digest()
+        counter += 1
+    return bytes(b or 1 for b in out[:SIGNATURE_SIZE])
 
 
 def synth_header(content_type, display_name="", info=None):
     """Build a valid LIVE package header (0xB000 bytes) for a source that
     carries no STFS header of its own. Sets the fields a console actually
     indexes on - content type, and (from the payload default.xex, via
-    `info`) media id, title id, platform/exec type, disc number/count -
-    plus a display title. build() fills the volume descriptor and reseals
-    the header self-hash. Everything else is the ecosystem-standard junk
-    the signature bytes already are."""
+    `info`) media id, title id, version/base version, platform/exec type,
+    disc number/count - plus the display and title names. build() fills
+    the volume descriptor and reseals the header self-hash. The signature
+    slot gets a non-zero placeholder (see _placeholder_signature)."""
     h = bytearray(0xB000)
     h[0:4] = b"LIVE"
-    struct.pack_into(">I", h, HEADER_SIZE_OFFSET, 0xB000)   # base -> 0xB000
+    struct.pack_into(">I", h, HEADER_SIZE_OFFSET, NATIVE_HEADER_SIZE)  # base -> 0xB000
     struct.pack_into(">I", h, CONTENT_TYPE_OFFSET, int(content_type) & 0xFFFFFFFF)
     struct.pack_into(">I", h, 0x348, 2)                     # metadata version
+    h[TRANSFER_FLAGS_OFFSET] = TRANSFER_FLAGS_ANY
     # Unrestricted "all-console" license entry. A zero license descriptor
     # reads as unlicensed content and the console refuses to launch it
     # ("couldn't start") - a native package and the GoD template both carry
@@ -112,6 +155,8 @@ def synth_header(content_type, display_name="", info=None):
     struct.pack_into(">I", h, 0x234, 1)
     if info:
         struct.pack_into(">I", h, MEDIA_ID_OFFSET, int(info.get("media_id", 0)) & 0xFFFFFFFF)
+        struct.pack_into(">I", h, VERSION_OFFSET, int(info.get("version", 0)) & 0xFFFFFFFF)
+        struct.pack_into(">I", h, VERSION_OFFSET + 4, int(info.get("base_version", 0)) & 0xFFFFFFFF)
         struct.pack_into(">I", h, TITLE_ID_OFFSET, int(info.get("title_id", 0)) & 0xFFFFFFFF)
         h[PLATFORM_OFFSET]     = int(info.get("platform", 0)) & 0xFF
         h[PLATFORM_OFFSET + 1] = int(info.get("executable_type", 0)) & 0xFF
@@ -119,16 +164,22 @@ def synth_header(content_type, display_name="", info=None):
         h[PLATFORM_OFFSET + 3] = int(info.get("disc_count", 0)) & 0xFF
     if display_name:
         _set_title(h, display_name)
+    h[SIGNATURE_OFFSET:SIGNATURE_OFFSET + SIGNATURE_SIZE] = \
+        _placeholder_signature(bytes(h[CONTENT_TYPE_OFFSET:PLATFORM_OFFSET + 4]))
     return bytes(h)
 
 
 def _set_title(h, title):
-    """Write the UTF-16-BE display name at TITLE_OFFSET, clearing the old
-    one first (so an edit does not leave a longer previous name trailing)."""
+    """Write the UTF-16-BE name into both name slots - the display name at
+    TITLE_OFFSET and the title name at TITLE_NAME_OFFSET (a native package
+    carries the game's name in both; the GoD writer fills both too) -
+    clearing the old ones first (so an edit does not leave a longer
+    previous name trailing)."""
     span = 0x80
-    h[TITLE_OFFSET:TITLE_OFFSET + span] = b"\x00" * span
     enc = str(title).encode("utf-16-be")[:span - 2]
-    h[TITLE_OFFSET:TITLE_OFFSET + len(enc)] = enc
+    for off in (TITLE_OFFSET, TITLE_NAME_OFFSET):
+        h[off:off + span] = b"\x00" * span
+        h[off:off + len(enc)] = enc
 
 
 def apply_metadata(header, content_type=None, title=None,
@@ -454,13 +505,16 @@ def _ft_bytes(recs, idx_of, ft_blocks):
         rec = bytearray(FT_ENTRY)
         nb = name.encode("ascii", "replace")[:0x28]
         rec[:len(nb)] = nb
-        rec[0x28] = len(nb) | (0x80 if is_dir else 0x40)
+        # bit 0x40 (blocks consecutive) is set on files AND directories
+        # in native packages; 0x80 marks a directory
+        rec[0x28] = len(nb) | 0x40 | (0x80 if is_dir else 0)
         rec[0x29] = nblk & 0xFF; rec[0x2A] = (nblk >> 8) & 0xFF; rec[0x2B] = (nblk >> 16) & 0xFF
         rec[0x2C] = nblk & 0xFF; rec[0x2D] = (nblk >> 8) & 0xFF; rec[0x2E] = (nblk >> 16) & 0xFF
         rec[0x2F] = start & 0xFF; rec[0x30] = (start >> 8) & 0xFF; rec[0x31] = (start >> 16) & 0xFF
         pid = 0xFFFF if parent is None else idx_of[parent]
         struct.pack_into(">H", rec, 0x32, pid)
         struct.pack_into(">I", rec, 0x34, 0 if is_dir else size)
+        struct.pack_into(">II", rec, 0x38, FT_TIMESTAMP, FT_TIMESTAMP)
         buf += rec
     buf += b"\x00" * (ft_blocks * BLOCK - len(buf))
     return bytes(buf)
@@ -498,8 +552,11 @@ def build(entries, out_path, header, progress=None):
     n_l0 = (nblocks + PER_TABLE - 1) // PER_TABLE
     l0 = [bytearray(BLOCK) for _ in range(n_l0)]
 
-    def l0_put(c, digest):
-        nxt = c + 1
+    def l0_put(c, digest, last=False):
+        # status 0x80 = allocated; next-block continues the file's chain
+        # and ENDS it (0xFFFFFF) on the file's last block, as native
+        # packages do
+        nxt = CHAIN_END if last else c + 1
         o = (c % PER_TABLE) * HASH_ENTRY
         l0[c // PER_TABLE][o:o + HASH_ENTRY] = (
             digest + bytes([0x80, (nxt >> 16) & 0xFF, (nxt >> 8) & 0xFF, nxt & 0xFF]))
@@ -521,7 +578,7 @@ def build(entries, out_path, header, progress=None):
         for t in range(ft_blocks):
             blk = ft[t * BLOCK:(t + 1) * BLOCK]
             o.seek(data_off(t, base)); o.write(blk)
-            l0_put(t, hashlib.sha1(blk).digest())
+            l0_put(t, hashlib.sha1(blk).digest(), last=(t == ft_blocks - 1))
         # file data blocks, streamed through each opener
         for r in recs:
             name, is_dir, parent, start, nblk, size, opener = r
@@ -535,7 +592,7 @@ def build(entries, out_path, header, progress=None):
                         chunk = chunk + b"\x00" * (BLOCK - len(chunk))
                     c = start + k
                     o.seek(data_off(c, base)); o.write(chunk)
-                    l0_put(c, hashlib.sha1(chunk).digest())
+                    l0_put(c, hashlib.sha1(chunk).digest(), last=(k == nblk - 1))
                     done[0] += 1
                     if progress:
                         progress(done[0], nblocks)
@@ -546,12 +603,16 @@ def build(entries, out_path, header, progress=None):
         # higher-level tables from L0 upward
         levels = [[bytes(t) for t in l0]]
         child = levels[0]
+        span = PER_TABLE                 # data blocks under one child table
         while len(child) > 1:
             parents = []
+            span *= PER_TABLE            # data blocks under one table at this level
             for j in range((len(child) + PER_TABLE - 1) // PER_TABLE):
                 tb = bytearray(BLOCK)
                 for i, ch in enumerate(child[j * PER_TABLE:(j + 1) * PER_TABLE]):
                     tb[i * HASH_ENTRY:i * HASH_ENTRY + 20] = hashlib.sha1(ch).digest()
+                struct.pack_into(">I", tb, TABLE_COMMITTED_OFFSET,
+                                 min(span, nblocks - j * span))
                 parents.append(bytes(tb))
             levels.append(parents)
             child = parents
