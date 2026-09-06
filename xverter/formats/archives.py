@@ -212,6 +212,121 @@ def _list_7z(path):
     return out
 
 
+class _SevenZipStream:
+    """Forward-only stream over one member of a .7z, from `7z x -so`.
+
+    A solid archive has no random access, so a backward seek restarts
+    the extraction and skips forward again (correct, just slow); reads
+    and forward seeks cost only the decompression up to that point."""
+
+    def __init__(self, exe, path, member, size):
+        self._exe, self._path, self._member = exe, path, member
+        self._size = size
+        self._p = None
+        self._pos = 0
+        self._start()
+
+    def _start(self):
+        import subprocess as _sp
+        self._stop()
+        self._p = _sp.Popen([self._exe, "x", "-so", "-y", self._path,
+                             self._member], stdout=_sp.PIPE,
+                            stderr=_sp.DEVNULL, bufsize=1 << 20)
+        self._pos = 0
+
+    def _stop(self):
+        if self._p is not None:
+            try:
+                self._p.stdout.close()
+                self._p.kill()
+                self._p.wait()
+            except OSError:
+                pass
+            self._p = None
+
+    def _skip(self, n):
+        while n > 0:
+            chunk = self._p.stdout.read(min(n, 1 << 20))
+            if not chunk:
+                break
+            n -= len(chunk)
+            self._pos += len(chunk)
+
+    def read(self, n=-1):
+        if n is None or n < 0:
+            n = max(self._size - self._pos, 0)
+        out = bytearray()
+        while len(out) < n:
+            chunk = self._p.stdout.read(n - len(out))
+            if not chunk:
+                break
+            out += chunk
+        self._pos += len(out)
+        return bytes(out)
+
+    def seek(self, off, whence=0):
+        if whence == 1:
+            off = self._pos + off
+        elif whence == 2:
+            off = self._size + off
+        if off < self._pos:
+            self._start()
+        self._skip(off - self._pos)
+        return self._pos
+
+    def tell(self):
+        return self._pos
+
+    def close(self):
+        self._stop()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+def open_member(path, member, size=None):
+    """A seekable read-only stream over one archive member, without
+    extracting anything to disk. A zip member seeks natively (backward
+    seeks re-inflate from the start of that member); a 7z member is
+    streamed from 7-Zip and seeks forward cheaply, backward by restart."""
+    kind = sniff(path)
+    if kind == "zip":
+        try:
+            z = _open_zip(path)
+            f = z.open(member)
+        except (zipfile.BadZipFile, zlib.error, KeyError) as e:
+            raise _zip_damage(path, e)
+        f._xverter_zip = z                    # keep the archive open with the member
+        return f
+    if kind == "7z":
+        if size is None:
+            size = dict(list_entries(path)).get(member, 0)
+        return _SevenZipStream(_need_7z(), path, member, size)
+    raise ArchiveError("not a zip/7z archive: %s" % path)
+
+
+def payload_member(entries):
+    """Which archive member to read the game's identity from, given
+    [(name, size)]: (member, size, role) where role is "exe" for a
+    default.xex/.xbe (a packed game folder), "iso" for the largest disc
+    image, or the extension of the largest other game container."""
+    exes = [(n, s) for n, s in entries
+            if n.rsplit("/", 1)[-1].lower() in ("default.xex", "default.xbe")]
+    if exes:
+        n, s = min(exes, key=lambda e: e[0].count("/"))   # shallowest
+        return n, s, "exe"
+    games = [(n, s) for n, s in entries if n.lower().endswith(GAME_EXTS)]
+    if not games:
+        raise ArchiveError("no game payload found in the archive (looked "
+                           "for %s or a default.xex/.xbe)" % ", ".join(GAME_EXTS))
+    n, s = max(games, key=lambda e: e[1])
+    ext = n.rsplit(".", 1)[-1].lower()
+    return n, s, ("iso" if ext in ("iso", "xiso") else ext)
+
+
 def extract(path, out_dir, progress=None):
     """Extract the whole archive into out_dir (paths sanitized),
     reporting decompressed bytes via progress(done, total)."""
