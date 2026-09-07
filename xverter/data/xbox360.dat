@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3707) (2026-08-30 14-20-37)</description>
-		<version>2026-08-30 14-20-37</version>
-		<date>2026-08-30 14-20-37</date>
+		<description>Microsoft - Xbox 360 - Datfile (3708) (2026-09-07 08-39-01)</description>
+		<version>2026-09-07 08-39-01</version>
+		<date>2026-09-07 08-39-01</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -5885,10 +5885,10 @@
 		<description>Fable - The Journey (Russia) (En,Pl,Ru)</description>
 		<rom name="Fable - The Journey (Russia) (En,Pl,Ru).iso" size="8738846720" crc="726a81e9" md5="76e7efa800d2551d2745c0e644e79007" sha1="4d976ac5dfbde31181e7bde36fd9932f4a668056"/>
 	</game>
-	<game name="Fable - The Journey (Scandinavia)" id="137436">
+	<game name="Fable - The Journey (Scandinavia) (En,Sv,No,Da,Fi,Cs,Hu)" id="137436">
 		<category>Games</category>
-		<description>Fable - The Journey (Scandinavia)</description>
-		<rom name="Fable - The Journey (Scandinavia).iso" size="8738846720" crc="943026e6" md5="f51eb988f4969f6d944a5a74cab124e8" sha1="71069eed94f51d1db6672adbd66b73d45e55bbd0"/>
+		<description>Fable - The Journey (Scandinavia) (En,Sv,No,Da,Fi,Cs,Hu)</description>
+		<rom name="Fable - The Journey (Scandinavia) (En,Sv,No,Da,Fi,Cs,Hu).iso" size="8738846720" crc="943026e6" md5="f51eb988f4969f6d944a5a74cab124e8" sha1="71069eed94f51d1db6672adbd66b73d45e55bbd0"/>
 	</game>
 	<game name="Fable - The Journey (USA) (En,Fr,Es)" id="72219">
 		<category>Games</category>
@@ -7505,10 +7505,10 @@
 		<description>Gears of War 2 (USA, Canada) (En,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu)</description>
 		<rom name="Gears of War 2 (USA, Canada) (En,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu).iso" size="7835492352" crc="40aa5253" md5="efd6aab7725e3978cefac76dbb14f9b2" sha1="e9f08fb2b77d9fa290a1c6ee3b4e0c52f4f688e4"/>
 	</game>
-	<game name="Gears of War 2 (USA, Europe) (En,Fr,De,Es,It) (Limited Edition Bonus Disc)" id="87938">
+	<game name="Gears of War 2 - Limited Edition Bonus Disc (USA, Europe) (En,Fr,De,Es,It) (Xbox 360 Game Bundle)" id="87938">
 		<category>Bonus Discs</category>
-		<description>Gears of War 2 (USA, Europe) (En,Fr,De,Es,It) (Limited Edition Bonus Disc)</description>
-		<rom name="Gears of War 2 (USA, Europe) (En,Fr,De,Es,It) (Limited Edition Bonus Disc).iso" size="7835492352" crc="1b738df2" md5="fd32db4c8612d605890c810d2400ab5f" sha1="3fa4f3871c53847abc19bd91f129b591a30a5aba"/>
+		<description>Gears of War 2 - Limited Edition Bonus Disc (USA, Europe) (En,Fr,De,Es,It) (Xbox 360 Game Bundle)</description>
+		<rom name="Gears of War 2 - Limited Edition Bonus Disc (USA, Europe) (En,Fr,De,Es,It) (Xbox 360 Game Bundle).iso" size="7835492352" crc="1b738df2" md5="fd32db4c8612d605890c810d2400ab5f" sha1="3fa4f3871c53847abc19bd91f129b591a30a5aba"/>
 	</game>
 	<game name="Gears of War 3 (Germany) (En,De)" id="46612">
 		<category>Games</category>
@@ -9636,10 +9636,15 @@
 		<description>LMA Manager 2007 (Europe) (En,Fr,De,Es,It)</description>
 		<rom name="LMA Manager 2007 (Europe) (En,Fr,De,Es,It).iso" size="7834892288" crc="871654e9" md5="41e358cce3f589826dcf9899c9211cee" sha1="f5c7f1cd7725c98b832f6ca3b913810e727f4885"/>
 	</game>
-	<game name="Lollipop Chainsaw (Japan) (En,Ja)" id="65899">
+	<game name="Lollipop Chainsaw (Japan)" id="137958">
 		<category>Games</category>
-		<description>Lollipop Chainsaw (Japan) (En,Ja)</description>
-		<rom name="Lollipop Chainsaw (Japan) (En,Ja).iso" size="8738846720" crc="a629f093" md5="30bf3407a559cf5411a59e57e5f08ea7" sha1="a0a75ba67ed096203340f6613984e86e2bfb3d1c"/>
+		<description>Lollipop Chainsaw (Japan)</description>
+		<rom name="Lollipop Chainsaw (Japan).iso" size="8738846720" crc="8daac52e" md5="db496535d874d1ef50ad1e8edd915c9b" sha1="381a6e8f8a8d0c16f4d8af58c2c42906773919b5"/>
+	</game>
+	<game name="Lollipop Chainsaw (Japan) (En,Ja) (Premium Edition)" id="65899">
+		<category>Games</category>
+		<description>Lollipop Chainsaw (Japan) (En,Ja) (Premium Edition)</description>
+		<rom name="Lollipop Chainsaw (Japan) (En,Ja) (Premium Edition).iso" size="8738846720" crc="a629f093" md5="30bf3407a559cf5411a59e57e5f08ea7" sha1="a0a75ba67ed096203340f6613984e86e2bfb3d1c"/>
 	</game>
 	<game name="Lollipop Chainsaw (USA, Europe) (En,Fr,De,Es,It,Pt,Ru)" id="35948">
 		<category>Games</category>
@@ -13908,10 +13913,10 @@
 		<description>Ridge Racer 6 (USA) (En,Ja,Fr,De,Es,It)</description>
 		<rom name="Ridge Racer 6 (USA) (En,Ja,Fr,De,Es,It).iso" size="7834892288" crc="eb9a2f17" md5="1023de6d500170477d76b0c4ea703365" sha1="3a034c8aa844014ad20fcbf5d3e61c594d4816b1"/>
 	</game>
-	<game name="Ridge Racer Unbounded (World)" id="58919">
+	<game name="Ridge Racer Unbounded (World) (En,Fr,De,Es,It)" id="58919">
 		<category>Games</category>
-		<description>Ridge Racer Unbounded (World)</description>
-		<rom name="Ridge Racer Unbounded (World).iso" size="8738846720" crc="d3070292" md5="616365762a4745be9aa8b31dabe2f491" sha1="7d01f212c74a6ad31bf9679ae6304003cd1cb8f0"/>
+		<description>Ridge Racer Unbounded (World) (En,Fr,De,Es,It)</description>
+		<rom name="Ridge Racer Unbounded (World) (En,Fr,De,Es,It).iso" size="8738846720" crc="d3070292" md5="616365762a4745be9aa8b31dabe2f491" sha1="7d01f212c74a6ad31bf9679ae6304003cd1cb8f0"/>
 	</game>
 	<game name="Rio (USA, Europe) (En,Fr,De,Es,It,Nl)" id="58920">
 		<category>Games</category>
