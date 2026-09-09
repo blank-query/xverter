@@ -60,6 +60,34 @@ TABLE_COMMITTED_OFFSET = 0xFF0
 # so a rebuild stays byte-identical: 2005-11-22 00:00:00, FAT-encoded
 # (date<<16 | time), the day the console launched.
 FT_TIMESTAMP = ((2005 - 1980) << 9 | 11 << 5 | 22) << 16
+
+
+def _name_str(raw):
+    """File-table name bytes -> str. Names are raw bytes on the package
+    (ASCII for most games, Shift-JIS sequences in Japanese-authored ones);
+    the same convention as XDVDFS names (formats/xdvdfs.py): Windows-1252
+    for the defined bytes, and every undefined byte kept as a lone
+    surrogate so _name_bytes returns the exact bytes. One convention on
+    both formats means a name survives STFS -> zar/gamedir -> ISO and back
+    byte-for-byte."""
+    return raw.decode("cp1252", "surrogateescape")
+
+
+def _name_bytes(name):
+    """str -> file-table name bytes (inverse of _name_str). Raises
+    StfsError for a name carrying U+FFFD: that is the trace of a byte an
+    older lossy reader threw away, and writing a substitute would rename
+    the file behind the game's back."""
+    if "\ufffd" in name:
+        raise StfsError(
+            "entry name %r carries U+FFFD - a filename byte was lost when "
+            "this source was made (older xverter decoded names lossily). "
+            "Re-make it from the original package." % name)
+    try:
+        return name.encode("cp1252", "surrogateescape")
+    except UnicodeEncodeError:
+        raise StfsError("entry name %r cannot be stored in an STFS file "
+                        "table (not representable as raw bytes)" % name)
 HEADER_SIZE_OFFSET = 0x340
 DESCRIPTOR_OFFSET = 0x379
 TITLE_OFFSET = 0x411
@@ -430,7 +458,7 @@ class _Package:
                 break
             if name_len > 0x28:
                 continue
-            name = e[:name_len].decode("ascii", "replace")
+            name = _name_str(e[:name_len])
             blocks = e[0x29] | (e[0x2A] << 8) | (e[0x2B] << 16)
             start = e[0x2F] | (e[0x30] << 8) | (e[0x31] << 16)
             parent = struct.unpack(">H", e[0x32:0x34])[0]
@@ -503,7 +531,7 @@ def _ft_bytes(recs, idx_of, ft_blocks):
     for i, r in enumerate(recs):
         name, is_dir, parent, start, nblk, size, _op = r
         rec = bytearray(FT_ENTRY)
-        nb = name.encode("ascii", "replace")[:0x28]
+        nb = _name_bytes(name)[:0x28]       # length already checked in build()
         rec[:len(nb)] = nb
         # bit 0x40 (blocks consecutive) is set on files AND directories
         # in native packages; 0x80 marks a directory
@@ -527,24 +555,25 @@ def build(entries, out_path, header, progress=None):
     not hold the whole payload in memory. Returns (nblocks, record_count)."""
     if len(header) < 0x344 + 4:
         raise StfsError("header template too small")
-    # STFS file-table names are a hard 40 bytes (0x28) of ASCII. A longer
-    # or non-ASCII XDVDFS name cannot be stored: truncating it renames the
-    # file (transparent_..._m.vsh -> ...m.vs) and can collide two files
-    # onto one. Refuse loudly BEFORE writing anything rather than corrupt
-    # silently - some game trees simply cannot be packed as STFS.
+    # STFS file-table names are a hard 40 bytes (0x28) of raw bytes (see
+    # _name_str for the byte convention). A longer name cannot be stored:
+    # truncating it renames the file (transparent_..._m.vsh -> ...m.vs)
+    # and can collide two files onto one. Refuse loudly BEFORE writing
+    # anything rather than corrupt silently - some game trees simply
+    # cannot be packed as STFS. A name with a lost byte (U+FFFD) is
+    # refused by _name_bytes for the same reason.
     _bad = []
     for _rel, _sz, _op in entries:
         for _comp in _rel.replace(os.sep, "/").strip("/").split("/"):
-            _enc = _comp.encode("ascii", "replace")
-            if len(_enc) > 0x28 or _enc.decode("ascii") != _comp:
+            if len(_name_bytes(_comp)) > 0x28:
                 _bad.append(_comp)
     if _bad:
         _ex = _bad[0]
         raise StfsError(
             "%d name(s) cannot be stored in STFS (file-table names are "
-            "limited to 40 bytes of ASCII): e.g. %r (%d bytes). This tree "
+            "limited to 40 bytes): e.g. %r (%d bytes). This tree "
             "cannot be packed as STFS without corrupting names."
-            % (len(_bad), _ex, len(_ex.encode("ascii", "replace"))))
+            % (len(_bad), _ex, len(_name_bytes(_ex))))
     base = _hdr_base(header)
     recs, ft_blocks, nblocks, idx_of = _plan(entries)
     ft = _ft_bytes(recs, idx_of, ft_blocks)
