@@ -178,7 +178,7 @@ def probe(src):
         info = _probe_archive(path)
         tid = info["title_id"]
         name = info.get("title") or _titledb.name_for_title_id(tid)
-        return {"title_id": tid, "kind": "god", "name": name}
+        return {"title_id": tid, "kind": info.get("kind", "god"), "name": name}
 
     # Image / gamedir: read the executable's exec-info.
     from . import cli as _cli
@@ -210,6 +210,20 @@ def _probe_archive(path):
             base = _xdvdfs_mod.find_base(f)
             _ctype, info = _god._title_info(f, base, _god._xdvdfs())
         return info
+    if role == "stfs":
+        # A content package stored under the console layout: its header
+        # (first 0xB000 bytes, a cheap forward read) carries the identity.
+        with _arch.open_member(path, member, size) as f:
+            head = f.read(0xB000)
+        if head[:4] not in _stfs.STFS_MAGICS:
+            raise ConvertError("%s in %s is laid out like a content package "
+                               "but has no CON/LIVE/PIRS magic" % (member, path))
+        tid = struct.unpack_from(">I", head, 0x360)[0]
+        title = head[_stfs.TITLE_OFFSET:_stfs.TITLE_OFFSET + 0x80] \
+            .decode("utf-16-be", "replace").split("\x00", 1)[0].strip()
+        ctype = struct.unpack_from(">I", head, 0x344)[0]
+        return {"title_id": tid, "title": title,
+                "kind": "stfs" if ctype not in (0x7000, 0x5000) else "god"}
     import shutil
     import tempfile
     tmp = tempfile.mkdtemp(prefix="xverter-probe-",

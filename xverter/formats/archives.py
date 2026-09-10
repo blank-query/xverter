@@ -31,6 +31,7 @@ CRC-checked).
 import hashlib
 import ntpath
 import os
+import re
 import sys
 import contextlib
 import zipfile
@@ -308,11 +309,20 @@ def open_member(path, member, size=None):
     raise ArchiveError("not a zip/7z archive: %s" % path)
 
 
+# A content package as the console stores it: <TitleID>/<ContentType>/<id>,
+# two 8-hex directories and a 40-hex (or longer, some rips append bytes)
+# extensionless content id. TorrentZipped XBLA rips hold exactly this.
+_CONTENT_PATH = re.compile(
+    r"^(?:.*/)?[0-9A-Fa-f]{8}/[0-9A-Fa-f]{8}/[0-9A-Fa-f]{40,}$")
+
+
 def payload_member(entries):
     """Which archive member to read the game's identity from, given
     [(name, size)]: (member, size, role) where role is "exe" for a
     default.xex/.xbe (a packed game folder), "iso" for the largest disc
-    image, or the extension of the largest other game container."""
+    image, "stfs" for a content package stored under the console's
+    <TitleID>/<ContentType>/<contentid> layout (no extension), or the
+    extension of the largest other game container."""
     exes = [(n, s) for n, s in entries
             if n.rsplit("/", 1)[-1].lower() in ("default.xex", "default.xbe")]
     if exes:
@@ -320,8 +330,14 @@ def payload_member(entries):
         return n, s, "exe"
     games = [(n, s) for n, s in entries if n.lower().endswith(GAME_EXTS)]
     if not games:
+        pkgs = [(n, s) for n, s in entries if _CONTENT_PATH.match(n)]
+        if pkgs:
+            n, s = max(pkgs, key=lambda e: e[1])
+            return n, s, "stfs"
         raise ArchiveError("no game payload found in the archive (looked "
-                           "for %s or a default.xex/.xbe)" % ", ".join(GAME_EXTS))
+                           "for %s, a default.xex/.xbe, or a content "
+                           "package at <TitleID>/<ContentType>/<contentid>)"
+                           % ", ".join(GAME_EXTS))
     n, s = max(games, key=lambda e: e[1])
     ext = n.rsplit(".", 1)[-1].lower()
     return n, s, ("iso" if ext in ("iso", "xiso") else ext)
