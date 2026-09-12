@@ -62,6 +62,11 @@ SUBPART_SPAN = BLOCK_SIZE + SUBPART_DATA_SIZE              # subtable + data
 FULL_PART_SIZE = BLOCK_SIZE * (1 + SUBPARTS_PER_PART * (1 + BLOCKS_PER_SUBPART))  # 0xA290 blocks
 HASH_SIZE = 20
 SECTOR_SIZE = 0x800
+#: The data volume is rounded up to this many bytes (zero-padded) before
+#: it is carved into parts: whole 4 KiB blocks, because the SVOD driver
+#: reads and hashes whole blocks. Consumers that synthesise the same layout
+#: (godstream's cold scan) check this constant against their own rule.
+DATA_ALIGN = BLOCK_SIZE
 XDVDFS_MAGIC = b"MICROSOFT*XBOX*MEDIA"
 
 CONTENT_TYPES = {0x7000: "GamesOnDemand", 0x5000: "XboxOriginal"}
@@ -808,9 +813,18 @@ def _build(f, out_dir, trim, game_title, progress):
         raw_size = f.tell() - base
     if raw_size <= 0:
         die("empty data region past partition base 0x%X" % base)
-    # round up to a whole sector: extents allocate whole sectors on disc,
-    # and the header's parts_total_size field has 0x100 granularity
-    data_size = (raw_size + SECTOR_SIZE - 1) // SECTOR_SIZE * SECTOR_SIZE
+    # Round up to a whole 4 KiB BLOCK, not just a 2 KiB sector. The SVOD
+    # driver reads the data volume in 4 KiB blocks and hashes each one
+    # against its sub-table entry; a part whose last block is only half
+    # there (an allocation extent that ends 2048 mod 4096 - common for a
+    # trimmed image built from a zar or a folder) makes the console's last
+    # read come up short and the game "unreadable" the moment something
+    # touches that block. The pad is zeros beyond the allocation extent,
+    # so no file data changes; the last block's hash covers the padded
+    # block. (iso2god-rs writes the short block as-is and has the same
+    # latent failure; a full redump image is a block multiple already, so
+    # its output is unchanged.)
+    data_size = (raw_size + DATA_ALIGN - 1) // DATA_ALIGN * DATA_ALIGN
     pad = data_size - raw_size
     block_count = (data_size + BLOCK_SIZE - 1) // BLOCK_SIZE
     if block_count > 0xFFFFFF:

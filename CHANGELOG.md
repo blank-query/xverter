@@ -23,6 +23,18 @@ the conversion with a clear error instead of a traceback. Proven on the real
 7.8 GB Halo CE rip: every random read and a full sequential read match the
 extracted ISO, and `.7z → .cci` is byte-identical to `.iso → .cci`.
 
+**GoD: the data volume is padded to a whole 4 KiB block.** An image whose
+allocation extent ended 2048 bytes into a block - common for a trimmed image
+built from a zar or a folder - produced a last data part ending mid-block,
+hashed as the short block. The console's SVOD driver reads and hashes whole
+4 KiB blocks, so the moment a game touched that block the disc came up
+"unreadable" (Army of Two, found by godstream's console trace; 21 of 40
+library discs had the shape and failed only if the game read its tail).
+iso2god-rs has the same latent defect. The writer now rounds the data volume
+up to a block with zeros beyond the extent and hashes the padded block;
+`god.DATA_ALIGN` states the rule for consumers that synthesise the layout. A
+full redump image is already a block multiple and its output is unchanged.
+
 **`--level N` for `.zar` output** (zstd 1..22): the writer's level is a
 flag now instead of a constant; content is identical at any level (blocks
 that do not shrink are stored raw), only size and time change.
