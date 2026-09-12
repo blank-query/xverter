@@ -424,6 +424,16 @@ def check_god_data(edge, header, src_path):
                 break
             y = f.read(len(x))
             if x != y:
+                # The writer rounds the data volume up to a whole 4 KiB
+                # block (god.DATA_ALIGN); when the source ends at its
+                # allocation extent, that block's remainder is zero fill
+                # the source never had. Accept exactly that: the source's
+                # bytes as a prefix, then fewer than one block of zeros.
+                tail = x[len(y):]
+                if (x[:len(y)] == y and 0 < len(tail) < _god.DATA_ALIGN
+                        and not any(tail)):
+                    at += len(y)
+                    break
                 ok = False
                 detail = " (first difference near byte %d of %d)" % (at, g.size)
                 break
