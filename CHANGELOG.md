@@ -10,8 +10,9 @@ image inside straight to the writers, so `Halo 3.7z → .god` is one streamed
 pass with no unpacked copy on disk. LZMA2 members compressed by 7-Zip's
 multithreaded encoder are entered at any dictionary-reset block, so seeks are
 cheap and blocks decode in parallel on any interpreter (liblzma releases the
-GIL); a single-threaded archive is one block and restarts on a backward seek
-- correct, just paid for like a pipe. LZMA2, LZMA and Copy folders are
+GIL); a single-threaded (or LZMA1) archive is one block with no entry points, so a
+conversion decodes it once into the scratch dir - CRC-checked, then
+authenticated against redump like any ISO - and converts from there. LZMA2, LZMA and Copy folders are
 decoded natively; anything else (BCJ filters, PPMd, BZip2, Deflate, AES)
 falls back to the 7-Zip engine exactly as before. `.7z → .iso` is one
 continuous read checked against the archive's CRC; every other target reads
@@ -21,6 +22,10 @@ game's identity out of a `.7z` without decompressing past the executable,
 the conversion with a clear error instead of a traceback. Proven on the real
 7.8 GB Halo CE rip: every random read and a full sequential read match the
 extracted ISO, and `.7z → .cci` is byte-identical to `.iso → .cci`.
+
+**`--level N` for `.zar` output** (zstd 1..22): the writer's level is a
+flag now instead of a constant; content is identical at any level (blocks
+that do not shrink are stored raw), only size and time change.
 
 **`probe()` recognises a content package stored bare inside an archive**
 (`<TitleID>/<ContentType>/<contentid>`, the way TorrentZipped XBLA rips are
