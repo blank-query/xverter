@@ -92,11 +92,15 @@ try:
     except Exception:                              # noqa: BLE001
         _NB_WORKERS = 0
 
-    def _zstd_compress(raw):
-        c = getattr(_zstd_tls, "c", None)
+    def _zstd_compress(raw, level=None):
+        level = DEFAULT_LEVEL if level is None else level
+        cs = getattr(_zstd_tls, "c", None)
+        if cs is None:
+            cs = _zstd_tls.c = {}
+        c = cs.get(level)
         if c is None:
-            c = _zstd_tls.c = _zstd.ZstdCompressor(options={
-                _zstd.CompressionParameter.compression_level: _ZSTD_LEVEL,
+            c = cs[level] = _zstd.ZstdCompressor(options={
+                _zstd.CompressionParameter.compression_level: level,
                 _zstd.CompressionParameter.nb_workers: _NB_WORKERS,
             })
         return c.compress(raw, _zstd.ZstdCompressor.FLUSH_FRAME)
@@ -112,11 +116,14 @@ except ImportError:  # pragma: no cover - depends on interpreter version
             return _zstandard.ZstdDecompressor().decompress(
                 raw, max_output_size=64 * 1024)
 
-        def _zstd_compress(raw):
-            comp = getattr(_zstd_tls, "c", None)
+        def _zstd_compress(raw, level=None):
+            level = DEFAULT_LEVEL if level is None else level
+            cs = getattr(_zstd_tls, "c", None)
+            if cs is None:
+                cs = _zstd_tls.c = {}
+            comp = cs.get(level)
             if comp is None:
-                comp = _zstd_tls.c = _zstandard.ZstdCompressor(
-                    level=_ZSTD_LEVEL)
+                comp = cs[level] = _zstandard.ZstdCompressor(level=level)
             return comp.compress(raw)
 
         HAVE_ZSTD = True
@@ -135,7 +142,12 @@ _ENTRIES_PER_RECORD = 16
 _RECORD_SIZE = 8 + 2 * _ENTRIES_PER_RECORD  # 40
 _ENTRY_SIZE = 16
 _ROOT_NAME_OFFSET = 0x7FFFFFFF
-_ZSTD_LEVEL = 6            # matches the reference writer (StoreBlock, level 6)
+#: zstd level the writer uses when none is given. The reference writer
+#: (StoreBlock) used 6; a block is stored raw whenever compression does not
+#: shrink it, at any level. Bounds: 1..22.
+DEFAULT_LEVEL = 6
+MIN_LEVEL, MAX_LEVEL = 1, 22
+_ZSTD_LEVEL = DEFAULT_LEVEL   # kept for callers that poked the old name
 _MAX_NAME_BYTES = 128      # the reference reader misparses names >= 128 bytes
 _MAX_FILE_FIELD = 1 << 48  # file offset/size are 48-bit in FileDirectoryEntry
 _PACK_CHUNK = 1 << 20
@@ -657,8 +669,8 @@ def _zstd_pool():
     return _ZSTD_POOL
 
 
-def _compress_or_store(block):
-    comp = _zstd_compress(block)
+def _compress_or_store(block, level=None):
+    comp = _zstd_compress(block, level)
     return block if len(comp) >= _BLOCK_SIZE else comp
 
 
@@ -678,11 +690,15 @@ class ZarWriter:
     successful ``finalize()`` deletes the partial output file.
     """
 
-    def __init__(self, path):
+    def __init__(self, path, level=None):
         if not HAVE_ZSTD:
             raise ZarNativeError(
                 "compression.zstd is unavailable (Python 3.14+ required)"
             )
+        if level is not None and not (MIN_LEVEL <= int(level) <= MAX_LEVEL):
+            raise ZarNativeError("zstd level %r out of range %d..%d"
+                                 % (level, MIN_LEVEL, MAX_LEVEL))
+        self._level = None if level is None else int(level)
         self._path = os.fspath(path)
         self._root = _PathNode(b"", False)
         self._current: "_PathNode | None" = None
@@ -869,7 +885,7 @@ class ZarWriter:
         # single-shot zstd compression - determinism does not depend on
         # which thread ran it).
         self._pending.append(
-            _zstd_pool().submit(_compress_or_store, block))
+            _zstd_pool().submit(_compress_or_store, block, self._level))
         while len(self._pending) > 32:
             self._flush_one()
 
@@ -1008,7 +1024,7 @@ class ZarWriter:
         return w0, node.start_index, len(node.children), 0
 
 
-def pack(src_dir, zar_path, progress=None) -> int:
+def pack(src_dir, zar_path, progress=None, level=None) -> int:
     """Pack a directory tree into a new .zar file. Returns the file count.
 
     Deterministic: entries are packed in the archive's canonical order
@@ -1030,14 +1046,14 @@ def pack(src_dir, zar_path, progress=None) -> int:
                 continue
             grand += os.path.getsize(p)
     state = [0]
-    with ZarWriter(zar_path) as zw:
+    with ZarWriter(zar_path, level=level) as zw:
         count = _pack_tree(zw, src_dir, "", progress=progress,
                            grand=grand, state=state, skip=skip)
         zw.finalize()
     return count
 
 
-def pack_entries(entries, zar_path, progress=None) -> int:
+def pack_entries(entries, zar_path, progress=None, level=None) -> int:
     """Pack files that are not on disk into a new .zar file.
 
     `entries` is an iterable of (relpath, size, opener), opener being a
@@ -1074,7 +1090,7 @@ def pack_entries(entries, zar_path, progress=None) -> int:
         node[parts[-1]] = (size, opener)
         grand += size
     state = [0]
-    with ZarWriter(zar_path) as zw:
+    with ZarWriter(zar_path, level=level) as zw:
         count = _pack_nodes(zw, root, "", progress=progress,
                             grand=grand, state=state)
         zw.finalize()

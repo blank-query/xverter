@@ -311,7 +311,7 @@ def can_stream():
 
 
 def pack_entries(entries, zar_path, roundtrip_verify=True, manifest=None,
-                 progress=None, verify_progress=None):
+                 progress=None, verify_progress=None, level=None):
     """Pack (relpath, size, opener) entries into a zar without staging
     them on disk. See zar_native.pack_entries for why the result is
     byte-identical to packing the same files out of a directory.
@@ -337,7 +337,8 @@ def pack_entries(entries, zar_path, roundtrip_verify=True, manifest=None,
                     % (name, rel,
                        len(name.encode("utf-8", "surrogateescape"))))
     try:
-        zar_native.pack_entries(entries, zar_path, progress=progress)
+        zar_native.pack_entries(entries, zar_path, progress=progress,
+                                level=level)
     except zar_native.ZarNativeError as e:
         raise ZarError("native zar pack failed: %s" % e)
     if not roundtrip_verify:
@@ -364,7 +365,7 @@ def pack_entries(entries, zar_path, roundtrip_verify=True, manifest=None,
 
 
 def pack(src_dir, zar_path, roundtrip_verify=True, manifest=None,
-         progress=None, verify_progress=None):
+         progress=None, verify_progress=None, level=None):
     if os.path.exists(zar_path):
         raise ZarError("output already exists: %s" % zar_path)
     # The ZArchive reference implementation (which Xenia embeds) misreads
@@ -391,7 +392,8 @@ def pack(src_dir, zar_path, roundtrip_verify=True, manifest=None,
         manifest = hash_tree(src_dir)
     if _NATIVE:
         try:
-            zar_native.pack(src_dir, zar_path, progress=progress)
+            zar_native.pack(src_dir, zar_path, progress=progress,
+                            level=level)
         except zar_native.ZarNativeError as e:
             raise ZarError("native zar pack failed: %s" % e)
     else:

@@ -1577,7 +1577,8 @@ def _convert_store(args):
             "<TitleID>/<ContentType>/<contentid>), not a single file")
     prog = _Progress(getattr(args, "progress", None)
                      or ("tty" if sys.stderr.isatty() else None))
-    zar_mod.pack(args.input, args.output, progress=prog.cb("store"))
+    zar_mod.pack(args.input, args.output, progress=prog.cb("store"),
+                 level=getattr(args, "level", None))
     print("wrote %s (stored verbatim, round-trip verified)" % args.output)
 
 
@@ -2113,6 +2114,7 @@ def cmd_convert(args):
             entries, closer = stfs_mod.file_entries(path, manifest=man)
             try:
                 zar_mod.pack_entries(entries, args.output,
+                                     level=getattr(args, "level", None),
                                      roundtrip_verify=not args.no_verify,
                                      manifest=man,
                                      progress=prog.cb("zar-write"),
@@ -2157,6 +2159,7 @@ def cmd_convert(args):
                     entries = xdvdfs_mod.file_entries(probe, opener=opener,
                                                       manifest=man)
                 zar_mod.pack_entries(entries, args.output,
+                                     level=getattr(args, "level", None),
                                      roundtrip_verify=not args.no_verify,
                                      manifest=man,
                                      progress=prog.cb("zar-write"),
@@ -2211,7 +2214,7 @@ def cmd_convert(args):
                      else "extracted and hashed - a folder carries no "
                           "container to re-verify"))
         elif out_kind == "zar":
-            zar_mod.pack(gamedir, args.output,
+            zar_mod.pack(gamedir, args.output, level=getattr(args, "level", None),
                          roundtrip_verify=not args.no_verify,
                          manifest=manifest, progress=prog.cb("zar-write"),
                          verify_progress=prog.cb("verify"))
@@ -2409,6 +2412,15 @@ def main(argv=None):
     p.add_argument("--media-id", metavar="HEX", default=None,
                    help="override the media id for .stfs output (0x-hex or "
                         "decimal). Normally read from the payload default.xex")
+    p.add_argument("--level", metavar="N", type=int, default=None,
+                   choices=range(zar_native_mod.MIN_LEVEL,
+                                 zar_native_mod.MAX_LEVEL + 1),
+                   help="zstd compression level for .zar output, %d..%d "
+                        "(default %d). Blocks that do not shrink are stored "
+                        "raw at any level, so the archive is byte-identical in "
+                        "content whichever level built it"
+                        % (zar_native_mod.MIN_LEVEL, zar_native_mod.MAX_LEVEL,
+                           zar_native_mod.DEFAULT_LEVEL))
     p.add_argument("--thumbnail", metavar="PNG", default=None,
                    help="embed this PNG as the package icon for .stfs "
                         "output (what a dashboard shows). Max 16 KB. A "
