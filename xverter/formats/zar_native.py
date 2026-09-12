@@ -43,7 +43,7 @@ The integrity hash is SHA-256 over the whole file up to the footer, followed
 by the serialized footer with its hash field zeroed.
 
 The writer (``ZarWriter`` / ``pack``) mirrors the reference
-``ZArchiveWriter``: 64 KiB blocks zstd-compressed at level 6 (stored raw
+``ZArchiveWriter``: 64 KiB blocks zstd-compressed at level 19 by default (stored raw
 when compression does not shrink them), the final partial block
 zero-padded to a full block, directory entries sorted case-insensitively
 (ASCII fold, bytewise) within each directory, and the tree serialized
@@ -142,10 +142,12 @@ _ENTRIES_PER_RECORD = 16
 _RECORD_SIZE = 8 + 2 * _ENTRIES_PER_RECORD  # 40
 _ENTRY_SIZE = 16
 _ROOT_NAME_OFFSET = 0x7FFFFFFF
-#: zstd level the writer uses when none is given. The reference writer
-#: (StoreBlock) used 6; a block is stored raw whenever compression does not
-#: shrink it, at any level. Bounds: 1..22.
-DEFAULT_LEVEL = 6
+#: zstd level the writer uses when none is given: 19, the top of zstd's
+#: "normal" range (the reference writer used 6). Rigs' ruling after the
+#: 2026-09-11 benchmark: archival output takes the smaller file. A block
+#: is stored raw whenever compression does not shrink it, at any level,
+#: so content is identical whichever level built it. Bounds: 1..22.
+DEFAULT_LEVEL = 19
 MIN_LEVEL, MAX_LEVEL = 1, 22
 _ZSTD_LEVEL = DEFAULT_LEVEL   # kept for callers that poked the old name
 _MAX_NAME_BYTES = 128      # the reference reader misparses names >= 128 bytes

@@ -35,9 +35,11 @@ up to a block with zeros beyond the extent and hashes the padded block;
 `god.DATA_ALIGN` states the rule for consumers that synthesise the layout. A
 full redump image is already a block multiple and its output is unchanged.
 
-**`--level N` for `.zar` output** (zstd 1..22): the writer's level is a
-flag now instead of a constant; content is identical at any level (blocks
-that do not shrink are stored raw), only size and time change.
+**`--level N` for `.zar` output** (zstd 1..22), and **the default is now 19**
+(was 6): content is identical at any level (blocks that do not shrink are
+stored raw), only size and build time change - measured on the real fixtures,
+19 is 0.3-1% smaller than 6 for about 4x the compression time, and archival
+output takes the smaller file. `--level 6` gets the old behaviour.
 
 **`probe()` recognises a content package stored bare inside an archive**
 (`<TitleID>/<ContentType>/<contentid>`, the way TorrentZipped XBLA rips are
