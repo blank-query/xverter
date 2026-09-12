@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+**`.7z` input is read in place by xVerter's own 7z reader.** A `.7z` holding
+a disc image is no longer extracted first: the new pure-Python reader
+(`formats/sevenzip.py`, written from 7-Zip's `7zFormat.txt`) parses the
+archive - plain and packed headers, solid folders, substreams - and hands the
+image inside straight to the writers, so `Halo 3.7z → .god` is one streamed
+pass with no unpacked copy on disk. LZMA2 members compressed by 7-Zip's
+multithreaded encoder are entered at any dictionary-reset block, so seeks are
+cheap and blocks decode in parallel on any interpreter (liblzma releases the
+GIL); a single-threaded archive is one block and restarts on a backward seek
+- correct, just paid for like a pipe. LZMA2, LZMA and Copy folders are
+decoded natively; anything else (BCJ filters, PPMd, BZip2, Deflate, AES)
+falls back to the 7-Zip engine exactly as before. `.7z → .iso` is one
+continuous read checked against the archive's CRC; every other target reads
+at random and is verified by its own rules. `probe()` and `info` read a
+game's identity out of a `.7z` without decompressing past the executable,
+`info` reports the coder and block count, and a corrupt LZMA stream fails
+the conversion with a clear error instead of a traceback. Proven on the real
+7.8 GB Halo CE rip: every random read and a full sequential read match the
+extracted ISO, and `.7z → .cci` is byte-identical to `.iso → .cci`.
+
+**`probe()` recognises a content package stored bare inside an archive**
+(`<TitleID>/<ContentType>/<contentid>`, the way TorrentZipped XBLA rips are
+laid out) and reads its identity from the member's header.
+
+**STFS file-table names are raw bytes**, not ASCII: a Japanese-authored
+package's Shift-JIS names round-trip through STFS, zar, folder and ISO
+byte-for-byte (the same convention XDVDFS names got in 1.4.x). Proven on
+hardware: a package carrying such a name registers and boots.
+
 ## 1.4.0 — the format it could only read
 
 **New writer: STFS (`.stfs`) output — write LIVE packages from any input.**

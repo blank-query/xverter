@@ -32,6 +32,7 @@ from .formats import cci as cci_mod
 from .formats import cso as cso_mod
 from .formats import chd as chd_mod
 from .formats import archives as archives_mod
+from .formats import sevenzip as sevenzip_mod
 from .formats import lz4compat as lz4compat_mod
 from .formats import zar_native as zar_native_mod
 from . import datcache
@@ -265,6 +266,9 @@ def _image_opener(kind, path):
         return lambda: cci_mod.CciReader(path)
     if kind == "cso":
         return lambda: cso_mod.CsoReader(path)
+    if kind == "7z":
+        # the disc image inside the archive, read in place by the 7z reader
+        return lambda: archives_mod.open_native_image(path)
     # CHD is absent here on purpose, but not because streaming is slow:
     # a whole-image target (god/cci/cso) carries the padding too, so its
     # fidelity rests on the CHD's whole-image SHA-1, which the materialise
@@ -321,6 +325,13 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
         xdvdfs_mod.extract(path, out, quiet=True, manifest=manifest,
                            progress=progress,
                            opener=lambda: open(path, "rb"))
+    elif kind == "7z":
+        # straight out of the archive's image; every parallel reader gets
+        # its own decoder through the opener
+        with archives_mod.open_native_image(path) as stream:
+            xdvdfs_mod.extract(stream, out, quiet=True, manifest=manifest,
+                               progress=progress,
+                               opener=lambda: archives_mod.open_native_image(path))
     elif kind == "zar":
         zar_mod.unpack(path, out, manifest=manifest, progress=progress)
     elif kind == "stfs":
@@ -458,6 +469,9 @@ def _source_image(kind, path, w):
     if kind == "god":
         s = god_mod.GodStream(path)
         return s, s.close
+    if kind == "7z":
+        m = archives_mod.open_native_image(path)
+        return m, m.close
     if kind in ("zar", "gamedir", "stfs"):
         img, extra = _lazy_image_source(kind, path)
 
@@ -528,7 +542,7 @@ def _write_xiso(kind, path, out_path, prog, verify=True):
         # and the slice below copies the whole (already-trimmed) image.
         # Only a raw iso can be untrimmed, so only a raw iso is refused
         # for having nothing to trim.
-        if base == 0 and kind == "iso":
+        if base == 0 and kind in ("iso", "7z"):
             raise CliError(
                 "input is already a bare xiso - its game partition "
                 "starts at byte 0, there is no video partition to trim. "
@@ -1025,7 +1039,7 @@ class _SourceHashAhead:
         self._err = []
         self._t = None
         if in_kind not in ("iso", "god", "cci", "cso", "chd",
-                            "zar", "gamedir", "stfs"):
+                            "zar", "gamedir", "stfs", "7z"):
             return                       # nothing streamable to read ahead
         self._t = threading.Thread(
             target=self._run, args=(in_kind, in_path, w), daemon=True)
@@ -1072,6 +1086,13 @@ def _source_stream_sha1(in_kind, in_path, w):
     if in_kind == "god":
         with god_mod.GodStream(in_path) as f:
             return _hash(f)
+    if in_kind == "7z":
+        # the image inside the archive, hashed like a raw iso (from the
+        # game partition when it is a full OG Xbox redump)
+        with archives_mod.open_native_image(in_path) as f:
+            from .formats.cci import xbox_image_offset
+            f.seek(xbox_image_offset(f))
+            return _hash(f, seek0=False)
     if in_kind in ("zar", "gamedir", "stfs"):
         # An independent second synthesis of the same tree - a fresh
         # LazyImage - so a transient read error during the build's stream
@@ -1236,6 +1257,31 @@ def cmd_info(args):
                   % h["parent_sha1"])
     elif kind in ("zip", "7z"):
         entries = archives_mod.list_entries(path)
+        if kind == "7z":
+            # what xverter's own 7z reader makes of it: the coder, and how
+            # many independently decodable LZMA2 blocks the image has
+            # (one = single-threaded archive, no random access)
+            try:
+                arc = sevenzip_mod.Archive(path)
+                for m in arc.members:
+                    if m.name.lower().endswith((".iso", ".xiso")):
+                        nat = arc.native(m.name)
+                        nb = arc.block_count(m.name) if nat else 0
+                        if not nat:
+                            what = "not decoded natively - extracted with the 7-Zip engine"
+                        elif nb > 1:
+                            what = ("%d LZMA2 blocks - read in place, random "
+                                    "access + parallel decode" % nb)
+                        else:
+                            what = ("one block - a conversion decodes it once "
+                                    "into scratch (no random access%s)"
+                                    % (", single-threaded archive"
+                                       if m.folder.coder_name() == "LZMA2"
+                                       else ", %s has no blocks" % m.folder.coder_name()))
+                        print("7z     : %s, %s" % (m.folder.coder_name(), what))
+                        break
+            except sevenzip_mod.SevenZipError as e:
+                print("7z     : %s (extracted with the 7-Zip engine)" % e)
         print("entries: %d (%d bytes uncompressed)"
               % (len(entries), sum(sz for _n, sz in entries)))
         for n, sz in sorted(entries, key=lambda e: -e[1])[:5]:
@@ -1562,15 +1608,50 @@ def cmd_convert(args):
                    if os.path.exists(p)}
     try:
         if kind in ("zip", "7z"):
-            # Transparent input layer: extract, find the game inside,
-            # continue as that kind.
-            arc_dir = os.path.join(w, "archive_in")
-            archives_mod.extract(path, arc_dir,
-                                 progress=prog.cb("unpack"))
-            payload = archives_mod.find_payload(arc_dir)
-            kind, path = detect_mod.detect(payload)
-            print("archive payload: %s (%s)"
-                  % (os.path.basename(path.rstrip(os.sep)), kind))
+            # Transparent input layer. A .7z holding a disc image that
+            # xverter's own 7z reader decodes is read IN PLACE - the
+            # writers consume the member like an ISO, no extracted copy
+            # on disk (kind stays "7z"; every image seam below accepts
+            # it). Anything else - a zip, another payload kind, a coder
+            # the reader does not do, or an archive OUTPUT (which wraps
+            # the unpacked payload) - is extracted with the engine, the
+            # game found inside, and continues as that kind.
+            native = (archives_mod.native_image(path)
+                      if kind == "7z" and out_kind not in ("zip", "7z")
+                      else None)
+            if native and native[1] == 1 and os.path.getsize(path) >= \
+                    archives_mod.SINGLE_BLOCK_DECODE_MIN:
+                # A single-threaded archive: one block, no entry points, and
+                # a conversion reads the image several times. Decode it
+                # ONCE into the work dir (native, CRC-checked - what the
+                # engine's extraction gave, minus the engine) and continue
+                # as an iso. A multithreaded archive streams in place.
+                member, _blocks = native
+                arc_dir = os.path.join(w, "archive_in")
+                os.makedirs(arc_dir, exist_ok=True)
+                iso_path = os.path.join(arc_dir, os.path.basename(member))
+                ok = archives_mod.decode_member(path, member, iso_path,
+                                                progress=prog.cb("unpack"))
+                kind, path = "iso", iso_path
+                print("archive payload: %s (iso, decoded once from the "
+                      "single-block 7z%s)"
+                      % (os.path.basename(member),
+                         ", CRC verified" if ok else ""))
+            elif native:
+                member, blocks = native
+                print("archive payload: %s (iso, read in place from the "
+                      "7z: %s)" % (os.path.basename(member),
+                                   "%d LZMA2 blocks - random access + "
+                                   "parallel decode" % blocks if blocks > 1
+                                   else "1 LZMA2 block, small - streamed"))
+            else:
+                arc_dir = os.path.join(w, "archive_in")
+                archives_mod.extract(path, arc_dir,
+                                     progress=prog.cb("unpack"))
+                payload = archives_mod.find_payload(arc_dir)
+                kind, path = detect_mod.detect(payload)
+                print("archive payload: %s (%s)"
+                      % (os.path.basename(path.rstrip(os.sep)), kind))
         # Only ISO sources get authenticated, but every path reports,
         # so start from a disabled one rather than a name that exists on
         # some branches and not others.
@@ -1674,7 +1755,7 @@ def cmd_convert(args):
                 return 0
             kind, path = "iso", chd_iso
         if out_kind == "xiso":
-            if kind in ("iso", "god", "cci", "cso"):
+            if kind in ("iso", "god", "cci", "cso", "7z"):
                 # Image-bearing sources hand over the pressed image, so
                 # the xiso is a byte slice of its game partition - the
                 # original layout, not a rebuild. (A CHD source was
@@ -1714,6 +1795,37 @@ def cmd_convert(args):
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "unpacked from the archive, member CRC verified"))
+            return 0
+        if out_kind == "iso" and kind == "7z":
+            # The image inside the archive, copied out sequentially - one
+            # continuous read from byte 0, which is exactly the read the
+            # 7z reader CRC-checks against the archive's own digest, so
+            # the integrity claim is the same one the extract path made.
+            with archives_mod.open_native_image(path) as src, \
+                    open(args.output, "wb") as dst:
+                done = 0
+                cb = prog.cb("unpack")
+                while True:
+                    chunk = src.read(4 << 20)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+                    done += len(chunk)
+                    if cb:
+                        cb(done, src.size)
+                ok = src.crc_ok()
+            if ok is False:
+                raise CliError("the image inside %s does not match the "
+                               "archive's CRC - the archive is damaged"
+                               % os.path.basename(path))
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output,
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
+                     else ("unpacked from the archive, member CRC verified"
+                           if ok else "unpacked from the archive, no CRC "
+                           "recorded for the member")))
             return 0
         if out_kind == "iso" and kind == "god":
             # direct verified path, no pivot needed
@@ -2365,6 +2477,7 @@ def main(argv=None):
             # bug rather than their file.
             cci_mod.CciError, cso_mod.CsoError, chd_mod.ChdError,
             archives_mod.ArchiveError, zar_native_mod.ZarNativeError,
+            sevenzip_mod.SevenZipError,
             lz4compat_mod.Lz4Error, lz4compat_mod.Lz4Missing) as e:
         if _json_mode():
             _emit({"event": "error", "message": str(e)})
