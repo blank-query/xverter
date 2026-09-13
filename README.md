@@ -234,7 +234,7 @@ xverter dat     update|status              # manage the bundled/cached redump da
 | Flag | Effect |
 |------|--------|
 | `-o PATH` | output — extension picks the format: `.iso` `.zar` `.god` `.cci` `.cso` `.chd` `.zip` `.7z`, or a trailing `/` for an extracted folder |
-| `--level N` | zstd level for `.zar` output, 1–22 (default 19). Content is identical at any level — blocks that don't shrink are stored raw — only size and build time change; `--level 6` is the old default and builds about 4× faster for ~1% larger files |
+| `--level N` | zstd level for `.zar` output, 1–22 (default 9). Content is identical at any level — blocks that don't shrink are stored raw — only size and build time change; `--level 19` is ~2% smaller for roughly 10× the build time |
 | `--leeroy-jenkins` | skip **every** check — no structure validation, no output verification, no redump authentication. Halves I/O; outputs carry no guarantees |
 | `--split` | split `.cci`/`.cso` at 4GiB for console FATX storage (default: one file) |
 | `--scratch ram` | keep pivot files in a tmpfs — Linux, needs ~2.2× game size *available* |
