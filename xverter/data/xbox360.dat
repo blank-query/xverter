@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3708) (2026-09-07 08-39-01)</description>
-		<version>2026-09-07 08-39-01</version>
-		<date>2026-09-07 08-39-01</date>
+		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-09-14 07-52-40)</description>
+		<version>2026-09-14 07-52-40</version>
+		<date>2026-09-14 07-52-40</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -4194,6 +4194,11 @@
 		<category>Games</category>
 		<description>Disney Infinity (Europe) (Fr,De,It,Nl)</description>
 		<rom name="Disney Infinity (Europe) (Fr,De,It,Nl).iso" size="7838695424" crc="8fa72a0b" md5="c926fe35e36798876dbd77b1401c928a" sha1="cef47d4bc29c39376c9b03e6b361172fd62847ac"/>
+	</game>
+	<game name="Disney Infinity (Scandinavia)" id="138204">
+		<category>Games</category>
+		<description>Disney Infinity (Scandinavia)</description>
+		<rom name="Disney Infinity (Scandinavia).iso" size="7838695424" crc="c1e02de5" md5="8664f68eabb14540f1c2ab6245451a9b" sha1="603fbf07c8302b69c4035b496b2a1f5e09e0d8b7"/>
 	</game>
 	<game name="Disney Infinity (USA) (En,Fr,Es,Pt)" id="60557">
 		<category>Games</category>
