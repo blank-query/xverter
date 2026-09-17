@@ -1301,14 +1301,75 @@ def cmd_info(args):
     return 0
 
 
+# Damage, as opposed to "we do not recognise this". Every one of these
+# means a check we ran said the bytes are not what they claim to be, so
+# verify can say so in a sentence instead of handing back a stack trace.
+_DAMAGE_ERRORS = (god_mod.GodError, xdvdfs_mod.XdvdfsError,
+                  zar_mod.ZarError, zar_native_mod.ZarNativeError,
+                  stfs_mod.StfsError, cci_mod.CciError, cso_mod.CsoError,
+                  chd_mod.ChdError, archives_mod.ArchiveError,
+                  sevenzip_mod.SevenZipError, lz4compat_mod.Lz4Error)
+
+
+def _verify_verdict(st):
+    """One plain sentence, and the next action.
+
+    "Damaged" and "not in the database" are different findings and are
+    reported as such: a dump redump has never catalogued is not a broken
+    file, and telling someone to re-download a perfectly good rip earns
+    a worse support ticket than the one it avoids."""
+    print()
+    if st["damage"]:
+        print("verdict: this file is DAMAGED - %s" % st["damage"])
+        print("         Converting will not repair it. Get another copy.")
+        return 1
+    auth = st["authed"]
+    if auth is True:
+        print("verdict: INTACT, and it matches a redump entry - this is a "
+              "known-good copy of the disc. Good to convert.")
+        return 0
+    # How strong the "intact" claim is depends on what the form could
+    # prove. A hash tree that verifies is evidence; parsing an ISO is not.
+    if st["selfcheck"]:
+        strength = "INTACT - its own internal checksums all verify"
+    elif st["fullread"]:
+        strength = ("INTACT as far as this format can show - every byte "
+                    "read cleanly, but this form carries no checksums of "
+                    "its own, so that is the strongest claim available")
+    else:
+        strength = ("STRUCTURE OK - it parses and its table of contents is "
+                    "readable, but not every byte was read. Re-run with "
+                    "--deep for a full read")
+    print("verdict: %s." % strength)
+    if auth is False:
+        print("         It matches no redump entry, so it is a trimmed or "
+              "otherwise non-redump rip. That is NOT a damaged file.")
+        print("         Good to convert. Layout provenance cannot be "
+              "established for it.")
+    else:
+        print("         Good to convert.")
+    return 0
+
+
 def cmd_verify(args):
     prog = _Progress(getattr(args, "progress", None)
                      or ("tty" if sys.stderr.isatty() else None))
+    st = {"authed": None, "damage": None, "selfcheck": False,
+          "fullread": False}
+    try:
+        _verify_body(args, prog, st)
+    except _DAMAGE_ERRORS as e:
+        st["damage"] = str(e)
+    return _verify_verdict(st)
+
+
+def _verify_body(args, prog, st):
     kind, path = detect_mod.detect(args.input)
     print("format: %s" % kind)
     if kind == "god":
         god_mod.convert(path, None, verify_only=True,
                         progress=prog.cb("verify"))
+        st["selfcheck"] = True            # SVOD hash tree verified
     elif kind == "iso":
         if args.deep:
             w = _tempdir()
@@ -1316,6 +1377,7 @@ def cmd_verify(args):
                 xdvdfs_mod.extract(path, os.path.join(w, "x"), quiet=True,
                                    progress=prog.cb("deep-read"))
                 print("verified: full extraction OK - every file read and hashed")
+                st["fullread"] = True
             finally:
                 shutil.rmtree(w, ignore_errors=True)
         else:
@@ -1329,17 +1391,20 @@ def cmd_verify(args):
             # catalogs full discs. Not applicable is not a failure.
             print("authentication not applicable: bare game partition "
                   "(redump catalogs full disc images only)")
+            st["authed"] = None
         elif args.dat or not args.no_lookup:
             crc, sha1 = _stream_hashes(path, progress=prog.cb("hash"))
+            st["fullread"] = True         # whole-image hash = whole-image read
             size = os.path.getsize(path)
             if args.dat:
                 name = _dat_lookup(args.dat, size, crc, sha1)
                 if name:
                     print("authenticated: %s (crc=%s sha1=%s)" % (name, crc, sha1))
+                    st["authed"] = True
                 else:
                     print("NOT authenticated: no DAT entry matches "
                           "(size=%d crc=%s sha1=%s)" % (size, crc, sha1))
-                    return 1
+                    st["authed"] = False
             else:
                 hit = None
                 oldest = None
@@ -1357,6 +1422,7 @@ def cmd_verify(args):
                         if hit:
                             # a match is a match - age is irrelevant on a hit
                             print("authenticated (%s): %s" % (label, hit))
+                            st["authed"] = True
                             break
                     if hit:
                         break
@@ -1376,7 +1442,7 @@ def cmd_verify(args):
                         print("       (your cached DAT is %d days old - "
                               "`xverter dat update` first if you have not "
                               "lately)" % oldest)
-                    return 1
+                    st["authed"] = False
     elif kind == "zar":
         n = None
         try:
@@ -1386,6 +1452,7 @@ def cmd_verify(args):
         if n is not None:
             print("zar verify: embedded SHA-256 OK over all bytes "
                   "(%d files, nothing written)" % n)
+            st["selfcheck"] = True
         else:
             w = _tempdir()
             try:
@@ -1409,6 +1476,7 @@ def cmd_verify(args):
                     _vcb(n, f.size)
         print("%s verify: all blocks decoded OK (%d bytes, stream sha1 %s)"
               % (kind, n, h.hexdigest()))
+        st["fullread"] = True
         print("         note: %s carries no checksums, so decoding cleanly "
               "is the strongest claim the format permits - it cannot prove "
               "the data is what was originally stored. For storage that "
@@ -1419,12 +1487,15 @@ def cmd_verify(args):
         print("chd verify: decompressed everything and matched the "
               "internal SHA-1s (%d bytes, raw sha1 %s)"
               % (h["logical_bytes"], h["raw_sha1"]))
+        st["selfcheck"] = True
     elif kind == "stfs":
-        st = stfs_mod.verify_chains(path, progress=prog.cb("verify"))
+        chains = stfs_mod.verify_chains(path, progress=prog.cb("verify"))
+        st["selfcheck"] = True
         print("stfs verify: complete internal hash chain OK "
               "(%d blocks, %d L0 tables, %d level(s)%s)"
-              % (st["blocks"], st["l0_tables"], st["levels"],
-                 ", doubled tables" if st["doubled_tables"] else ""))
+              % (chains["blocks"], chains["l0_tables"],
+                 chains["levels"],
+                 ", doubled tables" if chains["doubled_tables"] else ""))
     elif kind in ("zip", "7z"):
         w = _tempdir()
         try:
@@ -1434,16 +1505,46 @@ def cmd_verify(args):
             pkind, ppath = detect_mod.detect(payload)
             print("archive extracts OK; payload: %s (%s) - verifying it"
                   % (os.path.basename(ppath.rstrip(os.sep)), pkind))
+            st["selfcheck"] = True        # every member's CRC32 checked
             sub = argparse.Namespace(input=ppath, deep=args.deep,
                                      dat=args.dat,
                                      no_lookup=args.no_lookup,
                                      progress=getattr(args, "progress",
                                                       False))
-            return cmd_verify(sub)
+            return _verify_body(sub, prog, st)
         finally:
             shutil.rmtree(w, ignore_errors=True)
     elif kind == "gamedir":
-        print("nothing to verify for an extracted directory")
+        nfiles = nbytes = 0
+        for dirpath, _dirs, files in os.walk(path):
+            for n in files:
+                fp = os.path.join(dirpath, n)
+                try:
+                    nbytes += os.path.getsize(fp)
+                except OSError as e:
+                    raise CliError("cannot stat %s (%s)" % (fp, e))
+                nfiles += 1
+        print("gamedir: %d files, %d bytes" % (nfiles, nbytes))
+        if args.deep:
+            read = 0
+            _dcb = prog.cb("deep-read")
+            for dirpath, _dirs, files in os.walk(path):
+                for n in sorted(files):
+                    with open(os.path.join(dirpath, n), "rb") as f:
+                        while True:
+                            b = f.read(1 << 22)
+                            if not b:
+                                break
+                            read += len(b)
+                    if _dcb:
+                        _dcb(read, nbytes)
+            print("gamedir: every file read OK (%d bytes)" % read)
+            st["fullread"] = True
+        else:
+            print("         (use --deep to read every file, not just stat it)")
+        print("         note: a directory carries no checksums of its own, "
+              "so structure and readability is the strongest claim the "
+              "form permits.")
     else:
         raise CliError("verify not supported yet for %r" % kind)
     return 0
