@@ -170,8 +170,13 @@ def probe(src):
         tid = hdr["title_id"]
         ctype = hdr.get("content_type")
         name = hdr.get("title") or _titledb.name_for_title_id(tid)
+        # 0x5000 is an Xbox Original: an SVOD disc package like 0x7000,
+        # not an STFS content package. Omitting it here made every bare
+        # Xbox Original GoD tree probe as kind="stfs" - the archive path
+        # below already had it right, and the two disagreed.
         return {"title_id": tid,
-                "kind": "stfs" if ctype not in (0x7000, None) else "god",
+                "kind": ("stfs" if ctype not in (0x7000, 0x5000, None)
+                         else "god"),
                 "name": name}
 
     if kind in ("zip", "7z"):
