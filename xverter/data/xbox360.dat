@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-09-14 07-52-40)</description>
-		<version>2026-09-14 07-52-40</version>
-		<date>2026-09-14 07-52-40</date>
+		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-09-20 21-02-35)</description>
+		<version>2026-09-20 21-02-35</version>
+		<date>2026-09-20 21-02-35</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -4195,10 +4195,10 @@
 		<description>Disney Infinity (Europe) (Fr,De,It,Nl)</description>
 		<rom name="Disney Infinity (Europe) (Fr,De,It,Nl).iso" size="7838695424" crc="8fa72a0b" md5="c926fe35e36798876dbd77b1401c928a" sha1="cef47d4bc29c39376c9b03e6b361172fd62847ac"/>
 	</game>
-	<game name="Disney Infinity (Scandinavia)" id="138204">
+	<game name="Disney Infinity (Scandinavia) (Sv,No,Da,Fi)" id="138204">
 		<category>Games</category>
-		<description>Disney Infinity (Scandinavia)</description>
-		<rom name="Disney Infinity (Scandinavia).iso" size="7838695424" crc="c1e02de5" md5="8664f68eabb14540f1c2ab6245451a9b" sha1="603fbf07c8302b69c4035b496b2a1f5e09e0d8b7"/>
+		<description>Disney Infinity (Scandinavia) (Sv,No,Da,Fi)</description>
+		<rom name="Disney Infinity (Scandinavia) (Sv,No,Da,Fi).iso" size="7838695424" crc="c1e02de5" md5="8664f68eabb14540f1c2ab6245451a9b" sha1="603fbf07c8302b69c4035b496b2a1f5e09e0d8b7"/>
 	</game>
 	<game name="Disney Infinity (USA) (En,Fr,Es,Pt)" id="60557">
 		<category>Games</category>
@@ -15179,10 +15179,10 @@
 		<description>Soldier of Fortune - Payback (Australia)</description>
 		<rom name="Soldier of Fortune - Payback (Australia).iso" size="7835492352" crc="7981ea5c" md5="583beab448c3f2f9560e1c682aa3ad1f" sha1="bdbd59fd13a92d6f1e7d87ec36a2ea60ea1a7c44"/>
 	</game>
-	<game name="Soldier of Fortune - Payback (USA, Europe)" id="63280">
+	<game name="Soldier of Fortune - Payback (World)" id="63280">
 		<category>Games</category>
-		<description>Soldier of Fortune - Payback (USA, Europe)</description>
-		<rom name="Soldier of Fortune - Payback (USA, Europe).iso" size="7835492352" crc="5f22b60c" md5="94ed6d0840e6f97dcf7c49c04b78f99b" sha1="14a3acd7842309716e9d15a722cb9346d9bc840e"/>
+		<description>Soldier of Fortune - Payback (World)</description>
+		<rom name="Soldier of Fortune - Payback (World).iso" size="7835492352" crc="5f22b60c" md5="94ed6d0840e6f97dcf7c49c04b78f99b" sha1="14a3acd7842309716e9d15a722cb9346d9bc840e"/>
 	</game>
 	<game name="Sonic &amp; All-Stars Racing Transformed (World) (En,Fr,De,Es,It)" id="58143">
 		<category>Games</category>
@@ -15429,20 +15429,20 @@
 		<description>Star Ocean - The Last Hope (Korea) (Disc 3)</description>
 		<rom name="Star Ocean - The Last Hope (Korea) (Disc 3).iso" size="7835492352" crc="1a1311bb" md5="3bfcc284ed98d920bc972b892c0c100c" sha1="e2cd0c738da16133514d6516a7dc9cf41f214eb1"/>
 	</game>
-	<game name="Star Ocean - The Last Hope (USA) (Disc 1)" id="11846">
+	<game name="Star Ocean - The Last Hope (USA, Canada) (Disc 1)" id="11846">
 		<category>Games</category>
-		<description>Star Ocean - The Last Hope (USA) (Disc 1)</description>
-		<rom name="Star Ocean - The Last Hope (USA) (Disc 1).iso" size="7835492352" crc="446fe678" md5="206555d8018994dce31867d560cc21f8" sha1="8c97121fe874321d191ec3f770d1c0588191ad8f"/>
+		<description>Star Ocean - The Last Hope (USA, Canada) (Disc 1)</description>
+		<rom name="Star Ocean - The Last Hope (USA, Canada) (Disc 1).iso" size="7835492352" crc="446fe678" md5="206555d8018994dce31867d560cc21f8" sha1="8c97121fe874321d191ec3f770d1c0588191ad8f"/>
 	</game>
-	<game name="Star Ocean - The Last Hope (USA) (Disc 2)" id="11847">
+	<game name="Star Ocean - The Last Hope (USA, Canada) (Disc 2)" id="11847">
 		<category>Games</category>
-		<description>Star Ocean - The Last Hope (USA) (Disc 2)</description>
-		<rom name="Star Ocean - The Last Hope (USA) (Disc 2).iso" size="7835492352" crc="ab47f6f4" md5="cd5ceabf3a397dea7a6a4240e3ba76bb" sha1="e2b8e59e81ec55d57c909266be34467112596487"/>
+		<description>Star Ocean - The Last Hope (USA, Canada) (Disc 2)</description>
+		<rom name="Star Ocean - The Last Hope (USA, Canada) (Disc 2).iso" size="7835492352" crc="ab47f6f4" md5="cd5ceabf3a397dea7a6a4240e3ba76bb" sha1="e2b8e59e81ec55d57c909266be34467112596487"/>
 	</game>
-	<game name="Star Ocean - The Last Hope (USA) (Disc 3)" id="11848">
+	<game name="Star Ocean - The Last Hope (USA, Canada) (Disc 3)" id="11848">
 		<category>Games</category>
-		<description>Star Ocean - The Last Hope (USA) (Disc 3)</description>
-		<rom name="Star Ocean - The Last Hope (USA) (Disc 3).iso" size="7835492352" crc="1f9fdee3" md5="5787bd4c07b8e0960a4a7430da54e9c9" sha1="7ad72a7d79f8bc61f89ed0b3b76bc624cabce4e5"/>
+		<description>Star Ocean - The Last Hope (USA, Canada) (Disc 3)</description>
+		<rom name="Star Ocean - The Last Hope (USA, Canada) (Disc 3).iso" size="7835492352" crc="1f9fdee3" md5="5787bd4c07b8e0960a4a7430da54e9c9" sha1="7ad72a7d79f8bc61f89ed0b3b76bc624cabce4e5"/>
 	</game>
 	<game name="Star Trek (Asia) (En,Fr,De,Es,It,Ru)" id="130654">
 		<category>Games</category>
