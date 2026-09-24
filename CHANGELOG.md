@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.0 — in place, and in plain words
 
 **`.7z` input is read in place by xVerter's own 7z reader.** A `.7z` holding
 a disc image is no longer extracted first: the new pure-Python reader
@@ -50,6 +50,21 @@ laid out) and reads its identity from the member's header.
 package's Shift-JIS names round-trip through STFS, zar, folder and ISO
 byte-for-byte (the same convention XDVDFS names got in 1.4.x). Proven on
 hardware: a package carrying such a name registers and boots.
+
+**`verify` tells you what it found, in plain words.** It now ends with a verdict
+line instead of leaving you to read the checks: INTACT, INTACT-but-not-matched,
+STRUCTURE OK, or DAMAGED with the reason. Crucially it stops calling good files
+bad - an intact image that matches no redump entry is a trimmed or non-redump
+rip, not a broken file, and it no longer exits non-zero for that. Exit 1 now
+means damaged and nothing else. The verdict also states what was actually
+proven, so an ISO that was only parsed no longer claims more than that. A folder
+is verified too, rather than skipped.
+
+**An Xbox Original probes as a disc, not a content package.** `probe()` tested
+the content type in two places and they disagreed: a GoD inside an archive
+accepted `0x5000`, a GoD tree on disk did not, so the same Xbox Original came
+back as a disc from a `.7z` and as a content package from a directory. Anything
+routing on that mis-served every OG title read from a tree.
 
 ## 1.4.0 — the format it could only read
 
