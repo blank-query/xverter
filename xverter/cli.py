@@ -32,6 +32,7 @@ from .formats import cci as cci_mod
 from .formats import cso as cso_mod
 from .formats import chd as chd_mod
 from .formats import archives as archives_mod
+from .formats import sevenzip as sevenzip_mod
 from .formats import lz4compat as lz4compat_mod
 from .formats import zar_native as zar_native_mod
 from . import datcache
@@ -265,12 +266,44 @@ def _image_opener(kind, path):
         return lambda: cci_mod.CciReader(path)
     if kind == "cso":
         return lambda: cso_mod.CsoReader(path)
-    # CHD is deliberately absent: its reader decodes hunks on the
-    # calling thread, so bulk consumers are faster through the
-    # materialised pivot, whose extraction is parallel. Measured, not
-    # assumed - streaming only wins when the stream is not the
-    # bottleneck.
+    if kind == "7z":
+        # the disc image inside the archive, read in place by the 7z reader
+        return lambda: archives_mod.open_native_image(path)
+    # CHD is absent here on purpose, but not because streaming is slow:
+    # a whole-image target (god/cci/cso) carries the padding too, so its
+    # fidelity rests on the CHD's whole-image SHA-1, which the materialise
+    # step checks in the one decode it already does. Reproducing that on a
+    # stream would cost a second full decode - a real regression. The one
+    # target that carries no padding, zar, streams straight off a ChdReader
+    # at the pack site (measured ~17% faster, byte-identical), where the
+    # reader's per-hunk CRC covers every byte the container keeps.
     return None
+
+
+# The RAM-scratch (`--scratch ram`) benefit is not per-format, it is per
+# EDGE: a switch only helps a conversion that writes a game-sized pivot to
+# the scratch dir and then throws it away, so RAM saves a real disk
+# round-trip. Everything else either streams (no pivot at all) or writes
+# its scratch straight to the product (folder output stages, then MOVES to
+# disk - RAM there is a net loss, not a win). This is the one place that
+# knowledge lives; the TUI imports it and the `ram-scope` command hands the
+# same map to the GUI, so neither surface re-derives it.
+RAM_HELPED_TARGETS = ("god", "cci", "cso", "chd")
+
+
+def ram_helps_edge(src, dst):
+    """True if `--scratch ram` speeds up converting a `src` image to `dst` -
+    i.e. the edge stages a discarded pivot in the scratch dir. See
+    RAM_HELPED_TARGETS and the scratch writers in cmd_convert."""
+    if src == "gamedir":
+        return False                      # already extracted files, no pivot ever
+    if src in ("zip", "7z"):
+        return True                       # archive is extracted to w/archive_in
+    if dst == "stfs" and src != "stfs":
+        return True                       # cross-format -> STFS stages w/gamedir
+    if src == "chd" and dst in RAM_HELPED_TARGETS:
+        return True                       # CHD pivot w/chd_in.iso (not iso/zar)
+    return False
 
 
 def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
@@ -292,6 +325,13 @@ def _to_gamedir(kind, path, workdir, manifest=None, progress=None):
         xdvdfs_mod.extract(path, out, quiet=True, manifest=manifest,
                            progress=progress,
                            opener=lambda: open(path, "rb"))
+    elif kind == "7z":
+        # straight out of the archive's image; every parallel reader gets
+        # its own decoder through the opener
+        with archives_mod.open_native_image(path) as stream:
+            xdvdfs_mod.extract(stream, out, quiet=True, manifest=manifest,
+                               progress=progress,
+                               opener=lambda: archives_mod.open_native_image(path))
     elif kind == "zar":
         zar_mod.unpack(path, out, manifest=manifest, progress=progress)
     elif kind == "stfs":
@@ -429,6 +469,9 @@ def _source_image(kind, path, w):
     if kind == "god":
         s = god_mod.GodStream(path)
         return s, s.close
+    if kind == "7z":
+        m = archives_mod.open_native_image(path)
+        return m, m.close
     if kind in ("zar", "gamedir", "stfs"):
         img, extra = _lazy_image_source(kind, path)
 
@@ -499,7 +542,7 @@ def _write_xiso(kind, path, out_path, prog, verify=True):
         # and the slice below copies the whole (already-trimmed) image.
         # Only a raw iso can be untrimmed, so only a raw iso is refused
         # for having nothing to trim.
-        if base == 0 and kind == "iso":
+        if base == 0 and kind in ("iso", "7z"):
             raise CliError(
                 "input is already a bare xiso - its game partition "
                 "starts at byte 0, there is no video partition to trim. "
@@ -791,6 +834,25 @@ def _user_thumbnail(arg):
     return png
 
 
+def _payload_icon(entries):
+    """The payload's own root-level icon.png as thumbnail bytes, if it is
+    a PNG that fits the header slot; else None."""
+    for rel, size, opener in entries:
+        if rel.lower().lstrip("/") != "icon.png":
+            continue
+        if size > stfs_mod.THUMB_MAX:
+            return None
+        f = opener()
+        try:
+            png = f.read()
+        finally:
+            cl = getattr(f, "close", None)
+            if cl:
+                cl()
+        return png if png[:8] == b"\x89PNG\r\n\x1a\n" else None
+    return None
+
+
 def _redump_name(path):
     """The canonical redump game name for an image, or None. Reuses the
     redump check, which only hashes when the file's size matches a known
@@ -977,7 +1039,7 @@ class _SourceHashAhead:
         self._err = []
         self._t = None
         if in_kind not in ("iso", "god", "cci", "cso", "chd",
-                            "zar", "gamedir", "stfs"):
+                            "zar", "gamedir", "stfs", "7z"):
             return                       # nothing streamable to read ahead
         self._t = threading.Thread(
             target=self._run, args=(in_kind, in_path, w), daemon=True)
@@ -1024,6 +1086,13 @@ def _source_stream_sha1(in_kind, in_path, w):
     if in_kind == "god":
         with god_mod.GodStream(in_path) as f:
             return _hash(f)
+    if in_kind == "7z":
+        # the image inside the archive, hashed like a raw iso (from the
+        # game partition when it is a full OG Xbox redump)
+        with archives_mod.open_native_image(in_path) as f:
+            from .formats.cci import xbox_image_offset
+            f.seek(xbox_image_offset(f))
+            return _hash(f, seek0=False)
     if in_kind in ("zar", "gamedir", "stfs"):
         # An independent second synthesis of the same tree - a fresh
         # LazyImage - so a transient read error during the build's stream
@@ -1188,6 +1257,31 @@ def cmd_info(args):
                   % h["parent_sha1"])
     elif kind in ("zip", "7z"):
         entries = archives_mod.list_entries(path)
+        if kind == "7z":
+            # what xverter's own 7z reader makes of it: the coder, and how
+            # many independently decodable LZMA2 blocks the image has
+            # (one = single-threaded archive, no random access)
+            try:
+                arc = sevenzip_mod.Archive(path)
+                for m in arc.members:
+                    if m.name.lower().endswith((".iso", ".xiso")):
+                        nat = arc.native(m.name)
+                        nb = arc.block_count(m.name) if nat else 0
+                        if not nat:
+                            what = "not decoded natively - extracted with the 7-Zip engine"
+                        elif nb > 1:
+                            what = ("%d LZMA2 blocks - read in place, random "
+                                    "access + parallel decode" % nb)
+                        else:
+                            what = ("one block - a conversion decodes it once "
+                                    "into scratch (no random access%s)"
+                                    % (", single-threaded archive"
+                                       if m.folder.coder_name() == "LZMA2"
+                                       else ", %s has no blocks" % m.folder.coder_name()))
+                        print("7z     : %s, %s" % (m.folder.coder_name(), what))
+                        break
+            except sevenzip_mod.SevenZipError as e:
+                print("7z     : %s (extracted with the 7-Zip engine)" % e)
         print("entries: %d (%d bytes uncompressed)"
               % (len(entries), sum(sz for _n, sz in entries)))
         for n, sz in sorted(entries, key=lambda e: -e[1])[:5]:
@@ -1207,14 +1301,75 @@ def cmd_info(args):
     return 0
 
 
+# Damage, as opposed to "we do not recognise this". Every one of these
+# means a check we ran said the bytes are not what they claim to be, so
+# verify can say so in a sentence instead of handing back a stack trace.
+_DAMAGE_ERRORS = (god_mod.GodError, xdvdfs_mod.XdvdfsError,
+                  zar_mod.ZarError, zar_native_mod.ZarNativeError,
+                  stfs_mod.StfsError, cci_mod.CciError, cso_mod.CsoError,
+                  chd_mod.ChdError, archives_mod.ArchiveError,
+                  sevenzip_mod.SevenZipError, lz4compat_mod.Lz4Error)
+
+
+def _verify_verdict(st):
+    """One plain sentence, and the next action.
+
+    "Damaged" and "not in the database" are different findings and are
+    reported as such: a dump redump has never catalogued is not a broken
+    file, and telling someone to re-download a perfectly good rip earns
+    a worse support ticket than the one it avoids."""
+    print()
+    if st["damage"]:
+        print("verdict: this file is DAMAGED - %s" % st["damage"])
+        print("         Converting will not repair it. Get another copy.")
+        return 1
+    auth = st["authed"]
+    if auth is True:
+        print("verdict: INTACT, and it matches a redump entry - this is a "
+              "known-good copy of the disc. Good to convert.")
+        return 0
+    # How strong the "intact" claim is depends on what the form could
+    # prove. A hash tree that verifies is evidence; parsing an ISO is not.
+    if st["selfcheck"]:
+        strength = "INTACT - its own internal checksums all verify"
+    elif st["fullread"]:
+        strength = ("INTACT as far as this format can show - every byte "
+                    "read cleanly, but this form carries no checksums of "
+                    "its own, so that is the strongest claim available")
+    else:
+        strength = ("STRUCTURE OK - it parses and its table of contents is "
+                    "readable, but not every byte was read. Re-run with "
+                    "--deep for a full read")
+    print("verdict: %s." % strength)
+    if auth is False:
+        print("         It matches no redump entry, so it is a trimmed or "
+              "otherwise non-redump rip. That is NOT a damaged file.")
+        print("         Good to convert. Layout provenance cannot be "
+              "established for it.")
+    else:
+        print("         Good to convert.")
+    return 0
+
+
 def cmd_verify(args):
     prog = _Progress(getattr(args, "progress", None)
                      or ("tty" if sys.stderr.isatty() else None))
+    st = {"authed": None, "damage": None, "selfcheck": False,
+          "fullread": False}
+    try:
+        _verify_body(args, prog, st)
+    except _DAMAGE_ERRORS as e:
+        st["damage"] = str(e)
+    return _verify_verdict(st)
+
+
+def _verify_body(args, prog, st):
     kind, path = detect_mod.detect(args.input)
     print("format: %s" % kind)
     if kind == "god":
         god_mod.convert(path, None, verify_only=True,
                         progress=prog.cb("verify"))
+        st["selfcheck"] = True            # SVOD hash tree verified
     elif kind == "iso":
         if args.deep:
             w = _tempdir()
@@ -1222,6 +1377,7 @@ def cmd_verify(args):
                 xdvdfs_mod.extract(path, os.path.join(w, "x"), quiet=True,
                                    progress=prog.cb("deep-read"))
                 print("verified: full extraction OK - every file read and hashed")
+                st["fullread"] = True
             finally:
                 shutil.rmtree(w, ignore_errors=True)
         else:
@@ -1235,17 +1391,20 @@ def cmd_verify(args):
             # catalogs full discs. Not applicable is not a failure.
             print("authentication not applicable: bare game partition "
                   "(redump catalogs full disc images only)")
+            st["authed"] = None
         elif args.dat or not args.no_lookup:
             crc, sha1 = _stream_hashes(path, progress=prog.cb("hash"))
+            st["fullread"] = True         # whole-image hash = whole-image read
             size = os.path.getsize(path)
             if args.dat:
                 name = _dat_lookup(args.dat, size, crc, sha1)
                 if name:
                     print("authenticated: %s (crc=%s sha1=%s)" % (name, crc, sha1))
+                    st["authed"] = True
                 else:
                     print("NOT authenticated: no DAT entry matches "
                           "(size=%d crc=%s sha1=%s)" % (size, crc, sha1))
-                    return 1
+                    st["authed"] = False
             else:
                 hit = None
                 oldest = None
@@ -1263,6 +1422,7 @@ def cmd_verify(args):
                         if hit:
                             # a match is a match - age is irrelevant on a hit
                             print("authenticated (%s): %s" % (label, hit))
+                            st["authed"] = True
                             break
                     if hit:
                         break
@@ -1282,7 +1442,7 @@ def cmd_verify(args):
                         print("       (your cached DAT is %d days old - "
                               "`xverter dat update` first if you have not "
                               "lately)" % oldest)
-                    return 1
+                    st["authed"] = False
     elif kind == "zar":
         n = None
         try:
@@ -1292,6 +1452,7 @@ def cmd_verify(args):
         if n is not None:
             print("zar verify: embedded SHA-256 OK over all bytes "
                   "(%d files, nothing written)" % n)
+            st["selfcheck"] = True
         else:
             w = _tempdir()
             try:
@@ -1315,6 +1476,7 @@ def cmd_verify(args):
                     _vcb(n, f.size)
         print("%s verify: all blocks decoded OK (%d bytes, stream sha1 %s)"
               % (kind, n, h.hexdigest()))
+        st["fullread"] = True
         print("         note: %s carries no checksums, so decoding cleanly "
               "is the strongest claim the format permits - it cannot prove "
               "the data is what was originally stored. For storage that "
@@ -1325,12 +1487,15 @@ def cmd_verify(args):
         print("chd verify: decompressed everything and matched the "
               "internal SHA-1s (%d bytes, raw sha1 %s)"
               % (h["logical_bytes"], h["raw_sha1"]))
+        st["selfcheck"] = True
     elif kind == "stfs":
-        st = stfs_mod.verify_chains(path, progress=prog.cb("verify"))
+        chains = stfs_mod.verify_chains(path, progress=prog.cb("verify"))
+        st["selfcheck"] = True
         print("stfs verify: complete internal hash chain OK "
               "(%d blocks, %d L0 tables, %d level(s)%s)"
-              % (st["blocks"], st["l0_tables"], st["levels"],
-                 ", doubled tables" if st["doubled_tables"] else ""))
+              % (chains["blocks"], chains["l0_tables"],
+                 chains["levels"],
+                 ", doubled tables" if chains["doubled_tables"] else ""))
     elif kind in ("zip", "7z"):
         w = _tempdir()
         try:
@@ -1340,16 +1505,46 @@ def cmd_verify(args):
             pkind, ppath = detect_mod.detect(payload)
             print("archive extracts OK; payload: %s (%s) - verifying it"
                   % (os.path.basename(ppath.rstrip(os.sep)), pkind))
+            st["selfcheck"] = True        # every member's CRC32 checked
             sub = argparse.Namespace(input=ppath, deep=args.deep,
                                      dat=args.dat,
                                      no_lookup=args.no_lookup,
                                      progress=getattr(args, "progress",
                                                       False))
-            return cmd_verify(sub)
+            return _verify_body(sub, prog, st)
         finally:
             shutil.rmtree(w, ignore_errors=True)
     elif kind == "gamedir":
-        print("nothing to verify for an extracted directory")
+        nfiles = nbytes = 0
+        for dirpath, _dirs, files in os.walk(path):
+            for n in files:
+                fp = os.path.join(dirpath, n)
+                try:
+                    nbytes += os.path.getsize(fp)
+                except OSError as e:
+                    raise CliError("cannot stat %s (%s)" % (fp, e))
+                nfiles += 1
+        print("gamedir: %d files, %d bytes" % (nfiles, nbytes))
+        if args.deep:
+            read = 0
+            _dcb = prog.cb("deep-read")
+            for dirpath, _dirs, files in os.walk(path):
+                for n in sorted(files):
+                    with open(os.path.join(dirpath, n), "rb") as f:
+                        while True:
+                            b = f.read(1 << 22)
+                            if not b:
+                                break
+                            read += len(b)
+                    if _dcb:
+                        _dcb(read, nbytes)
+            print("gamedir: every file read OK (%d bytes)" % read)
+            st["fullread"] = True
+        else:
+            print("         (use --deep to read every file, not just stat it)")
+        print("         note: a directory carries no checksums of its own, "
+              "so structure and readability is the strongest claim the "
+              "form permits.")
     else:
         raise CliError("verify not supported yet for %r" % kind)
     return 0
@@ -1483,7 +1678,8 @@ def _convert_store(args):
             "<TitleID>/<ContentType>/<contentid>), not a single file")
     prog = _Progress(getattr(args, "progress", None)
                      or ("tty" if sys.stderr.isatty() else None))
-    zar_mod.pack(args.input, args.output, progress=prog.cb("store"))
+    zar_mod.pack(args.input, args.output, progress=prog.cb("store"),
+                 level=getattr(args, "level", None))
     print("wrote %s (stored verbatim, round-trip verified)" % args.output)
 
 
@@ -1514,15 +1710,50 @@ def cmd_convert(args):
                    if os.path.exists(p)}
     try:
         if kind in ("zip", "7z"):
-            # Transparent input layer: extract, find the game inside,
-            # continue as that kind.
-            arc_dir = os.path.join(w, "archive_in")
-            archives_mod.extract(path, arc_dir,
-                                 progress=prog.cb("unpack"))
-            payload = archives_mod.find_payload(arc_dir)
-            kind, path = detect_mod.detect(payload)
-            print("archive payload: %s (%s)"
-                  % (os.path.basename(path.rstrip(os.sep)), kind))
+            # Transparent input layer. A .7z holding a disc image that
+            # xverter's own 7z reader decodes is read IN PLACE - the
+            # writers consume the member like an ISO, no extracted copy
+            # on disk (kind stays "7z"; every image seam below accepts
+            # it). Anything else - a zip, another payload kind, a coder
+            # the reader does not do, or an archive OUTPUT (which wraps
+            # the unpacked payload) - is extracted with the engine, the
+            # game found inside, and continues as that kind.
+            native = (archives_mod.native_image(path)
+                      if kind == "7z" and out_kind not in ("zip", "7z")
+                      else None)
+            if native and native[1] == 1 and os.path.getsize(path) >= \
+                    archives_mod.SINGLE_BLOCK_DECODE_MIN:
+                # A single-threaded archive: one block, no entry points, and
+                # a conversion reads the image several times. Decode it
+                # ONCE into the work dir (native, CRC-checked - what the
+                # engine's extraction gave, minus the engine) and continue
+                # as an iso. A multithreaded archive streams in place.
+                member, _blocks = native
+                arc_dir = os.path.join(w, "archive_in")
+                os.makedirs(arc_dir, exist_ok=True)
+                iso_path = os.path.join(arc_dir, os.path.basename(member))
+                ok = archives_mod.decode_member(path, member, iso_path,
+                                                progress=prog.cb("unpack"))
+                kind, path = "iso", iso_path
+                print("archive payload: %s (iso, decoded once from the "
+                      "single-block 7z%s)"
+                      % (os.path.basename(member),
+                         ", CRC verified" if ok else ""))
+            elif native:
+                member, blocks = native
+                print("archive payload: %s (iso, read in place from the "
+                      "7z: %s)" % (os.path.basename(member),
+                                   "%d LZMA2 blocks - random access + "
+                                   "parallel decode" % blocks if blocks > 1
+                                   else "1 LZMA2 block, small - streamed"))
+            else:
+                arc_dir = os.path.join(w, "archive_in")
+                archives_mod.extract(path, arc_dir,
+                                     progress=prog.cb("unpack"))
+                payload = archives_mod.find_payload(arc_dir)
+                kind, path = detect_mod.detect(payload)
+                print("archive payload: %s (%s)"
+                      % (os.path.basename(path.rstrip(os.sep)), kind))
         # Only ISO sources get authenticated, but every path reports,
         # so start from a disabled one rather than a name that exists on
         # some branches and not others.
@@ -1589,10 +1820,13 @@ def cmd_convert(args):
                      else "round-trip verified" if out_kind == "zip"
                      else "CRC verified"))
             return 0
-        if kind == "chd":
+        if kind == "chd" and out_kind != "zar":
             # CHD is a transparent decompression layer over an ISO:
             # materialize the wrapped image (verified against the CHD
             # header's internal data SHA-1), then continue as iso input.
+            # A zar target is the exception - it packs no padding, so it
+            # streams straight off the CHD at the pack site below with no
+            # pivot written; see the stream_op block and _image_opener.
             chd_iso = (args.output if out_kind == "iso"
                        else os.path.join(w, "chd_in.iso"))
             chd_mod.extract(path, chd_iso, progress=prog.cb("chd-read"))
@@ -1623,7 +1857,7 @@ def cmd_convert(args):
                 return 0
             kind, path = "iso", chd_iso
         if out_kind == "xiso":
-            if kind in ("iso", "god", "cci", "cso"):
+            if kind in ("iso", "god", "cci", "cso", "7z"):
                 # Image-bearing sources hand over the pressed image, so
                 # the xiso is a byte slice of its game partition - the
                 # original layout, not a rebuild. (A CHD source was
@@ -1663,6 +1897,37 @@ def cmd_convert(args):
                   % (args.output,
                      "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
                      else "unpacked from the archive, member CRC verified"))
+            return 0
+        if out_kind == "iso" and kind == "7z":
+            # The image inside the archive, copied out sequentially - one
+            # continuous read from byte 0, which is exactly the read the
+            # 7z reader CRC-checks against the archive's own digest, so
+            # the integrity claim is the same one the extract path made.
+            with archives_mod.open_native_image(path) as src, \
+                    open(args.output, "wb") as dst:
+                done = 0
+                cb = prog.cb("unpack")
+                while True:
+                    chunk = src.read(4 << 20)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+                    done += len(chunk)
+                    if cb:
+                        cb(done, src.size)
+                ok = src.crc_ok()
+            if ok is False:
+                raise CliError("the image inside %s does not match the "
+                               "archive's CRC - the archive is damaged"
+                               % os.path.basename(path))
+            ident.report()
+            _gil_hint()
+            print("wrote %s (%s)"
+                  % (args.output,
+                     "NO GUARANTEES - --leeroy-jenkins" if args.no_verify
+                     else ("unpacked from the archive, member CRC verified"
+                           if ok else "unpacked from the archive, no CRC "
+                           "recorded for the member")))
             return 0
         if out_kind == "iso" and kind == "god":
             # direct verified path, no pivot needed
@@ -1866,6 +2131,14 @@ def cmd_convert(args):
                 if _thumb is None and titledb_mod.XVERTER_TITLES.get(
                         "%08X" % _eff_tid):
                     _thumb = titledb_mod.xverter_icon()
+                if _thumb is None and kind != "stfs":
+                    # A synthesized header has no thumbnail of its own; a
+                    # native XBLA package carries the game's icon there,
+                    # and the same icon ships in the payload as a
+                    # root-level icon.png (an extracted package keeps it).
+                    # Reuse the game's own icon when it fits the slot -
+                    # nothing invented.
+                    _thumb = _payload_icon(entries)
                 if _thumb:
                     header = stfs_mod.set_thumbnail(header, _thumb)
                 stfs_mod.build(entries, args.output, header,
@@ -1883,6 +2156,15 @@ def cmd_convert(args):
             print("wrote %s (%s)"
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "hash chain verified to root"))
+            # The console names a content package by its content id - the
+            # header self-hash at 0x32C, which every header edit re-seals.
+            # Say what this package's id is, so a re-converted package is
+            # never filed under a stale name.
+            with open(args.output, "rb") as _hf:
+                _hf.seek(0x32C)
+                _cid = _hf.read(20).hex().upper()
+            print("content id %s (name the file this under <TitleID>/%08X/)"
+                  % (_cid, int.from_bytes(header[0x344:0x348], "big")))
             if retail_warn:
                 sys.stderr.write("warning: " + retail_warn + "\n")
             return 0
@@ -1933,6 +2215,7 @@ def cmd_convert(args):
             entries, closer = stfs_mod.file_entries(path, manifest=man)
             try:
                 zar_mod.pack_entries(entries, args.output,
+                                     level=getattr(args, "level", None),
                                      roundtrip_verify=not args.no_verify,
                                      manifest=man,
                                      progress=prog.cb("zar-write"),
@@ -1945,8 +2228,26 @@ def cmd_convert(args):
                   % (args.output, "NO GUARANTEES - --leeroy-jenkins"
                      if args.no_verify else "verified"))
             return 0
-        stream_op = (_image_opener(kind, path)
-                     if out_kind == "zar" and zar_mod.can_stream() else None)
+        stream_op = None
+        if out_kind == "zar" and zar_mod.can_stream():
+            if kind == "chd":
+                # Stream straight off the CHD - no pivot ISO written. The
+                # materialise path's whole-image SHA-1 is skipped (it only
+                # covers padding a zar does not keep); in its place the
+                # structure is validated up front, exactly as an image
+                # source is at the top of convert, and the ChdReader
+                # CRC-checks every hunk it decodes into the pack - so every
+                # byte the zar carries is verified on the way in. The zar
+                # then round-trips like any other.
+                if not args.no_verify:
+                    try:
+                        with _wrapper_reader("chd", path) as _cimg:
+                            xdvdfs_mod.validate_image(_cimg)
+                    except xdvdfs_mod.XdvdfsError as e:
+                        raise CliError("source is INVALID: %s" % e)
+                stream_op = (lambda: _wrapper_reader("chd", path))
+            else:
+                stream_op = _image_opener(kind, path)
         if stream_op is not None:
             # The image feeds the archive writer directly. Unlike the
             # ISO case there is nothing given up by not having the files
@@ -1959,6 +2260,7 @@ def cmd_convert(args):
                     entries = xdvdfs_mod.file_entries(probe, opener=opener,
                                                       manifest=man)
                 zar_mod.pack_entries(entries, args.output,
+                                     level=getattr(args, "level", None),
                                      roundtrip_verify=not args.no_verify,
                                      manifest=man,
                                      progress=prog.cb("zar-write"),
@@ -2013,7 +2315,7 @@ def cmd_convert(args):
                      else "extracted and hashed - a folder carries no "
                           "container to re-verify"))
         elif out_kind == "zar":
-            zar_mod.pack(gamedir, args.output,
+            zar_mod.pack(gamedir, args.output, level=getattr(args, "level", None),
                          roundtrip_verify=not args.no_verify,
                          manifest=manifest, progress=prog.cb("zar-write"),
                          verify_progress=prog.cb("verify"))
@@ -2211,6 +2513,15 @@ def main(argv=None):
     p.add_argument("--media-id", metavar="HEX", default=None,
                    help="override the media id for .stfs output (0x-hex or "
                         "decimal). Normally read from the payload default.xex")
+    p.add_argument("--level", metavar="N", type=int, default=None,
+                   choices=range(zar_native_mod.MIN_LEVEL,
+                                 zar_native_mod.MAX_LEVEL + 1),
+                   help="zstd compression level for .zar output, %d..%d "
+                        "(default %d). Blocks that do not shrink are stored "
+                        "raw at any level, so the archive is byte-identical in "
+                        "content whichever level built it"
+                        % (zar_native_mod.MIN_LEVEL, zar_native_mod.MAX_LEVEL,
+                           zar_native_mod.DEFAULT_LEVEL))
     p.add_argument("--thumbnail", metavar="PNG", default=None,
                    help="embed this PNG as the package icon for .stfs "
                         "output (what a dashboard shows). Max 16 KB. A "
@@ -2279,6 +2590,7 @@ def main(argv=None):
             # bug rather than their file.
             cci_mod.CciError, cso_mod.CsoError, chd_mod.ChdError,
             archives_mod.ArchiveError, zar_native_mod.ZarNativeError,
+            sevenzip_mod.SevenZipError,
             lz4compat_mod.Lz4Error, lz4compat_mod.Lz4Missing) as e:
         if _json_mode():
             _emit({"event": "error", "message": str(e)})

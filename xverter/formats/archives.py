@@ -31,6 +31,7 @@ CRC-checked).
 import hashlib
 import ntpath
 import os
+import re
 import sys
 import contextlib
 import zipfile
@@ -210,6 +211,202 @@ def _list_7z(path):
             k, _sep, v = line.partition(" = ")
             block[k] = v
     return out
+
+
+class _SevenZipStream:
+    """Forward-only stream over one member of a .7z, from `7z x -so`.
+
+    A solid archive has no random access, so a backward seek restarts
+    the extraction and skips forward again (correct, just slow); reads
+    and forward seeks cost only the decompression up to that point."""
+
+    def __init__(self, exe, path, member, size):
+        self._exe, self._path, self._member = exe, path, member
+        self._size = size
+        self._p = None
+        self._pos = 0
+        self._start()
+
+    def _start(self):
+        import subprocess as _sp
+        self._stop()
+        self._p = _sp.Popen([self._exe, "x", "-so", "-y", self._path,
+                             self._member], stdout=_sp.PIPE,
+                            stderr=_sp.DEVNULL, bufsize=1 << 20)
+        self._pos = 0
+
+    def _stop(self):
+        if self._p is not None:
+            try:
+                self._p.stdout.close()
+                self._p.kill()
+                self._p.wait()
+            except OSError:
+                pass
+            self._p = None
+
+    def _skip(self, n):
+        while n > 0:
+            chunk = self._p.stdout.read(min(n, 1 << 20))
+            if not chunk:
+                break
+            n -= len(chunk)
+            self._pos += len(chunk)
+
+    def read(self, n=-1):
+        if n is None or n < 0:
+            n = max(self._size - self._pos, 0)
+        out = bytearray()
+        while len(out) < n:
+            chunk = self._p.stdout.read(n - len(out))
+            if not chunk:
+                break
+            out += chunk
+        self._pos += len(out)
+        return bytes(out)
+
+    def seek(self, off, whence=0):
+        if whence == 1:
+            off = self._pos + off
+        elif whence == 2:
+            off = self._size + off
+        if off < self._pos:
+            self._start()
+        self._skip(off - self._pos)
+        return self._pos
+
+    def tell(self):
+        return self._pos
+
+    def close(self):
+        self._stop()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+def open_member(path, member, size=None):
+    """A seekable read-only stream over one archive member, without
+    extracting anything to disk. A zip member seeks natively (backward
+    seeks re-inflate from the start of that member). A 7z member is read
+    by xverter's own 7z reader when its coder is one it decodes (LZMA2 /
+    LZMA / Copy - random access at LZMA2 block boundaries); any other
+    coder is streamed from the 7-Zip engine, forward seeks cheap,
+    backward by restart."""
+    kind = sniff(path)
+    if kind == "zip":
+        try:
+            z = _open_zip(path)
+            f = z.open(member)
+        except (zipfile.BadZipFile, zlib.error, KeyError) as e:
+            raise _zip_damage(path, e)
+        f._xverter_zip = z                    # keep the archive open with the member
+        return f
+    if kind == "7z":
+        from . import sevenzip
+        try:
+            return sevenzip.Archive(path).open(member)
+        except sevenzip.SevenZipError:
+            pass                              # unsupported coder: the engine
+        if size is None:
+            size = dict(list_entries(path)).get(member, 0)
+        return _SevenZipStream(_need_7z(), path, member, size)
+    raise ArchiveError("not a zip/7z archive: %s" % path)
+
+
+def native_image(path):
+    """For a .7z whose game payload is a disc image (.iso/.xiso) that
+    xverter's own 7z reader decodes: (member name, LZMA2 block count).
+    None when the archive, its payload or its coder is anything else - the
+    caller then extracts with the engine as before."""
+    from . import sevenzip
+    try:
+        arc = sevenzip.Archive(path)
+        member, _size, role = payload_member(arc.list())
+    except (sevenzip.SevenZipError, ArchiveError):
+        return None
+    if role != "iso" or not arc.native(member):
+        return None
+    return member, arc.block_count(member)
+
+
+#: A single-block member (single-threaded archive) has no entry points: a
+#: conversion reads the image several times (validation, source hash, the
+#: build), and each pass would decode the whole stream again. Members at
+#: or above this size are decoded ONCE into the work dir instead - the
+#: same cost as extracting, but native and CRC-checked - and the
+#: conversion continues from that file. Smaller ones stream in place.
+SINGLE_BLOCK_DECODE_MIN = 64 << 20
+
+
+def decode_member(path, member, out_path, progress=None):
+    """Decode one archive member sequentially to out_path, checking it
+    against the archive's CRC. Raises ArchiveError on a mismatch."""
+    from . import sevenzip
+    arc = sevenzip.Archive(path)
+    with arc.open(member) as src, open(out_path, "wb") as dst:
+        done = 0
+        while True:
+            chunk = src.read(4 << 20)
+            if not chunk:
+                break
+            dst.write(chunk)
+            done += len(chunk)
+            if progress:
+                progress(done, src.size)
+        ok = src.crc_ok()
+    if ok is False:
+        raise ArchiveError("%s in %s does not match the archive's CRC - "
+                           "the archive is damaged" % (member, os.path.basename(path)))
+    return ok
+
+
+def open_native_image(path):
+    """A seekable MemberFile over the disc image inside a .7z (see
+    native_image); the writers consume it like an ISO file."""
+    from . import sevenzip
+    arc = sevenzip.Archive(path)
+    member, _size, role = payload_member(arc.list())
+    if role != "iso":
+        raise ArchiveError("%s holds no disc image to read in place" % path)
+    return arc.open(member)
+
+
+# A content package as the console stores it: <TitleID>/<ContentType>/<id>,
+# two 8-hex directories and a 40-hex (or longer, some rips append bytes)
+# extensionless content id. TorrentZipped XBLA rips hold exactly this.
+_CONTENT_PATH = re.compile(
+    r"^(?:.*/)?[0-9A-Fa-f]{8}/[0-9A-Fa-f]{8}/[0-9A-Fa-f]{40,}$")
+
+
+def payload_member(entries):
+    """Which archive member to read the game's identity from, given
+    [(name, size)]: (member, size, role) where role is "exe" for a
+    default.xex/.xbe (a packed game folder), "iso" for the largest disc
+    image, "stfs" for a content package stored under the console's
+    <TitleID>/<ContentType>/<contentid> layout (no extension), or the
+    extension of the largest other game container."""
+    exes = [(n, s) for n, s in entries
+            if n.rsplit("/", 1)[-1].lower() in ("default.xex", "default.xbe")]
+    if exes:
+        n, s = min(exes, key=lambda e: e[0].count("/"))   # shallowest
+        return n, s, "exe"
+    games = [(n, s) for n, s in entries if n.lower().endswith(GAME_EXTS)]
+    if not games:
+        pkgs = [(n, s) for n, s in entries if _CONTENT_PATH.match(n)]
+        if pkgs:
+            n, s = max(pkgs, key=lambda e: e[1])
+            return n, s, "stfs"
+        raise ArchiveError("no game payload found in the archive (looked "
+                           "for %s, a default.xex/.xbe, or a content "
+                           "package at <TitleID>/<ContentType>/<contentid>)"
+                           % ", ".join(GAME_EXTS))
+    n, s = max(games, key=lambda e: e[1])
+    ext = n.rsplit(".", 1)[-1].lower()
+    return n, s, ("iso" if ext in ("iso", "xiso") else ext)
 
 
 def extract(path, out_dir, progress=None):

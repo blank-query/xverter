@@ -29,6 +29,7 @@ from textual.widgets import (Button, DataTable, Header, Label,
                              TabbedContent, TabPane)
 
 from . import detect as detect_mod
+from .cli import ram_helps_edge
 
 KIND_BADGE = {
     "god": "GoD", "iso": "ISO", "zar": "ZAR",
@@ -212,6 +213,16 @@ class XVerterApp(App):
     #to-dir, #to-7z, #to-zip {
         border: round #9575e0;
         color: #b39ddb;
+    }
+    /* RAM-scratch gold: while the switch is on, the targets whose
+       conversion from the selected game actually stages a pivot to
+       scratch (so RAM speeds them up) turn their text gold. id+class
+       out-specifies the family colour above so gold wins. */
+    #to-iso.ramgold, #to-zar.ramgold, #to-god.ramgold, #to-stfs.ramgold,
+    #to-chd.ramgold, #to-xiso.ramgold, #to-cci.ramgold, #to-cso.ramgold,
+    #to-zip.ramgold, #to-7z.ramgold, #to-dir.ramgold {
+        color: #ffca28;
+        text-style: bold;
     }
     ContentTypeScreen { align: center middle; }
     #ctmodal {
@@ -529,12 +540,16 @@ class XVerterApp(App):
         # button id crashed. Now they actually take effect.
         if event.switch.id == "opt-ram":
             self.ram_scratch = event.value
+            self._refresh_ram_gold()
             if event.value:
                 self._log("RAM scratch ON - pivot files go to a tmpfs "
                           "(/dev/shm). You need ~2.2x the game's size in "
                           "AVAILABLE ram or conversions fail with 'no "
                           "space left on device'. Linux only; on Windows "
-                          "make a RAM drive and use the CLI's --workdir.")
+                          "make a RAM drive and use the CLI's --workdir. "
+                          "The gold targets below are the ones it speeds "
+                          "up for this game - the rest stream, so RAM does "
+                          "nothing for them.")
             else:
                 self._log("RAM scratch off - pivot files go to the "
                           "system temp dir on disk.")
@@ -549,6 +564,35 @@ class XVerterApp(App):
                           "file regardless of size. Fine for PC "
                           "emulators; a console FATX drive can't hold "
                           "files past 4GiB.")
+
+    def on_data_table_row_highlighted(self, event):
+        # The selected game is the conversion SOURCE, and which targets
+        # RAM helps depends on it - so re-gold when the cursor moves, but
+        # only while the switch is on (detect() reads a header; no point
+        # paying that per keystroke when nothing is gold anyway).
+        if self.ram_scratch:
+            self._refresh_ram_gold()
+
+    def _refresh_ram_gold(self):
+        """Gold the target buttons whose conversion from the selected game
+        actually stages a scratch pivot (so `--scratch ram` speeds them
+        up). Single source of truth is cli.ram_helps_edge; the switch off,
+        or no/undetectable selection, clears all gold."""
+        src = None
+        if self.ram_scratch:
+            p = self._selected_path()
+            if p:
+                try:
+                    src, _ = detect_mod.detect(p)
+                except Exception:
+                    src = None
+        for bid, _lbl, suffix, _var in FORMATS:
+            target = "gamedir" if suffix == "dir" else suffix
+            gold = bool(src) and ram_helps_edge(src, target)
+            try:
+                self.query_one("#" + bid, Button).set_class(gold, "ramgold")
+            except Exception:
+                pass
 
     # ------------------------------------------------------------ actions
 

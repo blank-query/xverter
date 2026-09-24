@@ -170,16 +170,79 @@ def probe(src):
         tid = hdr["title_id"]
         ctype = hdr.get("content_type")
         name = hdr.get("title") or _titledb.name_for_title_id(tid)
+        # 0x5000 is an Xbox Original: an SVOD disc package like 0x7000,
+        # not an STFS content package. Omitting it here made every bare
+        # Xbox Original GoD tree probe as kind="stfs" - the archive path
+        # below already had it right, and the two disagreed.
         return {"title_id": tid,
-                "kind": "stfs" if ctype not in (0x7000, None) else "god",
+                "kind": ("stfs" if ctype not in (0x7000, 0x5000, None)
+                         else "god"),
                 "name": name}
 
-    # Image / archive / gamedir: read the executable's exec-info.
+    if kind in ("zip", "7z"):
+        info = _probe_archive(path)
+        tid = info["title_id"]
+        name = info.get("title") or _titledb.name_for_title_id(tid)
+        return {"title_id": tid, "kind": info.get("kind", "god"), "name": name}
+
+    # Image / gamedir: read the executable's exec-info.
     from . import cli as _cli
     info = _title_info_of(kind, path, _cli)
     tid = info["title_id"]
     name = info.get("title") or _titledb.name_for_title_id(tid)
     return {"title_id": tid, "kind": "god", "name": name}
+
+
+def _probe_archive(path):
+    """exec-info of the game inside a zip/7z WITHOUT extracting it: a
+    packed default.xex/.xbe is read straight out of the archive; a disc
+    image member is streamed and its partition base, root table and
+    executable read in place (a solid 7z only seeks forward cheaply, so
+    this costs the decompression up to the executable - far less than
+    an extract). Other containers (cci/cso/chd/zar/god) need random
+    access the archive cannot give, so that one member is extracted to
+    a temp dir, probed, and removed."""
+    from .formats import archives as _arch
+    from .formats import xdvdfs as _xdvdfs_mod
+    entries = _arch.list_entries(path)
+    member, size, role = _arch.payload_member(entries)
+    if role == "exe":
+        with _arch.open_member(path, member, size) as f:
+            return (_god._parse_xex(f, 0) if member.lower().endswith(".xex")
+                    else _god._parse_xbe(f, 0))
+    if role == "iso":
+        with _arch.open_member(path, member, size) as f:
+            base = _xdvdfs_mod.find_base(f)
+            _ctype, info = _god._title_info(f, base, _god._xdvdfs())
+        return info
+    if role == "stfs":
+        # A content package stored under the console layout: its header
+        # (first 0xB000 bytes, a cheap forward read) carries the identity.
+        with _arch.open_member(path, member, size) as f:
+            head = f.read(0xB000)
+        if head[:4] not in _stfs.STFS_MAGICS:
+            raise ConvertError("%s in %s is laid out like a content package "
+                               "but has no CON/LIVE/PIRS magic" % (member, path))
+        tid = struct.unpack_from(">I", head, 0x360)[0]
+        title = head[_stfs.TITLE_OFFSET:_stfs.TITLE_OFFSET + 0x80] \
+            .decode("utf-16-be", "replace").split("\x00", 1)[0].strip()
+        ctype = struct.unpack_from(">I", head, 0x344)[0]
+        return {"title_id": tid, "title": title,
+                "kind": "stfs" if ctype not in (0x7000, 0x5000) else "god"}
+    import shutil
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="xverter-probe-",
+                           dir=os.path.dirname(os.path.abspath(path)) or None)
+    try:
+        _arch.extract(path, tmp)
+        payload = _arch.find_payload(tmp)
+        from . import cli as _cli
+        kind, inner = _detect.detect(payload)
+        if kind in ("god", "stfs"):
+            return {"title_id": probe(inner)["title_id"], "title": ""}
+        return _title_info_of(kind, inner, _cli)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _god_header_path(path):

@@ -131,7 +131,14 @@ def walk_table(table):
                 descend = False
         off = stack.pop()
         _l, right, start, size, attr, name_raw = parse(off)
-        entries.append((name_raw.decode("cp1252", "replace"),
+        # Names are raw bytes on disc. Decode as Windows-1252 for the
+        # defined bytes and keep every undefined one (0x81 0x8D 0x8F 0x90
+        # 0x9D - Shift-JIS lead bytes in Japanese-authored games) as a
+        # lone surrogate, so the exact bytes come back out of
+        # _encode_name: a byte the codec cannot name must not be
+        # replaced with U+FFFD, which loses it for good and makes the
+        # file unreachable by the name the game uses.
+        entries.append((name_raw.decode("cp1252", "surrogateescape"),
                         start, size, attr))
         if right not in (0, 0xFFFF):
             cur = right * 4
@@ -648,8 +655,18 @@ def _encode_name(name, where):
     if not name or name in (".", "..") or "/" in name or "\\" in name \
             or "\x00" in name:
         die("invalid entry name %r in %s" % (name, where))
+    if "\ufffd" in name:
+        # U+FFFD is the trace of a byte an older reader threw away
+        # ("replace" decoding). The original byte is gone; writing any
+        # substitute would rename the file behind the game's back.
+        die("entry name %r in %s carries U+FFFD - a filename byte was "
+            "lost when this source was made (older xverter decoded "
+            "names lossily). Re-make it from the original disc image."
+            % (name, where))
     try:
-        raw = name.encode("cp1252")
+        # surrogateescape returns the exact undefined byte that
+        # walk_table preserved (see there); everything else is 1252.
+        raw = name.encode("cp1252", "surrogateescape")
     except UnicodeEncodeError:
         die("entry name %r in %s is not Windows-1252 encodable" % (name, where))
     if len(raw) > 255:

@@ -1,5 +1,71 @@
 # Changelog
 
+## 1.5.0 — in place, and in plain words
+
+**`.7z` input is read in place by xVerter's own 7z reader.** A `.7z` holding
+a disc image is no longer extracted first: the new pure-Python reader
+(`formats/sevenzip.py`, written from 7-Zip's `7zFormat.txt`) parses the
+archive - plain and packed headers, solid folders, substreams - and hands the
+image inside straight to the writers, so `Halo 3.7z → .god` is one streamed
+pass with no unpacked copy on disk. LZMA2 members compressed by 7-Zip's
+multithreaded encoder are entered at any dictionary-reset block, so seeks are
+cheap and blocks decode in parallel on any interpreter (liblzma releases the
+GIL); a single-threaded (or LZMA1) archive is one block with no entry points, so a
+conversion decodes it once into the scratch dir - CRC-checked, then
+authenticated against redump like any ISO - and converts from there. LZMA2, LZMA and Copy folders are
+decoded natively; anything else (BCJ filters, PPMd, BZip2, Deflate, AES)
+falls back to the 7-Zip engine exactly as before. `.7z → .iso` is one
+continuous read checked against the archive's CRC; every other target reads
+at random and is verified by its own rules. `probe()` and `info` read a
+game's identity out of a `.7z` without decompressing past the executable,
+`info` reports the coder and block count, and a corrupt LZMA stream fails
+the conversion with a clear error instead of a traceback. Proven on the real
+7.8 GB Halo CE rip: every random read and a full sequential read match the
+extracted ISO, and `.7z → .cci` is byte-identical to `.iso → .cci`.
+
+**GoD: the data volume is padded to a whole 4 KiB block.** An image whose
+allocation extent ended 2048 bytes into a block - common for a trimmed image
+built from a zar or a folder - produced a last data part ending mid-block,
+hashed as the short block. The console's SVOD driver reads and hashes whole
+4 KiB blocks, so the moment a game touched that block the disc came up
+"unreadable" (Army of Two, found by godstream's console trace; 21 of 40
+library discs had the shape and failed only if the game read its tail).
+iso2god-rs has the same latent defect. The writer now rounds the data volume
+up to a block with zeros beyond the extent and hashes the padded block;
+`god.DATA_ALIGN` states the rule for consumers that synthesise the layout. A
+full redump image is already a block multiple and its output is unchanged.
+
+**`--level N` for `.zar` output** (zstd 1..22), and **the default is now 9**
+(was 6): content is identical at any level (blocks that do not shrink are
+stored raw), only size and build time change. Measured across levels 1-22 on
+real game trees, the curve is flat from 9 to 12 and the last 2% costs about
+10x the build time at 19, so 9 is the point where a library stops paying for
+size it will not notice. `--level 19` still gets the smallest file.
+
+**`probe()` recognises a content package stored bare inside an archive**
+(`<TitleID>/<ContentType>/<contentid>`, the way TorrentZipped XBLA rips are
+laid out) and reads its identity from the member's header.
+
+**STFS file-table names are raw bytes**, not ASCII: a Japanese-authored
+package's Shift-JIS names round-trip through STFS, zar, folder and ISO
+byte-for-byte (the same convention XDVDFS names got in 1.4.x). Proven on
+hardware: a package carrying such a name registers and boots.
+
+**`verify` tells you what it found, in plain words.** It now ends with a verdict
+line instead of leaving you to read the checks: INTACT, INTACT-but-not-matched,
+STRUCTURE OK, or DAMAGED with the reason. Crucially it stops calling good files
+bad - an intact image that matches no redump entry is a trimmed or non-redump
+rip, not a broken file, and it no longer exits non-zero for that. Exit 1 now
+means damaged and nothing else. The verdict also states what was actually
+proven, so an ISO that was only parsed no longer claims more than that. A folder
+is verified too, rather than skipped.
+
+**An Xbox Original probes as a disc, not a content package.** `probe()` tested
+the content type in two places and they disagreed: a GoD inside an archive
+accepted `0x5000`, a GoD tree on disk did not, so the same Xbox Original came
+back as a disc from a `.7z` and as a content package from a directory. Anything
+routing on that mis-served every OG title read from a tree.
+
 ## 1.4.0 — the format it could only read
 
 **New writer: STFS (`.stfs`) output — write LIVE packages from any input.**
