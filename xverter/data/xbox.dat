@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox</name>
-		<description>Microsoft - Xbox - Datfile (2688) (2026-09-20 20-52-38)</description>
-		<version>2026-09-20 20-52-38</version>
-		<date>2026-09-20 20-52-38</date>
+		<description>Microsoft - Xbox - Datfile (2689) (2026-09-24 07-22-54)</description>
+		<version>2026-09-24 07-22-54</version>
+		<date>2026-09-24 07-22-54</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -885,6 +885,11 @@
 		<category>Games</category>
 		<description>Blinx 2 - Masters of Time &amp; Space (World) (En,Ja,Fr,De,Es,It)</description>
 		<rom name="Blinx 2 - Masters of Time &amp; Space (World) (En,Ja,Fr,De,Es,It).iso" size="7825162240" crc="9d358cd4" md5="955ce3c81f4bb90664670a4109e6b5fc" sha1="93230082bdfad344aea8fd1e34bcd43f60a15f27"/>
+	</game>
+	<game name="Blinx 2 - Masters of Time &amp; Space - Trial Demo (USA)" id="138623">
+		<category>Demos</category>
+		<description>Blinx 2 - Masters of Time &amp; Space - Trial Demo (USA)</description>
+		<rom name="Blinx 2 - Masters of Time &amp; Space - Trial Demo (USA).iso" size="7825162240" crc="666766bb" md5="3a1306b9e361708321b2734957c0c3d2" sha1="da975846e5766e6112a8cb81389f9a91890b0912"/>
 	</game>
 	<game name="Blitz - The League (USA)" id="48888">
 		<category>Games</category>

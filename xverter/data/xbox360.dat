@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-09-20 21-02-35)</description>
-		<version>2026-09-20 21-02-35</version>
-		<date>2026-09-20 21-02-35</date>
+		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-09-27 00-14-03)</description>
+		<version>2026-09-27 00-14-03</version>
+		<date>2026-09-27 00-14-03</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -330,15 +330,15 @@
 		<description>Akumajou Dracula - Lords of Shadow 2 (Japan)</description>
 		<rom name="Akumajou Dracula - Lords of Shadow 2 (Japan).iso" size="7838695424" crc="902ca0a5" md5="cecbafffc71d85e48a04d1b36044e410" sha1="fbf522166061315cd875d3d8eb613c8472ce5958"/>
 	</game>
-	<game name="Alan Wake (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc)" id="15959">
-		<category>Bonus Discs</category>
-		<description>Alan Wake (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc)</description>
-		<rom name="Alan Wake (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc).iso" size="7838695424" crc="607108ec" md5="476688981fbc1de2f367680532283ac1" sha1="433f05bd117b83104866fceea058426e6952f011"/>
-	</game>
 	<game name="Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru)" id="13756">
 		<category>Games</category>
 		<description>Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru)</description>
 		<rom name="Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru).iso" size="7838695424" crc="4080b8ce" md5="bc07c4f4cea0188c9b52b439853d1d72" sha1="21542eabd3cb2df6248c2313fdf22e00d7c1e2c9"/>
+	</game>
+	<game name="Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc)" id="15959">
+		<category>Bonus Discs</category>
+		<description>Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc)</description>
+		<rom name="Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc).iso" size="7838695424" crc="607108ec" md5="476688981fbc1de2f367680532283ac1" sha1="433f05bd117b83104866fceea058426e6952f011"/>
 	</game>
 	<game name="Alice - Madness Returns (World) (En,Fr,De,Es,It)" id="38414">
 		<category>Games</category>
@@ -6145,10 +6145,10 @@
 		<description>Fallout - New Vegas - Ultimate Edition (Japan) (Disc 2)</description>
 		<rom name="Fallout - New Vegas - Ultimate Edition (Japan) (Disc 2).iso" size="7838695424" crc="df5c0bc7" md5="23e452bbb6d2c7cb4477a38edc718317" sha1="1a6b7490e70cf438d509207f725330075489a5f3"/>
 	</game>
-	<game name="Fallout - New Vegas - Ultimate Edition (USA) (Disc 2)" id="54602">
+	<game name="Fallout - New Vegas - Ultimate Edition (USA, Brazil) (Disc 2)" id="54602">
 		<category>Games</category>
-		<description>Fallout - New Vegas - Ultimate Edition (USA) (Disc 2)</description>
-		<rom name="Fallout - New Vegas - Ultimate Edition (USA) (Disc 2).iso" size="7838695424" crc="a1440ac7" md5="c203903923b93644549226ca97012f35" sha1="76fad92ce1bc23f68f9372c9a2ad6eaf2c1690a7"/>
+		<description>Fallout - New Vegas - Ultimate Edition (USA, Brazil) (Disc 2)</description>
+		<rom name="Fallout - New Vegas - Ultimate Edition (USA, Brazil) (Disc 2).iso" size="7838695424" crc="a1440ac7" md5="c203903923b93644549226ca97012f35" sha1="76fad92ce1bc23f68f9372c9a2ad6eaf2c1690a7"/>
 	</game>
 	<game name="Fallout 3 (Asia)" id="114595">
 		<category>Games</category>
