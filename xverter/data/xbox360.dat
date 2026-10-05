@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-09-27 00-14-03)</description>
-		<version>2026-09-27 00-14-03</version>
-		<date>2026-09-27 00-14-03</date>
+		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-10-03 22-15-59)</description>
+		<version>2026-10-03 22-15-59</version>
+		<date>2026-10-03 22-15-59</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -1000,10 +1000,10 @@
 		<description>Batman - Arkham Asylum (Japan)</description>
 		<rom name="Batman - Arkham Asylum (Japan).iso" size="7838695424" crc="231655ff" md5="607b3ed6625e26b394426c204a05f1f9" sha1="04df7b615c2cb7efdf232ecd88ab86fbd6a089a1"/>
 	</game>
-	<game name="Batman - Arkham Asylum (USA, Europe) (En,Fr,De,Es,It)" id="12475">
+	<game name="Batman - Arkham Asylum (World) (En,Fr,De,Es,It)" id="12475">
 		<category>Games</category>
-		<description>Batman - Arkham Asylum (USA, Europe) (En,Fr,De,Es,It)</description>
-		<rom name="Batman - Arkham Asylum (USA, Europe) (En,Fr,De,Es,It).iso" size="7838695424" crc="8433b6d9" md5="820c8bb14dbc7f4c6dc7f4b190c9e96c" sha1="8d4bd1c8bdba61077d18fb0648d8971b4fb380d1"/>
+		<description>Batman - Arkham Asylum (World) (En,Fr,De,Es,It)</description>
+		<rom name="Batman - Arkham Asylum (World) (En,Fr,De,Es,It).iso" size="7838695424" crc="8433b6d9" md5="820c8bb14dbc7f4c6dc7f4b190c9e96c" sha1="8d4bd1c8bdba61077d18fb0648d8971b4fb380d1"/>
 	</game>
 	<game name="Batman - Arkham Asylum - Game of the Year Edition (Europe) (En,Fr,De,Es,It)" id="68344">
 		<category>Games</category>
@@ -10796,10 +10796,10 @@
 		<description>MLB Front Office Manager (USA)</description>
 		<rom name="MLB Front Office Manager (USA).iso" size="7835492352" crc="90c301eb" md5="aebaa8eabd220c8f6f582e449f91f444" sha1="3f7bd0032189e85d47a1c233138be7924790adf4"/>
 	</game>
-	<game name="Mobile Suit Gundam - Operation - Troy (Japan)" id="61138">
+	<game name="Mobile Suit Gundam - Operation - Troy (Japan, Asia)" id="61138">
 		<category>Games</category>
-		<description>Mobile Suit Gundam - Operation - Troy (Japan)</description>
-		<rom name="Mobile Suit Gundam - Operation - Troy (Japan).iso" size="7835492352" crc="507e43dc" md5="995b740dcb6d9f66f030aca0e168e3a6" sha1="4e6c64e70ddeb55f54a43b2a49430bfb7ac81d2a"/>
+		<description>Mobile Suit Gundam - Operation - Troy (Japan, Asia)</description>
+		<rom name="Mobile Suit Gundam - Operation - Troy (Japan, Asia).iso" size="7835492352" crc="507e43dc" md5="995b740dcb6d9f66f030aca0e168e3a6" sha1="4e6c64e70ddeb55f54a43b2a49430bfb7ac81d2a"/>
 	</game>
 	<game name="Moe Moe 2-ji Taisen (Ryaku) 2 Ultra Deluxe (Japan)" id="94330">
 		<category>Games</category>
@@ -18469,10 +18469,10 @@
 		<description>Zhen Sanguo Wushuang 5 - Empires (Taiwan)</description>
 		<rom name="Zhen Sanguo Wushuang 5 - Empires (Taiwan).iso" size="7838695424" crc="a9105720" md5="d1ec5af58d300716b70dc2f9a8730d3b" sha1="7a5782b2046012645a80c55cf4972d30322fba66"/>
 	</game>
-	<game name="Zhen Sanguo Wushuang 7 (Taiwan) (En,Zh)" id="101536">
+	<game name="Zhen Sanguo Wushuang 7 (Asia) (En,Zh)" id="101536">
 		<category>Games</category>
-		<description>Zhen Sanguo Wushuang 7 (Taiwan) (En,Zh)</description>
-		<rom name="Zhen Sanguo Wushuang 7 (Taiwan) (En,Zh).iso" size="8738846720" crc="e7c234fe" md5="102e80e2b7583c6d680c281abf9c3514" sha1="4210c25b1ba47327882ec597a27d9d6f3722e278"/>
+		<description>Zhen Sanguo Wushuang 7 (Asia) (En,Zh)</description>
+		<rom name="Zhen Sanguo Wushuang 7 (Asia) (En,Zh).iso" size="8738846720" crc="e7c234fe" md5="102e80e2b7583c6d680c281abf9c3514" sha1="4210c25b1ba47327882ec597a27d9d6f3722e278"/>
 	</game>
 	<game name="Zoids Alternative (Japan)" id="76260">
 		<category>Games</category>
