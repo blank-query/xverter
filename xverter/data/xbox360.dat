@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-10-03 22-15-59)</description>
-		<version>2026-10-03 22-15-59</version>
-		<date>2026-10-03 22-15-59</date>
+		<description>Microsoft - Xbox 360 - Datfile (3709) (2026-10-11 15-13-33)</description>
+		<version>2026-10-11 15-13-33</version>
+		<date>2026-10-11 15-13-33</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -2895,10 +2895,10 @@
 		<description>Command &amp; Conquer - Alarmstufe Rot 3 (Germany)</description>
 		<rom name="Command &amp; Conquer - Alarmstufe Rot 3 (Germany).iso" size="7835492352" crc="2cec6c8f" md5="d4e9206e038c2df713fd222b7db548cf" sha1="32403945d979658ffdfee42a26284f0e8865809b"/>
 	</game>
-	<game name="Command &amp; Conquer - Alerte Rouge 3 (France)" id="123731">
+	<game name="Command &amp; Conquer - Alerte Rouge 3 (France, Canada)" id="123731">
 		<category>Games</category>
-		<description>Command &amp; Conquer - Alerte Rouge 3 (France)</description>
-		<rom name="Command &amp; Conquer - Alerte Rouge 3 (France).iso" size="7835492352" crc="dd8f58f2" md5="cd4fcad67e359e0c757e4a29103b1374" sha1="40ace322af873accbc8560d95ffccbfc7ef8f2ec"/>
+		<description>Command &amp; Conquer - Alerte Rouge 3 (France, Canada)</description>
+		<rom name="Command &amp; Conquer - Alerte Rouge 3 (France, Canada).iso" size="7835492352" crc="dd8f58f2" md5="cd4fcad67e359e0c757e4a29103b1374" sha1="40ace322af873accbc8560d95ffccbfc7ef8f2ec"/>
 	</game>
 	<game name="Command &amp; Conquer - Red Alert 3 (Italy)" id="66652">
 		<category>Games</category>
@@ -15554,10 +15554,10 @@
 		<description>Street Fighter IV (World) (En,Ja,Fr,De,Es,It,Ko)</description>
 		<rom name="Street Fighter IV (World) (En,Ja,Fr,De,Es,It,Ko).iso" size="7835492352" crc="a2544429" md5="60a11aaf6577883352010ee1aab3973c" sha1="2e7611a6002ac17e749490e182e2df8844fa1c76"/>
 	</game>
-	<game name="Street Fighter IV - The Ties That Bind (USA, Europe) (En,Fr,De,Es,It) (Bonus Disc)" id="112060">
+	<game name="Street Fighter IV - The Ties That Bind - Collector's Edition Bonus Disc (USA, Europe) (En,Fr,De,Es,It)" id="112060">
 		<category>Bonus Discs</category>
-		<description>Street Fighter IV - The Ties That Bind (USA, Europe) (En,Fr,De,Es,It) (Bonus Disc)</description>
-		<rom name="Street Fighter IV - The Ties That Bind (USA, Europe) (En,Fr,De,Es,It) (Bonus Disc).iso" size="7835492352" crc="d125875c" md5="53428cd32d7c56a2476c9c21b56bbfd7" sha1="33e1171d6c55095a2ddf10f5c5fe52bfcda290ec"/>
+		<description>Street Fighter IV - The Ties That Bind - Collector's Edition Bonus Disc (USA, Europe) (En,Fr,De,Es,It)</description>
+		<rom name="Street Fighter IV - The Ties That Bind - Collector's Edition Bonus Disc (USA, Europe) (En,Fr,De,Es,It).iso" size="7835492352" crc="d125875c" md5="53428cd32d7c56a2476c9c21b56bbfd7" sha1="33e1171d6c55095a2ddf10f5c5fe52bfcda290ec"/>
 	</game>
 	<game name="Street Fighter X Tekken (World) (Beta) (2012-01-15)" id="63399">
 		<category>Preproduction</category>

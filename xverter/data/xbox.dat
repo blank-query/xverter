@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox</name>
-		<description>Microsoft - Xbox - Datfile (2689) (2026-10-03 22-05-59)</description>
-		<version>2026-10-03 22-05-59</version>
-		<date>2026-10-03 22-05-59</date>
+		<description>Microsoft - Xbox - Datfile (2689) (2026-10-11 15-13-31)</description>
+		<version>2026-10-11 15-13-31</version>
+		<date>2026-10-11 15-13-31</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -215,10 +215,10 @@
 		<description>AirForce Delta Storm (USA) (Rev 1)</description>
 		<rom name="AirForce Delta Storm (USA) (Rev 1).iso" size="7825162240" crc="4490b432" md5="6adbf99abe618cfb8917b4159cd2b407" sha1="c75522718bc0d97147353692f500390e50ed5402"/>
 	</game>
-	<game name="Alias (Europe) (En,Fr,De,Es,It)" id="9053">
+	<game name="Alias (Europe, Australia) (En,Fr,De,Es,It)" id="9053">
 		<category>Games</category>
-		<description>Alias (Europe) (En,Fr,De,Es,It)</description>
-		<rom name="Alias (Europe) (En,Fr,De,Es,It).iso" size="7825162240" crc="d1d1b2d9" md5="d031e24c0307c446505ef10666e0ce35" sha1="691c282041d986fd36d99988c42ba21712fb4b86"/>
+		<description>Alias (Europe, Australia) (En,Fr,De,Es,It)</description>
+		<rom name="Alias (Europe, Australia) (En,Fr,De,Es,It).iso" size="7825162240" crc="d1d1b2d9" md5="d031e24c0307c446505ef10666e0ce35" sha1="691c282041d986fd36d99988c42ba21712fb4b86"/>
 	</game>
 	<game name="Alias (USA)" id="42804">
 		<category>Games</category>
@@ -2306,10 +2306,10 @@
 		<description>Dead or Alive 3 (Asia, Korea) (En,Fr,De,Es,It)</description>
 		<rom name="Dead or Alive 3 (Asia, Korea) (En,Fr,De,Es,It).iso" size="7825162240" crc="13d4a704" md5="0f21514b81bb92da9e774b7cf1e04644" sha1="8b6af7a5efa02e12a0d475521f957d39608d5668"/>
 	</game>
-	<game name="Dead or Alive 3 (Europe) (En,Ja,Fr,De,Es,It)" id="6101">
+	<game name="Dead or Alive 3 (Europe, Australia) (En,Ja,Fr,De,Es,It)" id="6101">
 		<category>Games</category>
-		<description>Dead or Alive 3 (Europe) (En,Ja,Fr,De,Es,It)</description>
-		<rom name="Dead or Alive 3 (Europe) (En,Ja,Fr,De,Es,It).iso" size="7825162240" crc="99e32810" md5="0f2e69a92b4de2db6e3d35faeeb7eee6" sha1="f330609a0e561f66115b73300d14bffb3b0d7552"/>
+		<description>Dead or Alive 3 (Europe, Australia) (En,Ja,Fr,De,Es,It)</description>
+		<rom name="Dead or Alive 3 (Europe, Australia) (En,Ja,Fr,De,Es,It).iso" size="7825162240" crc="99e32810" md5="0f2e69a92b4de2db6e3d35faeeb7eee6" sha1="f330609a0e561f66115b73300d14bffb3b0d7552"/>
 	</game>
 	<game name="Dead or Alive 3 (Japan) (En,Ja,Fr,De,Es,It)" id="27157">
 		<category>Games</category>
@@ -3251,10 +3251,10 @@
 		<description>Fable (USA) (Limited Edition Bonus DVD)</description>
 		<rom name="Fable (USA) (Limited Edition Bonus DVD).iso" size="7825162240" crc="060434d3" md5="6faca73af57216bf264b01536e1d2736" sha1="14a1c4b4b7c6949fcfb1ff122605c3cc3c753146"/>
 	</game>
-	<game name="Fable (USA, Europe)" id="6507">
+	<game name="Fable (World)" id="6507">
 		<category>Games</category>
-		<description>Fable (USA, Europe)</description>
-		<rom name="Fable (USA, Europe).iso" size="7825162240" crc="5e8944b2" md5="43abae9a4a1f8c5126ee041bccd1e9c7" sha1="d2e992a6aaca96ea397c7f341c13c2b020e165fd"/>
+		<description>Fable (World)</description>
+		<rom name="Fable (World).iso" size="7825162240" crc="5e8944b2" md5="43abae9a4a1f8c5126ee041bccd1e9c7" sha1="d2e992a6aaca96ea397c7f341c13c2b020e165fd"/>
 	</game>
 	<game name="Fable - The Lost Chapters (Europe) (En,Fr)" id="29622">
 		<category>Games</category>
@@ -6162,10 +6162,10 @@
 		<description>Midway Arcade Treasures (USA, Europe)</description>
 		<rom name="Midway Arcade Treasures (USA, Europe).iso" size="7825162240" crc="781bcc47" md5="8c41aa7fec9d1b983e4b3fcdff6137f8" sha1="d63e40688745f1d88bf4ffadd0291f91692c4309"/>
 	</game>
-	<game name="Midway Arcade Treasures 2 (USA, Europe)" id="6531">
+	<game name="Midway Arcade Treasures 2 (World)" id="6531">
 		<category>Games</category>
-		<description>Midway Arcade Treasures 2 (USA, Europe)</description>
-		<rom name="Midway Arcade Treasures 2 (USA, Europe).iso" size="7825162240" crc="7ac8d049" md5="431da35f02b55db5b6c0c0408383ab67" sha1="5e3da13f3c03853c116e7a69cbf81a02a61fec4d"/>
+		<description>Midway Arcade Treasures 2 (World)</description>
+		<rom name="Midway Arcade Treasures 2 (World).iso" size="7825162240" crc="7ac8d049" md5="431da35f02b55db5b6c0c0408383ab67" sha1="5e3da13f3c03853c116e7a69cbf81a02a61fec4d"/>
 	</game>
 	<game name="Midway Arcade Treasures 3 (USA, Europe)" id="12197">
 		<category>Games</category>
@@ -6282,10 +6282,10 @@
 		<description>Mortal Kombat - Armageddon (USA)</description>
 		<rom name="Mortal Kombat - Armageddon (USA).iso" size="7825162240" crc="d04aa986" md5="178d0166c6b668a546329178b74ed049" sha1="005151accb54df111dab2469dfd92b6a2e650f14"/>
 	</game>
-	<game name="Mortal Kombat - Deadly Alliance (Europe) (En,Fr,De,Es,It)" id="19486">
+	<game name="Mortal Kombat - Deadly Alliance (Europe, Australia) (En,Fr,De,Es,It)" id="19486">
 		<category>Games</category>
-		<description>Mortal Kombat - Deadly Alliance (Europe) (En,Fr,De,Es,It)</description>
-		<rom name="Mortal Kombat - Deadly Alliance (Europe) (En,Fr,De,Es,It).iso" size="7825162240" crc="00486513" md5="ad2cf20277ff0a90001e8fa883a9a220" sha1="3f8d8b38ebd6bf3f940f103f96a1d4219dd5b7d8"/>
+		<description>Mortal Kombat - Deadly Alliance (Europe, Australia) (En,Fr,De,Es,It)</description>
+		<rom name="Mortal Kombat - Deadly Alliance (Europe, Australia) (En,Fr,De,Es,It).iso" size="7825162240" crc="00486513" md5="ad2cf20277ff0a90001e8fa883a9a220" sha1="3f8d8b38ebd6bf3f940f103f96a1d4219dd5b7d8"/>
 	</game>
 	<game name="Mortal Kombat - Deadly Alliance (Germany) (En,Fr,De,Es,It)" id="12154">
 		<category>Games</category>
@@ -6502,10 +6502,10 @@
 		<description>MX SuperFly (USA)</description>
 		<rom name="MX SuperFly (USA).iso" size="7825162240" crc="00f47d90" md5="516a06c616bb90187819ffb86b6d5913" sha1="4a2a38eb57e1d609dea492f8850dcacb6a94d49c"/>
 	</game>
-	<game name="MX Unleashed (Europe)" id="28017">
+	<game name="MX Unleashed (Europe, Australia)" id="28017">
 		<category>Games</category>
-		<description>MX Unleashed (Europe)</description>
-		<rom name="MX Unleashed (Europe).iso" size="7825162240" crc="77100a2f" md5="969e4eba0fa1be115d957869403da075" sha1="3b4621efbe11ebe48cf43cfc14f731e7c798c40a"/>
+		<description>MX Unleashed (Europe, Australia)</description>
+		<rom name="MX Unleashed (Europe, Australia).iso" size="7825162240" crc="77100a2f" md5="969e4eba0fa1be115d957869403da075" sha1="3b4621efbe11ebe48cf43cfc14f731e7c798c40a"/>
 	</game>
 	<game name="MX Unleashed (USA)" id="23004">
 		<category>Games</category>
@@ -7232,10 +7232,10 @@
 		<description>NHL 2004 (USA)</description>
 		<rom name="NHL 2004 (USA).iso" size="7825162240" crc="4d63fdf1" md5="28d52a6a44bd96e221ff062ab8fd5f3e" sha1="f37d89c82b439727561c853c6bc5f4238902cc87"/>
 	</game>
-	<game name="NHL 2005 (Europe) (En,Fr,De,Sv,Fi)" id="21086">
+	<game name="NHL 2005 (Europe, Australia) (En,Fr,De,Sv,Fi)" id="21086">
 		<category>Games</category>
-		<description>NHL 2005 (Europe) (En,Fr,De,Sv,Fi)</description>
-		<rom name="NHL 2005 (Europe) (En,Fr,De,Sv,Fi).iso" size="7825162240" crc="3c7612a9" md5="cf327168802fbb75c7972b51ffa7e185" sha1="be4eb139b5633d558cd5ff766dc5900d79eeb133"/>
+		<description>NHL 2005 (Europe, Australia) (En,Fr,De,Sv,Fi)</description>
+		<rom name="NHL 2005 (Europe, Australia) (En,Fr,De,Sv,Fi).iso" size="7825162240" crc="3c7612a9" md5="cf327168802fbb75c7972b51ffa7e185" sha1="be4eb139b5633d558cd5ff766dc5900d79eeb133"/>
 	</game>
 	<game name="NHL 2005 (USA)" id="13616">
 		<category>Games</category>
@@ -9772,10 +9772,10 @@
 		<description>Sega GT 2002 &amp; JSRF - Jet Set Radio Future (USA) (En,Ja)</description>
 		<rom name="Sega GT 2002 &amp; JSRF - Jet Set Radio Future (USA) (En,Ja).iso" size="7825162240" crc="6767e8c0" md5="98fdc78eae6b61795f05c73483f7eb14" sha1="2d4a5ec047de848f3c452b42471adbc738272c43"/>
 	</game>
-	<game name="Sega GT 2002 (Europe) (En,Ja,Fr,De,Es,It)" id="35858">
+	<game name="Sega GT 2002 (Europe, Australia) (En,Ja,Fr,De,Es,It)" id="35858">
 		<category>Games</category>
-		<description>Sega GT 2002 (Europe) (En,Ja,Fr,De,Es,It)</description>
-		<rom name="Sega GT 2002 (Europe) (En,Ja,Fr,De,Es,It).iso" size="7825162240" crc="dcf53365" md5="243efee892315b85bd118cba9476914f" sha1="7e4c4d5554b16a7cb2be49f949198f3068b8ec34"/>
+		<description>Sega GT 2002 (Europe, Australia) (En,Ja,Fr,De,Es,It)</description>
+		<rom name="Sega GT 2002 (Europe, Australia) (En,Ja,Fr,De,Es,It).iso" size="7825162240" crc="dcf53365" md5="243efee892315b85bd118cba9476914f" sha1="7e4c4d5554b16a7cb2be49f949198f3068b8ec34"/>
 	</game>
 	<game name="Sega GT 2002 (Japan) (Demo)" id="70265">
 		<category>Demos</category>
@@ -11843,10 +11843,10 @@
 		<description>Top Spin (Asia) (En,Fr,De)</description>
 		<rom name="Top Spin (Asia) (En,Fr,De).iso" size="7825162240" crc="5cb2a99a" md5="3acc235a14de897b52e321145747bd09" sha1="015a7a9c397300a48fe3b90674d94570ed777d0b"/>
 	</game>
-	<game name="Top Spin (Europe) (En,Fr,De)" id="6569">
+	<game name="Top Spin (Europe, Australia) (En,Fr,De)" id="6569">
 		<category>Games</category>
-		<description>Top Spin (Europe) (En,Fr,De)</description>
-		<rom name="Top Spin (Europe) (En,Fr,De).iso" size="7825162240" crc="76af6674" md5="d100e6367670f4aab3e43636b273931c" sha1="7c15bd5bb83ca834db6588290eb24dfb617edd1e"/>
+		<description>Top Spin (Europe, Australia) (En,Fr,De)</description>
+		<rom name="Top Spin (Europe, Australia) (En,Fr,De).iso" size="7825162240" crc="76af6674" md5="d100e6367670f4aab3e43636b273931c" sha1="7c15bd5bb83ca834db6588290eb24dfb617edd1e"/>
 	</game>
 	<game name="Top Spin (Japan)" id="56023">
 		<category>Games</category>
