@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3710) (2026-10-18 21-17-24)</description>
-		<version>2026-10-18 21-17-24</version>
-		<date>2026-10-18 21-17-24</date>
+		<description>Microsoft - Xbox 360 - Datfile (3710) (2026-10-26 10-42-36)</description>
+		<version>2026-10-26 10-42-36</version>
+		<date>2026-10-26 10-42-36</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -540,11 +540,11 @@
 		<description>Anarchy Reigns (World) (En,Ja,Fr,Es,It)</description>
 		<rom name="Anarchy Reigns (World) (En,Ja,Fr,Es,It).iso" size="8738846720" crc="def13525" md5="9da4982cfe5e7629f6a4910286a72fca" sha1="68167be1f09685ee3b7e98842f30aba94b89146a"/>
 	</game>
-	<game name="Angry Birds Star Wars (United Arab Emirates, Russia) (Ru,Ar)" id="118301">
+	<game name="Angry Birds Star Wars (UAE, Russia) (Ru,Ar)" id="118301">
 		<category>Games</category>
 		<serial>AV-2305</serial>
-		<description>Angry Birds Star Wars (United Arab Emirates, Russia) (Ru,Ar)</description>
-		<rom name="Angry Birds Star Wars (United Arab Emirates, Russia) (Ru,Ar).iso" size="7838695424" crc="cfdd3657" md5="ef2e408361b6eefea10bb5acde11cbe7" sha1="af5257c6fe6f25558a49e8fc4cffb9e83893e642"/>
+		<description>Angry Birds Star Wars (UAE, Russia) (Ru,Ar)</description>
+		<rom name="Angry Birds Star Wars (UAE, Russia) (Ru,Ar).iso" size="7838695424" crc="cfdd3657" md5="ef2e408361b6eefea10bb5acde11cbe7" sha1="af5257c6fe6f25558a49e8fc4cffb9e83893e642"/>
 	</game>
 	<game name="Angry Birds Star Wars (USA, Europe) (En,Fr,De,Es,It,Pt)" id="46912">
 		<category>Games</category>
@@ -2648,17 +2648,17 @@
 		<description>Call of Duty: Advanced Warfare (Spain) (Disco de Juego)</description>
 		<rom name="Call of Duty - Advanced Warfare (Spain) (Disco de Juego).iso" size="8738846720" crc="6c07390f" md5="f1fa7d9a7ae45057389541ad5b0d01f8" sha1="99b01ea3208a4c87fd7f8208417170a7a765abfe"/>
 	</game>
-	<game name="Call of Duty - Advanced Warfare (United Arab Emirates) (En,Ar) (Game Disc)" id="133160">
+	<game name="Call of Duty - Advanced Warfare (UAE) (En,Ar) (Game Disc)" id="133160">
 		<category>Games</category>
 		<serial>AV-2324</serial>
-		<description>Call of Duty: Advanced Warfare (United Arab Emirates) (En,Ar) (Game Disc)</description>
-		<rom name="Call of Duty - Advanced Warfare (United Arab Emirates) (En,Ar) (Game Disc).iso" size="8738846720" crc="6c7181dd" md5="16ca22ad8d012d24c68967a9e9f09b22" sha1="0686433acae88eaff0f49fd1dc2cd113ad89d6b9"/>
+		<description>Call of Duty: Advanced Warfare (UAE) (En,Ar) (Game Disc)</description>
+		<rom name="Call of Duty - Advanced Warfare (UAE) (En,Ar) (Game Disc).iso" size="8738846720" crc="6c7181dd" md5="16ca22ad8d012d24c68967a9e9f09b22" sha1="0686433acae88eaff0f49fd1dc2cd113ad89d6b9"/>
 	</game>
-	<game name="Call of Duty - Advanced Warfare (United Arab Emirates) (En,Ar) (Install Disc)" id="133161">
+	<game name="Call of Duty - Advanced Warfare (UAE) (En,Ar) (Install Disc)" id="133161">
 		<category>Games</category>
 		<serial>AV-2324</serial>
-		<description>Call of Duty: Advanced Warfare (United Arab Emirates) (En,Ar) (Install Disc)</description>
-		<rom name="Call of Duty - Advanced Warfare (United Arab Emirates) (En,Ar) (Install Disc).iso" size="8738846720" crc="9db97944" md5="59c5aa136f1dc36739c03026849624e2" sha1="48b186682db3c8a0ff640cbbee717ff1e0ddd1b1"/>
+		<description>Call of Duty: Advanced Warfare (UAE) (En,Ar) (Install Disc)</description>
+		<rom name="Call of Duty - Advanced Warfare (UAE) (En,Ar) (Install Disc).iso" size="8738846720" crc="9db97944" md5="59c5aa136f1dc36739c03026849624e2" sha1="48b186682db3c8a0ff640cbbee717ff1e0ddd1b1"/>
 	</game>
 	<game name="Call of Duty - Advanced Warfare (World) (En,Fr,De,Es,It,Pt,Pl,Ru) (Install Disc)" id="53331">
 		<category>Games</category>
@@ -5383,11 +5383,11 @@
 		<description>Disney/Pixar WALL-E (Russia)</description>
 		<rom name="Disney-Pixar WALL-E (Russia).iso" size="7835492352" crc="38c3ae0f" md5="7738efb3680f6cb6e39e79c2fde33d9c" sha1="5041219af97874d8654752441bb76d96d68d3078"/>
 	</game>
-	<game name="Disney-Pixar WALL-E (United Arab Emirates) (En,Ar)" id="130268">
+	<game name="Disney-Pixar WALL-E (UAE) (En,Ar)" id="130268">
 		<category>Games</category>
 		<serial>TQ-2084</serial>
-		<description>Disney/Pixar WALL-E (United Arab Emirates) (En,Ar)</description>
-		<rom name="Disney-Pixar WALL-E (United Arab Emirates) (En,Ar).iso" size="7835492352" crc="f66d5fa4" md5="7756ec6e1595cddea050573486fd3dec" sha1="53833c11c5694afd650e30ea0bf0a6c18ff1c6a5"/>
+		<description>Disney/Pixar WALL-E (UAE) (En,Ar)</description>
+		<rom name="Disney-Pixar WALL-E (UAE) (En,Ar).iso" size="7835492352" crc="f66d5fa4" md5="7756ec6e1595cddea050573486fd3dec" sha1="53833c11c5694afd650e30ea0bf0a6c18ff1c6a5"/>
 	</game>
 	<game name="Disney-Pixar WALL-E (USA) (En,Fr,Es)" id="102416">
 		<category>Games</category>
@@ -5579,17 +5579,17 @@
 		<description>Dragon Age: Inquisition (Brazil) (En,Pt) (Disco 2)</description>
 		<rom name="Dragon Age - Inquisition (Brazil) (En,Pt) (Disco 2).iso" size="8738846720" crc="90a4c145" md5="2789bca94ac5f1043110cff5998cf059" sha1="bcf8eced2469b4308556e169f8300badbeba4fe9"/>
 	</game>
-	<game name="Dragon Age - Inquisition (France) (En,Fr,De,Es,It,Pl,Ru) (Disque 1)" id="123739">
+	<game name="Dragon Age - Inquisition (France, Canada) (En,Fr,De,Es,It,Pl,Ru) (Disque 1)" id="123739">
 		<category>Games</category>
 		<serial>EA-2455</serial>
-		<description>Dragon Age: Inquisition (France) (En,Fr,De,Es,It,Pl,Ru) (Disque 1)</description>
-		<rom name="Dragon Age - Inquisition (France) (En,Fr,De,Es,It,Pl,Ru) (Disque 1).iso" size="8738846720" crc="54d4aec5" md5="be804c85280df971261f81ec98fd16ae" sha1="75b106c6bf1c1e53aa86a342ec46a9bb40bc1b5b"/>
+		<description>Dragon Age: Inquisition (France, Canada) (En,Fr,De,Es,It,Pl,Ru) (Disque 1)</description>
+		<rom name="Dragon Age - Inquisition (France, Canada) (En,Fr,De,Es,It,Pl,Ru) (Disque 1).iso" size="8738846720" crc="54d4aec5" md5="be804c85280df971261f81ec98fd16ae" sha1="75b106c6bf1c1e53aa86a342ec46a9bb40bc1b5b"/>
 	</game>
-	<game name="Dragon Age - Inquisition (France) (En,Fr,De,Es,It,Pl,Ru) (Disque 2)" id="123740">
+	<game name="Dragon Age - Inquisition (France, Canada) (En,Fr,De,Es,It,Pl,Ru) (Disque 2)" id="123740">
 		<category>Games</category>
 		<serial>EA-2455</serial>
-		<description>Dragon Age: Inquisition (France) (En,Fr,De,Es,It,Pl,Ru) (Disque 2)</description>
-		<rom name="Dragon Age - Inquisition (France) (En,Fr,De,Es,It,Pl,Ru) (Disque 2).iso" size="8738846720" crc="38ba005c" md5="cc3d56505a646aec82629e1fc13cd0f8" sha1="ff62a094db9e0542c0d647129b8dfdacb25fbd74"/>
+		<description>Dragon Age: Inquisition (France, Canada) (En,Fr,De,Es,It,Pl,Ru) (Disque 2)</description>
+		<rom name="Dragon Age - Inquisition (France, Canada) (En,Fr,De,Es,It,Pl,Ru) (Disque 2).iso" size="8738846720" crc="38ba005c" md5="cc3d56505a646aec82629e1fc13cd0f8" sha1="ff62a094db9e0542c0d647129b8dfdacb25fbd74"/>
 	</game>
 	<game name="Dragon Age - Inquisition (Germany) (En,Fr,De,Es,It,Pl,Ru) (Disc 1)" id="130836">
 		<category>Games</category>
@@ -6660,11 +6660,11 @@
 		<description>Everyone Sing (Europe)</description>
 		<rom name="Everyone Sing (Europe).iso" size="7838695424" crc="e116f107" md5="f8bf1c241991ebeafde46652380cb936" sha1="e85510ce782edd6ec0cdcbd8bba1c8cbbf7049cb"/>
 	</game>
-	<game name="Everyparty (Asia) (En,Zh,Ko)" id="100965">
+	<game name="Everyparty (Asia, Korea) (En,Zh,Ko)" id="100965">
 		<category>Games</category>
 		<serial>MS-2032</serial>
-		<description>Everyparty (Asia) (En,Zh,Ko)</description>
-		<rom name="Everyparty (Asia) (En,Zh,Ko).iso" size="7834892288" crc="8af45414" md5="30ee98d7a84db3c3ed2a09dfe213e6a5" sha1="bfa24b224c7cc86436731684e8f9e8ce955acb07"/>
+		<description>Everyparty (Asia, Korea) (En,Zh,Ko)</description>
+		<rom name="Everyparty (Asia, Korea) (En,Zh,Ko).iso" size="7834892288" crc="8af45414" md5="30ee98d7a84db3c3ed2a09dfe213e6a5" sha1="bfa24b224c7cc86436731684e8f9e8ce955acb07"/>
 	</game>
 	<game name="Evil Within, The (Europe) (En,Ru)" id="107247">
 		<category>Games</category>
@@ -7216,12 +7216,6 @@
 		<description>Fable II (USA, Asia) (En,Zh,Ko,Pl,Cs,Hu,Sk) (Rev 1)</description>
 		<rom name="Fable II (USA, Asia) (En,Zh,Ko,Pl,Cs,Hu,Sk) (Rev 1).iso" size="7838695424" crc="e52c11fc" md5="c77b4fa44ff4b9f2d0c9252bbc8f5658" sha1="c38649fc79a22c25df1aba7013fa317d45257481"/>
 	</game>
-	<game name="Fable II (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu,Sk) (Bonus Disc)" id="76971">
-		<category>Bonus Discs</category>
-		<serial>MS-2174</serial>
-		<description>Fable II (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu,Sk) (Bonus Disc)</description>
-		<rom name="Fable II (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu,Sk) (Bonus Disc).iso" size="7835492352" crc="0a0675d3" md5="0d5d2a33c77a37583a5112a5211496c8" sha1="0aa09b7ffa2c41f546fe9750150968c35c78451a"/>
-	</game>
 	<game name="Fable II (USA, Europe) (En,Zh,Ko,Pl,Cs,Hu,Sk) (Rev 2)" id="20202">
 		<category>Games</category>
 		<serial>MS-2033</serial>
@@ -7234,6 +7228,12 @@
 		<serial>MS-2033</serial>
 		<description>Fable II (World) (En,Zh,Ko,Pl,Cs,Hu,Sk)</description>
 		<rom name="Fable II (World) (En,Zh,Ko,Pl,Cs,Hu,Sk).iso" size="7835492352" crc="bffb0011" md5="419a2388a28f98744079208b70daebc7" sha1="17a20c6d52b47d0c3b70b27a7f6f8a8c0f6f39fc"/>
+	</game>
+	<game name="Fable II - Bonus Disc (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu,Sk)" id="76971">
+		<category>Bonus Discs</category>
+		<serial>MS-2174</serial>
+		<description>Fable II: Bonus Disc (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu,Sk)</description>
+		<rom name="Fable II - Bonus Disc (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru,Cs,Hu,Sk).iso" size="7835492352" crc="0a0675d3" md5="0d5d2a33c77a37583a5112a5211496c8" sha1="0aa09b7ffa2c41f546fe9750150968c35c78451a"/>
 	</game>
 	<game name="Fable III (France, Canada)" id="102210">
 		<category>Games</category>
@@ -11203,17 +11203,17 @@
 		<description>Last Remnant, The (Europe) (En,Fr,De,Es,It) (Disc 2)</description>
 		<rom name="Last Remnant, The (Europe) (En,Fr,De,Es,It) (Disc 2).iso" size="7835492352" crc="4127240d" md5="1c9e8b6b1af296dcb09c18ab3578b16a" sha1="d01f6aa9457f321abb9fcc460ea5567cc079d307"/>
 	</game>
-	<game name="Last Remnant, The (Japan) (Disc 1)" id="51482">
+	<game name="Last Remnant, The (Japan, Asia) (Disc 1)" id="51482">
 		<category>Games</category>
 		<serial>SQ-2010</serial>
-		<description>Last Remnant, The (Japan) (Disc 1)</description>
-		<rom name="Last Remnant, The (Japan) (Disc 1).iso" size="7835492352" crc="7b8eb7c5" md5="762bf784aece352d34bf349ad0d2657c" sha1="1c15e326b8a5ff2e47af7bbc0e7ee9ddd37f84b9"/>
+		<description>Last Remnant, The (Japan, Asia) (Disc 1)</description>
+		<rom name="Last Remnant, The (Japan, Asia) (Disc 1).iso" size="7835492352" crc="7b8eb7c5" md5="762bf784aece352d34bf349ad0d2657c" sha1="1c15e326b8a5ff2e47af7bbc0e7ee9ddd37f84b9"/>
 	</game>
-	<game name="Last Remnant, The (Japan) (Disc 2)" id="51483">
+	<game name="Last Remnant, The (Japan, Asia) (Disc 2)" id="51483">
 		<category>Games</category>
 		<serial>SQ-2010</serial>
-		<description>Last Remnant, The (Japan) (Disc 2)</description>
-		<rom name="Last Remnant, The (Japan) (Disc 2).iso" size="7835492352" crc="95e4a181" md5="7d67292842c7efd7e2880da0215c4c0d" sha1="c768dc6123aa668dd38d95fccc69a8d491498c3c"/>
+		<description>Last Remnant, The (Japan, Asia) (Disc 2)</description>
+		<rom name="Last Remnant, The (Japan, Asia) (Disc 2).iso" size="7835492352" crc="95e4a181" md5="7d67292842c7efd7e2880da0215c4c0d" sha1="c768dc6123aa668dd38d95fccc69a8d491498c3c"/>
 	</game>
 	<game name="Last Remnant, The (USA) (En,Fr,De,Es,It) (Disc 1)" id="12494">
 		<category>Games</category>
@@ -17750,11 +17750,11 @@
 		<description>Shin Sangoku Musou: Multi Raid Special (Japan, Asia)</description>
 		<rom name="Shin Sangoku Musou - Multi Raid Special (Japan, Asia).iso" size="7838695424" crc="acb2e1fc" md5="43a3a81b5edec930d89ff797fbf3b0a2" sha1="28cffaacce57dce123df7e6f5be1cb4ef6c5826d"/>
 	</game>
-	<game name="Shin Sangoku Musou 4 - Empires (Japan, Korea)" id="92532">
+	<game name="Shin Sangoku Musou 4 - Empires (Japan, Asia)" id="92532">
 		<category>Games</category>
 		<serial>KO-2003</serial>
-		<description>Shin Sangoku Musou 4: Empires (Japan, Korea)</description>
-		<rom name="Shin Sangoku Musou 4 - Empires (Japan, Korea).iso" size="7834892288" crc="98cd93d6" md5="b9ece49278751fb59932fd50a6ab2bf6" sha1="aa5426b73a95936e82b86f68d0f8604d7930b2f2"/>
+		<description>Shin Sangoku Musou 4: Empires (Japan, Asia)</description>
+		<rom name="Shin Sangoku Musou 4 - Empires (Japan, Asia).iso" size="7834892288" crc="98cd93d6" md5="b9ece49278751fb59932fd50a6ab2bf6" sha1="aa5426b73a95936e82b86f68d0f8604d7930b2f2"/>
 	</game>
 	<game name="Shin Sangoku Musou 4 Special (Asia)" id="101182">
 		<category>Games</category>
@@ -18352,6 +18352,7 @@
 	<game name="South Park - Der Stab der Wahrheit (Germany)" id="58144">
 		<category>Games</category>
 		<serial>US-2245</serial>
+		<version>Rev 1</version>
 		<description>South Park: Der Stab der Wahrheit (Germany)</description>
 		<rom name="South Park - Der Stab der Wahrheit (Germany).iso" size="7838695424" crc="f76eb2ed" md5="da871583317e673301f3a409098a1a1a" sha1="6b5776919fffb010ef9c22920f45c008543357df"/>
 	</game>
@@ -19573,11 +19574,11 @@
 		<description>Tomb Raider (Russia) (Pl,Ru)</description>
 		<rom name="Tomb Raider (Russia) (Pl,Ru).iso" size="7838695424" crc="999df6c3" md5="db30e7f3110bf8401c35719ed3ef8d1a" sha1="7d7ee2e0d844a6b0d1e8dc2e272b53cb487bd1a7"/>
 	</game>
-	<game name="Tomb Raider (United Arab Emirates) (En,Ar)" id="131980">
+	<game name="Tomb Raider (UAE) (En,Ar)" id="131980">
 		<category>Games</category>
 		<serial>SQ-2050</serial>
-		<description>Tomb Raider (United Arab Emirates) (En,Ar)</description>
-		<rom name="Tomb Raider (United Arab Emirates) (En,Ar).iso" size="7838695424" crc="bdfc9721" md5="ac7a8d547093586cdcf1056d7fcf3e7e" sha1="7104c5b7af71f0454217bf35180d5a0e13a168ae"/>
+		<description>Tomb Raider (UAE) (En,Ar)</description>
+		<rom name="Tomb Raider (UAE) (En,Ar).iso" size="7838695424" crc="bdfc9721" md5="ac7a8d547093586cdcf1056d7fcf3e7e" sha1="7104c5b7af71f0454217bf35180d5a0e13a168ae"/>
 	</game>
 	<game name="Tomb Raider (USA, Europe) (En,Es,Nl,Pt)" id="38453">
 		<category>Games</category>
@@ -21179,11 +21180,11 @@
 		<description>X-Men: The Official Game (Europe) (Es,It)</description>
 		<rom name="X-Men - The Official Game (Europe) (Es,It).iso" size="7834892288" crc="e13aee03" md5="71847ea1156615e61c9c896366f1a9db" sha1="21275f2aee8ffd158eec2c8ac02e38ed6966aff4"/>
 	</game>
-	<game name="X-Men - The Official Game (USA)" id="60749">
+	<game name="X-Men - The Official Game (USA, Australia)" id="60749">
 		<category>Games</category>
 		<serial>AV-2011</serial>
-		<description>X-Men: The Official Game (USA)</description>
-		<rom name="X-Men - The Official Game (USA).iso" size="7834892288" crc="72fd0782" md5="878098af7d6234700908a939e738125b" sha1="6ae51866cf8efd039c55555434f6965fef4b5631"/>
+		<description>X-Men: The Official Game (USA, Australia)</description>
+		<rom name="X-Men - The Official Game (USA, Australia).iso" size="7834892288" crc="72fd0782" md5="878098af7d6234700908a939e738125b" sha1="6ae51866cf8efd039c55555434f6965fef4b5631"/>
 	</game>
 	<game name="X-Men Origins - Wolverine - Uncaged Edition (USA, Europe) (En,Fr,Es,It)" id="13323">
 		<category>Games</category>

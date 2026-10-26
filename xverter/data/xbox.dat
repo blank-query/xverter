@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox</name>
-		<description>Microsoft - Xbox - Datfile (2689) (2026-10-17 22-03-49)</description>
-		<version>2026-10-17 22-03-49</version>
-		<date>2026-10-17 22-03-49</date>
+		<description>Microsoft - Xbox - Datfile (2690) (2026-10-26 10-13-57)</description>
+		<version>2026-10-26 10-13-57</version>
+		<date>2026-10-26 10-13-57</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -5128,23 +5128,23 @@
 		<description>Guilty Gear Isuka (Japan)</description>
 		<rom name="Guilty Gear Isuka (Japan).iso" size="7825162240" crc="9afc9fc3" md5="87e815100cb1b7b9cc16a229323cd21a" sha1="16d8b02559b27cc53bb658f17b2a438f2900cbf6"/>
 	</game>
-	<game name="Guilty Gear X2 Reload - The Midnight Carnival (Europe)" id="25091">
+	<game name="Guilty Gear X2 #Reload - The Midnight Carnival (Europe)" id="25091">
 		<category>Games</category>
 		<serial>SA-006</serial>
 		<description>Guilty Gear X2 #Reload: The Midnight Carnival (Europe)</description>
-		<rom name="Guilty Gear X2 Reload - The Midnight Carnival (Europe).iso" size="7825162240" crc="c7863607" md5="6bf18e25c6d31e28a16fac7313dbf34c" sha1="0acbe5a89e21b231c3cd61d27f35278eeb8478e7"/>
+		<rom name="Guilty Gear X2 #Reload - The Midnight Carnival (Europe).iso" size="7825162240" crc="c7863607" md5="6bf18e25c6d31e28a16fac7313dbf34c" sha1="0acbe5a89e21b231c3cd61d27f35278eeb8478e7"/>
 	</game>
-	<game name="Guilty Gear X2 Reload - The Midnight Carnival (USA)" id="9244">
+	<game name="Guilty Gear X2 #Reload - The Midnight Carnival (USA)" id="9244">
 		<category>Games</category>
 		<serial>SA-002</serial>
 		<description>Guilty Gear X2 #Reload: The Midnight Carnival (USA)</description>
-		<rom name="Guilty Gear X2 Reload - The Midnight Carnival (USA).iso" size="7825162240" crc="ea7286aa" md5="d17149a71fda7733ca0cd10ac6345658" sha1="49ef33801f5e8d4486bdb91467c2a4a139a1cacc"/>
+		<rom name="Guilty Gear X2 #Reload - The Midnight Carnival (USA).iso" size="7825162240" crc="ea7286aa" md5="d17149a71fda7733ca0cd10ac6345658" sha1="49ef33801f5e8d4486bdb91467c2a4a139a1cacc"/>
 	</game>
-	<game name="Guilty Gear XX Reload - The Midnight Carnival (Japan)" id="56154">
+	<game name="Guilty Gear XX #Reload - The Midnight Carnival (Japan)" id="56154">
 		<category>Games</category>
 		<serial>SA-002</serial>
 		<description>Guilty Gear XX #Reload: The Midnight Carnival (Japan)</description>
-		<rom name="Guilty Gear XX Reload - The Midnight Carnival (Japan).iso" size="7825162240" crc="3754610b" md5="cb5f3989fef81a5ed2708c7e2405696d" sha1="b9c81f5643c798372a0d969a0c6393029627230f"/>
+		<rom name="Guilty Gear XX #Reload - The Midnight Carnival (Japan).iso" size="7825162240" crc="3754610b" md5="cb5f3989fef81a5ed2708c7e2405696d" sha1="b9c81f5643c798372a0d969a0c6393029627230f"/>
 	</game>
 	<game name="Gun (Germany)" id="23916">
 		<category>Games</category>
@@ -15913,6 +15913,12 @@
 		<description>Xbox Wireless Adapter Setup v1.0 (USA)</description>
 		<rom name="Xbox Wireless Adapter Setup v1.0 (USA).cue" size="127" crc="b8ed1ed1" md5="bb23ec9b4ea52ddda9ac2077bbd4fe84" sha1="1926335b76a827804db6ff334a7ea755ae552fa9"/>
 		<rom name="Xbox Wireless Adapter Setup v1.0 (USA).bin" size="62092800" crc="fde000ae" md5="cea1e6ecb5a34e7750dbc7e062337721" sha1="c0c2f717ac3f31a7ea63867b7f3751b4fd3f868c"/>
+	</game>
+	<game name="Xbox-ism - Autumn 2002 (Japan)" id="139698">
+		<category>Demos</category>
+		<serial>XD-009</serial>
+		<description>Xbox-ism: Autumn 2002 (Japan)</description>
+		<rom name="Xbox-ism - Autumn 2002 (Japan).iso" size="7825162240" crc="c2e8a1b2" md5="170146f818c4144b3ebf381991ce8583" sha1="6dde43a2aa07bbdc9be636ff7c0ed88fc3413412"/>
 	</game>
 	<game name="Xbox-ism - February 2003 (Japan)" id="117548">
 		<category>Demos</category>
