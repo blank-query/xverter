@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox</name>
-		<description>Microsoft - Xbox - Datfile (2690) (2026-10-26 10-13-57)</description>
-		<version>2026-10-26 10-13-57</version>
-		<date>2026-10-26 10-13-57</date>
+		<description>Microsoft - Xbox - Datfile (2691) (2026-11-01 16-48-12)</description>
+		<version>2026-11-01 16-48-12</version>
+		<date>2026-11-01 16-48-12</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -7306,11 +7306,11 @@
 		<description>Micro Machines (Europe) (En,Fr,De,Es,It)</description>
 		<rom name="Micro Machines (Europe) (En,Fr,De,Es,It).iso" size="7825162240" crc="4ebfdfe8" md5="0e8f0a578be3918e503cc04275f75fab" sha1="7ef77c1db6300a8eb9206d11a45e613600f9fef9"/>
 	</game>
-	<game name="Microsoft Game Studios New Year 2005 (Japan)" id="56184">
+	<game name="Microsoft Game Studios - New Year 2005 (Japan)" id="56184">
 		<category>Demos</category>
 		<serial>XK-049</serial>
-		<description>Microsoft Game Studios New Year 2005 (Japan)</description>
-		<rom name="Microsoft Game Studios New Year 2005 (Japan).iso" size="7825162240" crc="3bfe3558" md5="f7cc6d5bf2464649e519b0dd3493cebc" sha1="0ac5c5e5694117b66cb39b247dc8c53313e26581"/>
+		<description>Microsoft Game Studios: New Year 2005 (Japan)</description>
+		<rom name="Microsoft Game Studios - New Year 2005 (Japan).iso" size="7825162240" crc="3bfe3558" md5="f7cc6d5bf2464649e519b0dd3493cebc" sha1="0ac5c5e5694117b66cb39b247dc8c53313e26581"/>
 	</game>
 	<game name="Microsoft Windows Media Center Extender for Xbox (USA)" id="84195">
 		<category>Applications</category>
@@ -13936,17 +13936,17 @@
 		<description>Tom Clancy's Ghost Recon: Island Thunder (Korea)</description>
 		<rom name="Tom Clancy's Ghost Recon - Island Thunder (Korea).iso" size="7825162240" crc="37f10e65" md5="1a9d057384a02e55e29996264fdce315" sha1="43b0d7c93bce674c8f43dc008ed98b9da84ab04e"/>
 	</game>
-	<game name="Tom Clancy's Ghost Recon - Island Thunder (USA)" id="35834">
-		<category>Games</category>
-		<serial>US-007</serial>
-		<description>Tom Clancy's Ghost Recon: Island Thunder (USA)</description>
-		<rom name="Tom Clancy's Ghost Recon - Island Thunder (USA).iso" size="7825162240" crc="4adf8b4c" md5="89e145afd1b35d4bf1d9a0ed341ae0f5" sha1="d7200016a42ac03a03081e92f8cc548b0c591eea"/>
-	</game>
 	<game name="Tom Clancy's Ghost Recon - Island Thunder (USA) (Demo)" id="53803">
 		<category>Demos</category>
 		<serial>US-007</serial>
 		<description>Tom Clancy's Ghost Recon: Island Thunder (USA) (Demo)</description>
 		<rom name="Tom Clancy's Ghost Recon - Island Thunder (USA) (Demo).iso" size="7825162240" crc="2b885eaa" md5="cbc420b34dfcfce70ff881eef3c2369c" sha1="f3ae4bf3d8bd422619b0e77766867d670fbd33e8"/>
+	</game>
+	<game name="Tom Clancy's Ghost Recon - Island Thunder (USA, Asia)" id="35834">
+		<category>Games</category>
+		<serial>US-007</serial>
+		<description>Tom Clancy's Ghost Recon: Island Thunder (USA, Asia)</description>
+		<rom name="Tom Clancy's Ghost Recon - Island Thunder (USA, Asia).iso" size="7825162240" crc="4adf8b4c" md5="89e145afd1b35d4bf1d9a0ed341ae0f5" sha1="d7200016a42ac03a03081e92f8cc548b0c591eea"/>
 	</game>
 	<game name="Tom Clancy's Ghost Recon 2 (USA, Europe) (En,Fr,De,Es,It)" id="6013">
 		<category>Games</category>
@@ -15985,6 +15985,12 @@
 		<serial>XK-032</serial>
 		<description>Xbox-ism: Winter 2003 (Japan)</description>
 		<rom name="Xbox-ism - Winter 2003 (Japan).iso" size="7825162240" crc="7886d48b" md5="93575ca65f963a85d7cd2a5d312338f3" sha1="a83bca2390509c0f195446ea5e5976d959c5c608"/>
+	</game>
+	<game name="Xbox-ism - Winter 2004 (Japan)" id="139771">
+		<category>Demos</category>
+		<serial>XK-046</serial>
+		<description>Xbox-ism: Winter 2004 (Japan)</description>
+		<rom name="Xbox-ism - Winter 2004 (Japan).iso" size="7825162240" crc="b3ca0a01" md5="988611a1b97553b78411ce940231a29d" sha1="b571e53cca09c87e5f729fe807392d4e597a283d"/>
 	</game>
 	<game name="XGRA - Extreme G Racing Association (Europe) (En,Fr,De,Es,It)" id="14476">
 		<category>Games</category>

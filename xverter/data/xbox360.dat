@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3710) (2026-10-26 10-42-36)</description>
-		<version>2026-10-26 10-42-36</version>
-		<date>2026-10-26 10-42-36</date>
+		<description>Microsoft - Xbox 360 - Datfile (3737) (2026-11-01 18-48-09)</description>
+		<version>2026-11-01 18-48-09</version>
+		<date>2026-11-01 18-48-09</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -407,6 +407,12 @@
 		<serial>MS-2270</serial>
 		<description>Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc)</description>
 		<rom name="Alan Wake (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru) (Bonus Disc).iso" size="7838695424" crc="607108ec" md5="476688981fbc1de2f367680532283ac1" sha1="433f05bd117b83104866fceea058426e6952f011"/>
+	</game>
+	<game name="Alice - Madness Returns (Japan)" id="139805">
+		<category>Games</category>
+		<serial>EA-2326</serial>
+		<description>Alice: Madness Returns (Japan)</description>
+		<rom name="Alice - Madness Returns (Japan).iso" size="7838695424" crc="aba66802" md5="b6fb23e53bbb2e1720d52898f9bd1ec6" sha1="100cab708c429d7ceec7179d76b0eec815d534ff"/>
 	</game>
 	<game name="Alice - Madness Returns (World) (En,Fr,De,Es,It)" id="38414">
 		<category>Games</category>
@@ -1255,6 +1261,18 @@
 		<description>Batman: Arkham Origins (Brazil) (En,Es,Pt) (Disco 2)</description>
 		<rom name="Batman - Arkham Origins (Brazil) (En,Es,Pt) (Disco 2).iso" size="8738846720" crc="c01b7e63" md5="18fcdadcb273eb60ebf7daac534eff08" sha1="cc836ff65ec9fffa7920a5d3a6bd18a2da8abf07"/>
 	</game>
+	<game name="Batman - Arkham Origins (Japan) (Disc 1)" id="139806">
+		<category>Games</category>
+		<serial>WR-2088</serial>
+		<description>Batman: Arkham Origins (Japan) (Disc 1)</description>
+		<rom name="Batman - Arkham Origins (Japan) (Disc 1).iso" size="8738846720" crc="60d3e58e" md5="bff0ad68800b2ce255c38ede6a372f40" sha1="cf5c683ff8429231a2c2e774fe9adf5e0425c608"/>
+	</game>
+	<game name="Batman - Arkham Origins (Japan) (Disc 2)" id="139807">
+		<category>Games</category>
+		<serial>WR-2088</serial>
+		<description>Batman: Arkham Origins (Japan) (Disc 2)</description>
+		<rom name="Batman - Arkham Origins (Japan) (Disc 2).iso" size="8738846720" crc="e4a628dc" md5="c9ed83a5b0403560e7259eaa97773bb8" sha1="0438291b7bc98c4122101155c39502e24c9a840e"/>
+	</game>
 	<game name="Batman - Arkham Origins (USA, Europe) (En,Fr,De,Es,It,Ko,Pl,Ru) (Disc 1)" id="50852">
 		<category>Games</category>
 		<serial>WR-2088</serial>
@@ -1802,6 +1820,12 @@
 		<serial>KN-2105</serial>
 		<description>Birds of Steel (Europe)</description>
 		<rom name="Birds of Steel (Europe).iso" size="8738846720" crc="986b713f" md5="f90bb0569fc30b2abe26769626aa3938" sha1="40c6a05a80437e20514150fac3edfb5b77fb8fb4"/>
+	</game>
+	<game name="Birds of Steel (Japan)" id="139808">
+		<category>Games</category>
+		<serial>KN-2105</serial>
+		<description>Birds of Steel (Japan)</description>
+		<rom name="Birds of Steel (Japan).iso" size="8738846720" crc="5c3da154" md5="f60a3849c4aaf107fa158ef0015ee18c" sha1="9deab4bf420bfd7c2503a037e80579a5e5eacb0a"/>
 	</game>
 	<game name="Birds of Steel (USA)" id="51944">
 		<category>Games</category>
@@ -3323,6 +3347,12 @@
 		<description>Chikyuu Boueigun 4 (Japan)</description>
 		<rom name="Chikyuu Boueigun 4 (Japan).iso" size="7838695424" crc="ce88f7d4" md5="0469c572b8baaccb68e7a6f06a6c5c7f" sha1="d6e88f840c988e37ae0805b66f44eb8c520a8f84"/>
 	</game>
+	<game name="Child of Eden (Japan)" id="139809">
+		<category>Games</category>
+		<serial>US-2124</serial>
+		<description>Child of Eden (Japan)</description>
+		<rom name="Child of Eden (Japan).iso" size="7838695424" crc="fa1e2987" md5="ff61b933280a6635ebe5681b0447df9a" sha1="65b2dc7c47a9c6b01d2241386e83661cd7372c45"/>
+	</game>
 	<game name="Child of Eden (USA, Europe) (En,Fr,De,Es,It)" id="35187">
 		<category>Games</category>
 		<serial>US-2124</serial>
@@ -4107,11 +4137,11 @@
 		<description>Darkest of Days (USA)</description>
 		<rom name="Darkest of Days (USA).iso" size="7838695424" crc="0fc76d19" md5="8c9036e5a7bb66a0de4bd77f674b7f63" sha1="374433a143307333c1208926157d78bcddeaa061"/>
 	</game>
-	<game name="Darkness II, The (Japan, Europe)" id="57387">
+	<game name="Darkness II, The (Japan, Germany)" id="57387">
 		<category>Games</category>
 		<serial>TT-2189</serial>
-		<description>Darkness II, The (Japan, Europe)</description>
-		<rom name="Darkness II, The (Japan, Europe).iso" size="8738846720" crc="bcc16aaa" md5="af8b8f447efd1f85f233d6daba5ae2c7" sha1="17d4830c1d5fa2a6be50a74bf6eab8c0214c0806"/>
+		<description>Darkness II, The (Japan, Germany)</description>
+		<rom name="Darkness II, The (Japan, Germany).iso" size="8738846720" crc="bcc16aaa" md5="af8b8f447efd1f85f233d6daba5ae2c7" sha1="17d4830c1d5fa2a6be50a74bf6eab8c0214c0806"/>
 	</game>
 	<game name="Darkness II, The (UK)" id="35949">
 		<category>Games</category>
@@ -4173,11 +4203,11 @@
 		<description>Darksiders II (USA, Europe) (En,Fr,De,Es,It,Nl,Pl,Ru)</description>
 		<rom name="Darksiders II (USA, Europe) (En,Fr,De,Es,It,Nl,Pl,Ru).iso" size="8738846720" crc="493efafe" md5="2d784c17d80df4392ec908a2b3566c69" sha1="422bcb268f5079b7f46ec69b62e8a719269d6fdb"/>
 	</game>
-	<game name="DarkStar One - Broken Alliance (USA, Europe) (En,Fr,De)" id="16340">
+	<game name="Darkstar One - Broken Alliance (USA, Europe) (En,Fr,De)" id="16340">
 		<category>Games</category>
 		<serial>KY-2010</serial>
-		<description>DarkStar One: Broken Alliance (USA, Europe) (En,Fr,De)</description>
-		<rom name="DarkStar One - Broken Alliance (USA, Europe) (En,Fr,De).iso" size="7838695424" crc="c1ea12fb" md5="17c3373df50e1b76c6687f528d719ff7" sha1="55157639016f12f7883dd44a5b5977b196c1893b"/>
+		<description>Darkstar One: Broken Alliance (USA, Europe) (En,Fr,De)</description>
+		<rom name="Darkstar One - Broken Alliance (USA, Europe) (En,Fr,De).iso" size="7838695424" crc="c1ea12fb" md5="17c3373df50e1b76c6687f528d719ff7" sha1="55157639016f12f7883dd44a5b5977b196c1893b"/>
 	</game>
 	<game name="De Blob 2 (USA, Europe) (En,Fr,De,Es,It)" id="26919">
 		<category>Games</category>
@@ -6702,6 +6732,12 @@
 		<description>Experience Disc Version 1.4, The (USA)</description>
 		<rom name="Experience Disc Version 1.4, The (USA).iso" size="7834892288" crc="120a4269" md5="9248abc74f78440eb65328b7d59ac283" sha1="d203257f608721cb9ef90dc04436cb056b6066df"/>
 	</game>
+	<game name="Experience Disc Version 1.5 v3, The (USA) (En,Fr,Es)" id="58020">
+		<category>Demos</category>
+		<serial>XK-2028</serial>
+		<description>Experience Disc Version 1.5 v3, The (USA) (En,Fr,Es)</description>
+		<rom name="Experience Disc Version 1.5 v3, The (USA) (En,Fr,Es).iso" size="7834892288" crc="a639a51a" md5="fadce261e1ce4e42dca3495635e877cf" sha1="80d0e177d66e1c14b4ff83ebb3ed1bcc2864460e"/>
+	</game>
 	<game name="Experience Disc Version 1.5, The (Europe) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko)" id="125103">
 		<category>Demos</category>
 		<serial>XK-2029</serial>
@@ -6713,12 +6749,6 @@
 		<serial>XK-2025</serial>
 		<description>Experience Disc Version 1.5, The (USA) (En,Fr,Es)</description>
 		<rom name="Experience Disc Version 1.5, The (USA) (En,Fr,Es).iso" size="7834892288" crc="fdc9e48c" md5="1dadf1e488552b4998a04c547503e5d8" sha1="df25a20e416ee9808070e499a89dd8c2ce7597c5"/>
-	</game>
-	<game name="Experience Disc Version 1.5V3, The (USA) (En,Fr,Es)" id="58020">
-		<category>Demos</category>
-		<serial>XK-2028</serial>
-		<description>Experience Disc Version 1.5V3, The (USA) (En,Fr,Es)</description>
-		<rom name="Experience Disc Version 1.5V3, The (USA) (En,Fr,Es).iso" size="7834892288" crc="a639a51a" md5="fadce261e1ce4e42dca3495635e877cf" sha1="80d0e177d66e1c14b4ff83ebb3ed1bcc2864460e"/>
 	</game>
 	<game name="Experience Disc Version 1.6, The (Europe) (En,Fr,De,Es,It)" id="125104">
 		<category>Demos</category>
@@ -7281,6 +7311,12 @@
 		<category>Preproduction</category>
 		<description>FaceBreaker (Europe) (En,Fr,De) (Beta) (2008-06-08)</description>
 		<rom name="FaceBreaker (Europe) (En,Fr,De) (Beta) (2008-06-08).iso" size="3200997376" crc="7a18ef2a" md5="7789fb73f8e71706e35af270044239e6" sha1="1d587b5a190a4d91894f987d71262b68e2d1fe4d"/>
+	</game>
+	<game name="FaceBreaker (Japan)" id="139810">
+		<category>Games</category>
+		<serial>EA-2145</serial>
+		<description>FaceBreaker (Japan)</description>
+		<rom name="FaceBreaker (Japan).iso" size="7835492352" crc="9cf3571c" md5="1e46d1b87b267fc82cf9df3d8003c815" sha1="b09293fce2bc83fe76e52843d473912b377a3fc3"/>
 	</game>
 	<game name="FaceBreaker (USA) (Demo)" id="57633">
 		<category>Demos</category>
@@ -8899,6 +8935,12 @@
 		<description>Fuse (USA, Europe) (En,Fr,De,Es)</description>
 		<rom name="Fuse (USA, Europe) (En,Fr,De,Es).iso" size="8738846720" crc="38ebb996" md5="93b6152f75b2c030d26534e3ace3fe7f" sha1="a1b721b27d2f7da54ce4dec65a8cfdfbd78548f9"/>
 	</game>
+	<game name="Fuzion Frenzy 2 (Japan)" id="139811">
+		<category>Games</category>
+		<serial>HU-2004</serial>
+		<description>Fuzion Frenzy 2 (Japan)</description>
+		<rom name="Fuzion Frenzy 2 (Japan).iso" size="7835492352" crc="7b23be6c" md5="f8dae3be89dfcd2271e2c56d9c44a706" sha1="6b85bd5fc92194ec46295e586c9ea5b7ba56743b"/>
+	</game>
 	<game name="Fuzion Frenzy 2 (USA, Europe) (En,Ja,Fr,De,Es,It,Zh,Ko)" id="16635">
 		<category>Games</category>
 		<serial>HU-2004</serial>
@@ -9356,6 +9398,12 @@
 		<description>Grid 2 (USA, Europe) (En,Fr,Es,Pt)</description>
 		<rom name="Grid 2 (USA, Europe) (En,Fr,Es,Pt).iso" size="8738846720" crc="27edabba" md5="f96862592ae89e412d6275af7cb0ca76" sha1="7fc6d82e27dbcd5e9355f834bcfd76dbdde17727"/>
 	</game>
+	<game name="Grid Autosport (Japan)" id="139812">
+		<category>Games</category>
+		<serial>CM-2129</serial>
+		<description>Grid Autosport (Japan)</description>
+		<rom name="Grid Autosport (Japan).iso" size="8738846720" crc="3b6a2d03" md5="4e49333e37121190712188b77723a0bb" sha1="b7608cad3282488b13c3aa9b9ef8dcba966fcd75"/>
+	</game>
 	<game name="Grid Autosport (USA, Europe) (En,Fr,De,Es,It,Pt,Pl,Ru)" id="61846">
 		<category>Games</category>
 		<serial>CM-2129</serial>
@@ -9379,6 +9427,12 @@
 		<serial>AW-2001</serial>
 		<description>Guilty Gear 2: Overture (USA)</description>
 		<rom name="Guilty Gear 2 - Overture (USA).iso" size="7835492352" crc="e4ad3f19" md5="737167e38a54eaff43da482e73b3930c" sha1="7f1d0f3a7689c72d548b9e61431540e9d42f7c48"/>
+	</game>
+	<game name="Guitar Hero - Aerosmith (Japan)" id="139813">
+		<category>Games</category>
+		<serial>AV-2073</serial>
+		<description>Guitar Hero: Aerosmith (Japan)</description>
+		<rom name="Guitar Hero - Aerosmith (Japan).iso" size="7835492352" crc="2c191f50" md5="ed18b58236c75e695746a96f9dec3a6d" sha1="f71848a133d2cc96ab26e034ab67ddb409f3a2ff"/>
 	</game>
 	<game name="Guitar Hero - Aerosmith (USA) (Demo)" id="117720">
 		<category>Demos</category>
@@ -9652,11 +9706,11 @@
 		<description>Halo 3 (Spain) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko)</description>
 		<rom name="Halo 3 (Spain) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko).iso" size="7835492352" crc="40eee464" md5="eaa469c669721c91260094916985e70b" sha1="9f57c4111c17be71bb83be66fa858aac818169a8"/>
 	</game>
-	<game name="Halo 3 (USA, Europe) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko)" id="7749">
+	<game name="Halo 3 (World) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko)" id="7749">
 		<category>Games</category>
 		<serial>MS-2022</serial>
-		<description>Halo 3 (USA, Europe) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko)</description>
-		<rom name="Halo 3 (USA, Europe) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko).iso" size="7835492352" crc="3e97d574" md5="f84c357b70c30829098c3e66aa11972d" sha1="09b5e4354e62b9547a7776cb1be42010fb7b5208"/>
+		<description>Halo 3 (World) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko)</description>
+		<rom name="Halo 3 (World) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko).iso" size="7835492352" crc="3e97d574" md5="f84c357b70c30829098c3e66aa11972d" sha1="09b5e4354e62b9547a7776cb1be42010fb7b5208"/>
 	</game>
 	<game name="Halo 3 - Essentials (Europe) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1)" id="101061">
 		<category>Games</category>
@@ -9664,11 +9718,11 @@
 		<description>Halo 3: Essentials (Europe) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1)</description>
 		<rom name="Halo 3 - Essentials (Europe) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1).iso" size="7835492352" crc="514faa45" md5="b6aa15919fda442f7b5c57c7bbfc1519" sha1="fe15871df0a1e41d35db44d3944cfc6ecedbc66d"/>
 	</game>
-	<game name="Halo 3 - Essentials (USA, Japan) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1)" id="38302">
+	<game name="Halo 3 - Essentials (USA, Asia) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1)" id="38302">
 		<category>Bonus Discs</category>
 		<serial>MS-2082</serial>
-		<description>Halo 3: Essentials (USA, Japan) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1)</description>
-		<rom name="Halo 3 - Essentials (USA, Japan) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1).iso" size="7835492352" crc="fb46f481" md5="40fb3073c816d8b6d6112bc182db0d1e" sha1="07bc90480adfb42fe4667823e8fd5cf332ca6d4d"/>
+		<description>Halo 3: Essentials (USA, Asia) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1)</description>
+		<rom name="Halo 3 - Essentials (USA, Asia) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Disc 1).iso" size="7835492352" crc="fb46f481" md5="40fb3073c816d8b6d6112bc182db0d1e" sha1="07bc90480adfb42fe4667823e8fd5cf332ca6d4d"/>
 	</game>
 	<game name="Halo 3 - ODST (Asia) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko) (Campaign)" id="101058">
 		<category>Games</category>
@@ -10827,6 +10881,12 @@
 		<description>Kengou Zero (Japan)</description>
 		<rom name="Kengou Zero (Japan).iso" size="7834892288" crc="1fe82e55" md5="3db4998cc2b76973caed5c64f0689666" sha1="1db3e5f39f9f152d22bc47f70aaaf1e508d600d7"/>
 	</game>
+	<game name="Kengou Zero (Japan) (Taikenban)" id="139795">
+		<category>Demos</category>
+		<serial>GE-2004</serial>
+		<description>Kengou Zero (Japan) (Taikenban)</description>
+		<rom name="Kengou Zero (Japan) (Taikenban).iso" size="7834892288" crc="698b1b44" md5="c4047ebac6d499a673588836910d584d" sha1="962dbc7be2a2a8bc55562ab551c18d4dcd3dd912"/>
+	</game>
 	<game name="Ketsui - Kizuna Jigoku-tachi Extra (Japan)" id="13022">
 		<category>Games</category>
 		<serial>FV-2001</serial>
@@ -10877,19 +10937,19 @@
 		<description>Kinect Adventures! (Europe, Asia) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1)</description>
 		<rom name="Kinect Adventures! (Europe, Asia) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1).iso" size="7838695424" crc="d3b951e9" md5="bfdc6caff4e86b0888466099e90af8b6" sha1="91d8a29d85d827f71d1f16d007acca6f9ee6ff52"/>
 	</game>
-	<game name="Kinect Adventures! (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1)" id="60556">
-		<category>Games</category>
-		<serial>MS-2285</serial>
-		<version>Rev 1</version>
-		<description>Kinect Adventures! (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1)</description>
-		<rom name="Kinect Adventures! (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1).iso" size="7838695424" crc="b68f65de" md5="55f6d707f08a1b5aa094c0faa7ae03fc" sha1="e12a79e1b9c2b364255b3fc6f7bba622355c5907"/>
-	</game>
 	<game name="Kinect Adventures! (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 2)" id="131761">
 		<category>Games</category>
 		<serial>MS-2285</serial>
 		<version>Rev 2</version>
 		<description>Kinect Adventures! (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 2)</description>
 		<rom name="Kinect Adventures! (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 2).iso" size="7838695424" crc="62e0f6ba" md5="0f9439c09e9c1109fc616ab111d1f88b" sha1="eaca8f1e6818cf8d0335311cdb4382ca160f85fe"/>
+	</game>
+	<game name="Kinect Adventures! (USA, Asia) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1)" id="60556">
+		<category>Games</category>
+		<serial>MS-2285</serial>
+		<version>Rev 1</version>
+		<description>Kinect Adventures! (USA, Asia) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1)</description>
+		<rom name="Kinect Adventures! (USA, Asia) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru) (Rev 1).iso" size="7838695424" crc="b68f65de" md5="55f6d707f08a1b5aa094c0faa7ae03fc" sha1="e12a79e1b9c2b364255b3fc6f7bba622355c5907"/>
 	</game>
 	<game name="Kinect Adventures! (World) (En,Ja,Fr,De,Es,It,Nl,Pt,Zh,Ko,Pl,Ru)" id="20046">
 		<category>Games</category>
@@ -11173,6 +11233,12 @@
 		<description>L.A. Noire: The Complete Edition (USA, Europe) (En,Fr,De,Es,It) (Disc 4)</description>
 		<rom name="L.A. Noire - The Complete Edition (USA, Europe) (En,Fr,De,Es,It) (Disc 4).iso" size="7838695424" crc="c6fca488" md5="b0a3a5b765b18813fc28dfe66ab662a2" sha1="6aa4065b044affe6d17b8758b7669107cd0b04de"/>
 	</game>
+	<game name="Lara Croft Tomb Raider - Anniversary (Japan)" id="139814">
+		<category>Games</category>
+		<serial>SD-2037</serial>
+		<description>Lara Croft Tomb Raider: Anniversary (Japan)</description>
+		<rom name="Lara Croft Tomb Raider - Anniversary (Japan).iso" size="7835492352" crc="d076ce63" md5="58d83b01b43005455ba3eff1cf9ec762" sha1="321390f482cffa1adb2d054dbfcb839700924cb9"/>
+	</game>
 	<game name="Lara Croft Tomb Raider - Anniversary (USA, Europe) (En,Fr,De,Es,It)" id="11836">
 		<category>Games</category>
 		<serial>SC-2026</serial>
@@ -11215,17 +11281,17 @@
 		<description>Last Remnant, The (Japan, Asia) (Disc 2)</description>
 		<rom name="Last Remnant, The (Japan, Asia) (Disc 2).iso" size="7835492352" crc="95e4a181" md5="7d67292842c7efd7e2880da0215c4c0d" sha1="c768dc6123aa668dd38d95fccc69a8d491498c3c"/>
 	</game>
-	<game name="Last Remnant, The (USA) (En,Fr,De,Es,It) (Disc 1)" id="12494">
+	<game name="Last Remnant, The (USA, Asia) (En,Fr,De,Es,It) (Disc 1)" id="12494">
 		<category>Games</category>
 		<serial>SQ-2010</serial>
-		<description>Last Remnant, The (USA) (En,Fr,De,Es,It) (Disc 1)</description>
-		<rom name="Last Remnant, The (USA) (En,Fr,De,Es,It) (Disc 1).iso" size="7835492352" crc="7af76819" md5="2ee985d8dd121171335663d4b9499ef3" sha1="12a55b0517d9762f98ca089896bef9036dacc1ad"/>
+		<description>Last Remnant, The (USA, Asia) (En,Fr,De,Es,It) (Disc 1)</description>
+		<rom name="Last Remnant, The (USA, Asia) (En,Fr,De,Es,It) (Disc 1).iso" size="7835492352" crc="7af76819" md5="2ee985d8dd121171335663d4b9499ef3" sha1="12a55b0517d9762f98ca089896bef9036dacc1ad"/>
 	</game>
-	<game name="Last Remnant, The (USA) (En,Fr,De,Es,It) (Disc 2)" id="12495">
+	<game name="Last Remnant, The (USA, Asia) (En,Fr,De,Es,It) (Disc 2)" id="12495">
 		<category>Games</category>
 		<serial>SQ-2010</serial>
-		<description>Last Remnant, The (USA) (En,Fr,De,Es,It) (Disc 2)</description>
-		<rom name="Last Remnant, The (USA) (En,Fr,De,Es,It) (Disc 2).iso" size="7835492352" crc="112e3995" md5="919bc39732ee03a5fb2c44709d8b1515" sha1="f0a4e7d3ae12f135c6bf6697da61d1c4496a8ba6"/>
+		<description>Last Remnant, The (USA, Asia) (En,Fr,De,Es,It) (Disc 2)</description>
+		<rom name="Last Remnant, The (USA, Asia) (En,Fr,De,Es,It) (Disc 2).iso" size="7835492352" crc="112e3995" md5="919bc39732ee03a5fb2c44709d8b1515" sha1="f0a4e7d3ae12f135c6bf6697da61d1c4496a8ba6"/>
 	</game>
 	<game name="Lednikovyj period 4 - Kontinental'nyj drejf - Arkticheskie igry (Russia)" id="123247">
 		<category>Games</category>
@@ -11687,6 +11753,12 @@
 		<description>Lord of the Rings, The: The Battle for Middle-Earth II (USA)</description>
 		<rom name="Lord of the Rings, The - The Battle for Middle-Earth II (USA).iso" size="7834892288" crc="d64a2253" md5="dd0ec60f32fa7db1559d0bb807533ed5" sha1="be771910b4c796c016c143296b0f76589481f0da"/>
 	</game>
+	<game name="Lord of the Rings, The - War in the North (Japan)" id="139815">
+		<category>Games</category>
+		<serial>WR-2031</serial>
+		<description>Lord of the Rings, The: War in the North (Japan)</description>
+		<rom name="Lord of the Rings, The - War in the North (Japan).iso" size="8738846720" crc="5173d96c" md5="0159c3f6effa1911c840f44aae94ecb8" sha1="d748878b4309b1142341b5240cba190b093003e5"/>
+	</game>
 	<game name="Lord of the Rings, The - War in the North (USA, Europe) (En,Fr,De,Es,It,Pt,Pl,Ru)" id="39087">
 		<category>Games</category>
 		<serial>WR-2031</serial>
@@ -11699,29 +11771,29 @@
 		<description>Lost: Via Domus (USA, Europe) (En,Fr,De,Es,It)</description>
 		<rom name="Lost - Via Domus (USA, Europe) (En,Fr,De,Es,It).iso" size="7835492352" crc="0daa92f4" md5="6803737f64b78b4e83b9f1f269e538c7" sha1="0b9695d6d3ee09dc34eef99cb63e39d897451d8d"/>
 	</game>
-	<game name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 1)" id="39111">
+	<game name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 1)" id="39111">
 		<category>Games</category>
 		<serial>MS-2042</serial>
-		<description>Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 1)</description>
-		<rom name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 1).iso" size="7835492352" crc="5330b485" md5="679894ce934e98a58ea5e7b3649795d1" sha1="0d6af9430993431b984d6bc38c6eb2fa8520b09a"/>
+		<description>Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 1)</description>
+		<rom name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 1).iso" size="7835492352" crc="5330b485" md5="679894ce934e98a58ea5e7b3649795d1" sha1="0d6af9430993431b984d6bc38c6eb2fa8520b09a"/>
 	</game>
-	<game name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 2)" id="39112">
+	<game name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 2)" id="39112">
 		<category>Games</category>
 		<serial>MS-2042</serial>
-		<description>Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 2)</description>
-		<rom name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 2).iso" size="7835492352" crc="fce64568" md5="dca845b3a4e3f5c794ab53a506feeb9b" sha1="e599adbed671da9583596168b405e4bfe13d9079"/>
+		<description>Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 2)</description>
+		<rom name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 2).iso" size="7835492352" crc="fce64568" md5="dca845b3a4e3f5c794ab53a506feeb9b" sha1="e599adbed671da9583596168b405e4bfe13d9079"/>
 	</game>
-	<game name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 3)" id="39113">
+	<game name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 3)" id="39113">
 		<category>Games</category>
 		<serial>MS-2042</serial>
-		<description>Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 3)</description>
-		<rom name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 3).iso" size="7835492352" crc="c1ee7de6" md5="147fa131dd37f876f8bb5682a00e02c9" sha1="109eaf40cff1be3cf9a771fd7878e09be139c9f3"/>
+		<description>Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 3)</description>
+		<rom name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 3).iso" size="7835492352" crc="c1ee7de6" md5="147fa131dd37f876f8bb5682a00e02c9" sha1="109eaf40cff1be3cf9a771fd7878e09be139c9f3"/>
 	</game>
-	<game name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 4)" id="39114">
+	<game name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 4)" id="39114">
 		<category>Games</category>
 		<serial>MS-2042</serial>
-		<description>Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 4)</description>
-		<rom name="Lost Odyssey (Europe, Asia) (En,Ja,Zh,Ko) (Disc 4).iso" size="7835492352" crc="90338b89" md5="05db0878e539df81bcc9225cd0fb3cbf" sha1="f17d400c5a60622e3375e24619059d0eda4c49e0"/>
+		<description>Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 4)</description>
+		<rom name="Lost Odyssey (Asia, Australia) (En,Ja,Zh,Ko) (Disc 4).iso" size="7835492352" crc="90338b89" md5="05db0878e539df81bcc9225cd0fb3cbf" sha1="f17d400c5a60622e3375e24619059d0eda4c49e0"/>
 	</game>
 	<game name="Lost Odyssey (Japan) (Disc 1)" id="27092">
 		<category>Games</category>
@@ -12721,17 +12793,17 @@
 		<description>Mercenaries 2: World in Flames (USA) (En,Fr)</description>
 		<rom name="Mercenaries 2 - World in Flames (USA) (En,Fr).iso" size="7835492352" crc="cbc441f0" md5="381356fb3a5688a5c1642fb6bb04d26b" sha1="93cf6b6ed22f2334e00b5dfd11faa13e1d2bcab3"/>
 	</game>
-	<game name="Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt) (Demo)" id="63133">
-		<category>Demos</category>
-		<serial>KN-2133</serial>
-		<description>Metal Gear Rising: Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt) (Demo)</description>
-		<rom name="Metal Gear Rising - Revengeance (USA, Europe) (En,Ja,Fr,De,Es,It,Pt) (Demo).iso" size="7838695424" crc="3e0373a3" md5="ca453e0c6c61f7ca7af8ffe147601ac3" sha1="e329c4f7a97c181cc2f3494b3e2b1c87f781f004"/>
-	</game>
 	<game name="Metal Gear Rising - Revengeance (World) (En,Ja,Fr,De,Es,It,Pt)" id="39033">
 		<category>Games</category>
 		<serial>KN-2058</serial>
 		<description>Metal Gear Rising: Revengeance (World) (En,Ja,Fr,De,Es,It,Pt)</description>
 		<rom name="Metal Gear Rising - Revengeance (World) (En,Ja,Fr,De,Es,It,Pt).iso" size="8738846720" crc="7524ae2b" md5="d674877aea3144ae08e75ceb4d5ad0ac" sha1="81021826b07d93d1714dcd4574108a99b57410c6"/>
+	</game>
+	<game name="Metal Gear Rising - Revengeance (World) (En,Ja,Fr,De,Es,It,Pt) (Demo)" id="63133">
+		<category>Demos</category>
+		<serial>KN-2133</serial>
+		<description>Metal Gear Rising: Revengeance (World) (En,Ja,Fr,De,Es,It,Pt) (Demo)</description>
+		<rom name="Metal Gear Rising - Revengeance (World) (En,Ja,Fr,De,Es,It,Pt) (Demo).iso" size="7838695424" crc="3e0373a3" md5="ca453e0c6c61f7ca7af8ffe147601ac3" sha1="e329c4f7a97c181cc2f3494b3e2b1c87f781f004"/>
 	</game>
 	<game name="Metal Gear Solid - HD Collection (Europe) (Disc 1)" id="90845">
 		<category>Games</category>
@@ -12762,6 +12834,12 @@
 		<serial>KN-2112</serial>
 		<description>Metal Gear Solid: HD Edition (Japan)</description>
 		<rom name="Metal Gear Solid - HD Edition (Japan).iso" size="8738846720" crc="8aba257b" md5="ed64d83ba4fb39715eafd5ad6abcc2b2" sha1="0f8ef5ad89e596a26a27332fd0e3425b8008f1c4"/>
+	</game>
+	<game name="Metal Gear Solid - Peace Walker - HD Edition (Japan)" id="139816">
+		<category>Games</category>
+		<serial>KN-2108</serial>
+		<description>Metal Gear Solid: Peace Walker: HD Edition (Japan)</description>
+		<rom name="Metal Gear Solid - Peace Walker - HD Edition (Japan).iso" size="8738846720" crc="929857ab" md5="2019c3ea58c01598e431fae982920aa2" sha1="504ee665b709013119aaba3cf83299dbca3d0ead"/>
 	</game>
 	<game name="Metal Gear Solid V - Ground Zeroes (Japan)" id="88814">
 		<category>Games</category>
@@ -13392,11 +13470,11 @@
 		<description>N3: Ninety-Nine Nights (Japan)</description>
 		<rom name="N3 - Ninety-Nine Nights (Japan).iso" size="7834892288" crc="44ed5201" md5="feb04e47891cb24f9b3af5e07e47bfd4" sha1="edf96389ff02aeea82f56ef5f5386a8b79d3975b"/>
 	</game>
-	<game name="N3 - Ninety-Nine Nights (Japan) (Demo)" id="89825">
+	<game name="N3 - Ninety-Nine Nights (Japan) (Taikenban)" id="89825">
 		<category>Demos</category>
 		<serial>MS-2031</serial>
-		<description>N3: Ninety-Nine Nights (Japan) (Demo)</description>
-		<rom name="N3 - Ninety-Nine Nights (Japan) (Demo).iso" size="7834892288" crc="823098a5" md5="ff431ca2cc3350eaba80be2cb11a3922" sha1="057477b6262205aa17e64a3371d44be33b3c792b"/>
+		<description>N3: Ninety-Nine Nights (Japan) (Taikenban)</description>
+		<rom name="N3 - Ninety-Nine Nights (Japan) (Taikenban).iso" size="7834892288" crc="823098a5" md5="ff431ca2cc3350eaba80be2cb11a3922" sha1="057477b6262205aa17e64a3371d44be33b3c792b"/>
 	</game>
 	<game name="N3 - Ninety-Nine Nights (Korea)" id="137574">
 		<category>Games</category>
@@ -13566,6 +13644,12 @@
 		<serial>NM-2114</serial>
 		<description>Naruto Shippuuden: Narutimate Storm Generation (Japan)</description>
 		<rom name="Naruto Shippuuden - Narutimate Storm Generation (Japan).iso" size="8738846720" crc="503c182e" md5="f6f928e21a8b7a6d2c2cddcf8f3a51de" sha1="b2eed15f4d23733251f0989ff97b145c8c87e22e"/>
+	</game>
+	<game name="Naruto Shippuuden - Narutimate Storm Revolution (Japan)" id="139817">
+		<category>Games</category>
+		<serial>NM-2152</serial>
+		<description>Naruto Shippuuden: Narutimate Storm Revolution (Japan)</description>
+		<rom name="Naruto Shippuuden - Narutimate Storm Revolution (Japan).iso" size="8738846720" crc="afde497e" md5="0c8c84ff811c6837b45fecd72967364f" sha1="0ee8caef6333585dd64d8e687648be911d615be0"/>
 	</game>
 	<game name="NASCAR '14 (USA)" id="106184">
 		<category>Games</category>
@@ -14150,12 +14234,6 @@
 		<description>Need for Speed: ProStreet (Asia) (En,Es)</description>
 		<rom name="Need for Speed - ProStreet (Asia) (En,Es).iso" size="7835492352" crc="7edbe40b" md5="8f7b613fdee132729741912be4ed053e" sha1="93ca5a7f3e01eb881128383538db949895236beb"/>
 	</game>
-	<game name="Need for Speed - ProStreet (Europe) (En,Nl,Sv,No,Da,Fi,Pl,Cs,Hu)" id="71775">
-		<category>Games</category>
-		<serial>EA-2082</serial>
-		<description>Need for Speed: ProStreet (Europe) (En,Nl,Sv,No,Da,Fi,Pl,Cs,Hu)</description>
-		<rom name="Need for Speed - ProStreet (Europe) (En,Nl,Sv,No,Da,Fi,Pl,Cs,Hu).iso" size="7835492352" crc="ba4cbb45" md5="f0f6d183fe62f17cd02fa34969f33f64" sha1="316efbef16c5be7f1ec1866907a95dca8ae03fe0"/>
-	</game>
 	<game name="Need for Speed - ProStreet (Europe) (Es,It)" id="71478">
 		<category>Games</category>
 		<serial>EA-2082</serial>
@@ -14167,6 +14245,12 @@
 		<serial>EA-2082</serial>
 		<description>Need for Speed: ProStreet (Europe) (Fr,De)</description>
 		<rom name="Need for Speed - ProStreet (Europe) (Fr,De).iso" size="7835492352" crc="3e5e27b8" md5="837ae8a9289c81f8a7271572d64e13d8" sha1="1fb40a9174b1aeeec6dd9c18454a1abf273125b9"/>
+	</game>
+	<game name="Need for Speed - ProStreet (Europe, Australia) (En,Nl,Sv,No,Da,Fi,Pl,Cs,Hu)" id="71775">
+		<category>Games</category>
+		<serial>EA-2082</serial>
+		<description>Need for Speed: ProStreet (Europe, Australia) (En,Nl,Sv,No,Da,Fi,Pl,Cs,Hu)</description>
+		<rom name="Need for Speed - ProStreet (Europe, Australia) (En,Nl,Sv,No,Da,Fi,Pl,Cs,Hu).iso" size="7835492352" crc="ba4cbb45" md5="f0f6d183fe62f17cd02fa34969f33f64" sha1="316efbef16c5be7f1ec1866907a95dca8ae03fe0"/>
 	</game>
 	<game name="Need for Speed - ProStreet (Japan)" id="87797">
 		<category>Games</category>
@@ -14263,6 +14347,12 @@
 		<serial>EA-2166</serial>
 		<description>Need for Speed: Undercover (Europe) (Fr,De)</description>
 		<rom name="Need for Speed - Undercover (Europe) (Fr,De).iso" size="7835492352" crc="cb93fa6d" md5="087ddea595be90357353c9f173ac6146" sha1="04c9f35c9ba85357ac3e9449cfd77758c6b31eec"/>
+	</game>
+	<game name="Need for Speed - Undercover (Japan)" id="139818">
+		<category>Games</category>
+		<serial>EA-2166</serial>
+		<description>Need for Speed: Undercover (Japan)</description>
+		<rom name="Need for Speed - Undercover (Japan).iso" size="7835492352" crc="a99dcdb5" md5="90e92d8973f9346a8125f05b757ee900" sha1="b380b5b3e522fb1b943ca78a6ba8f5c12c0cf5dc"/>
 	</game>
 	<game name="Need for Speed - Undercover (UK, Australia)" id="14205">
 		<category>Games</category>
@@ -15297,6 +15387,12 @@
 		<description>Outfit, The (Germany) (En,Fr,De,Es,It)</description>
 		<rom name="Outfit, The (Germany) (En,Fr,De,Es,It).iso" size="7834892288" crc="746e2066" md5="3be308ecb2369dfc7b6b4b8d609283fb" sha1="f2f36ffc769d809a922cfdce57b9c97bee0f0f6d"/>
 	</game>
+	<game name="Outfit, The (Japan)" id="139823">
+		<category>Games</category>
+		<serial>TQ-2002</serial>
+		<description>Outfit, The (Japan)</description>
+		<rom name="Outfit, The (Japan).iso" size="7834892288" crc="61584fbd" md5="a242d190e65c10db616c652607b104e0" sha1="cac3b42f7db1e812fa5f387bd0c22ada8bf9e764"/>
+	</game>
 	<game name="Outfit, The (USA, Europe) (En,Fr,De,Es,It)" id="17007">
 		<category>Games</category>
 		<serial>TQ-2002</serial>
@@ -15383,6 +15479,12 @@
 		<serial>5H-2001</serial>
 		<description>Painkiller: Hell &amp; Damnation (Germany)</description>
 		<rom name="Painkiller - Hell &amp; Damnation (Germany).iso" size="7838695424" crc="62bf518e" md5="ef303bf3af9694881cd62bcdba4cec41" sha1="8dc0301daae3167c4d343e902001191248309b48"/>
+	</game>
+	<game name="Painkiller - Hell &amp; Damnation (Japan)" id="139819">
+		<category>Games</category>
+		<serial>5H-2001</serial>
+		<description>Painkiller: Hell &amp; Damnation (Japan)</description>
+		<rom name="Painkiller - Hell &amp; Damnation (Japan).iso" size="7838695424" crc="8b97010b" md5="b1f7472d43147a6a0c6c85e2d6160f08" sha1="4fc01d7c524596a2e445ec64227267e821cb5c3d"/>
 	</game>
 	<game name="Pate II, Der (Germany)" id="72669">
 		<category>Games</category>
@@ -15926,6 +16028,12 @@
 		<description>PopCap Hits! Vol. 2 (Europe)</description>
 		<rom name="PopCap Hits! Vol. 2 (Europe).iso" size="7838695424" crc="dfad64c1" md5="6d1e7057acdb4edb2b9997f3497cf575" sha1="30d47f242c3ea8dc502e7a3ace4fcfbae3090281"/>
 	</game>
+	<game name="Port Royale 3 (Japan)" id="139820">
+		<category>Games</category>
+		<serial>KY-2015</serial>
+		<description>Port Royale 3 (Japan)</description>
+		<rom name="Port Royale 3 (Japan).iso" size="8738846720" crc="e1526e8a" md5="af257d0a9db38abacf243fc3e778678a" sha1="ab01d1b470c1999f109803316798a5e53f244df9"/>
+	</game>
 	<game name="Port Royale 3 - Pirates &amp; Merchants (USA, Europe) (En,Fr,De,Es,It)" id="50642">
 		<category>Games</category>
 		<serial>KY-2015</serial>
@@ -16222,6 +16330,12 @@
 		<serial>TC-2012</serial>
 		<description>Quantum Theory (Europe) (En,Fr,De,Es,It)</description>
 		<rom name="Quantum Theory (Europe) (En,Fr,De,Es,It).iso" size="7838695424" crc="5de899bc" md5="b4dd0d9d57a27aea69d85d6b16e645e3" sha1="c8b146f6be6ae5325d770e16eb7cc39f9baf24d2"/>
+	</game>
+	<game name="Quantum Theory (Japan)" id="139821">
+		<category>Games</category>
+		<serial>TC-2012</serial>
+		<description>Quantum Theory (Japan)</description>
+		<rom name="Quantum Theory (Japan).iso" size="7838695424" crc="477f3dc9" md5="1a27d9a7b518ff0062ff378fdc064f8d" sha1="e4d7332fe03aab745edfb4eb1c1264c720340b61"/>
 	</game>
 	<game name="Quantum Theory (USA) (En,Fr)" id="17139">
 		<category>Games</category>
@@ -17661,6 +17775,12 @@
 		<description>Sharin no Kuni, Himawari no Shoujo (Japan)</description>
 		<rom name="Sharin no Kuni, Himawari no Shoujo (Japan).iso" size="7838695424" crc="240d02af" md5="80cd78201d53d793b563b7b005de454f" sha1="d93258f76f8253f8029a2f906c86418af3fc7519"/>
 	</game>
+	<game name="Shaun White Skateboarding (Japan)" id="139822">
+		<category>Games</category>
+		<serial>US-2095</serial>
+		<description>Shaun White Skateboarding (Japan)</description>
+		<rom name="Shaun White Skateboarding (Japan).iso" size="7838695424" crc="f1f44c09" md5="c321c7d533a9067adbffa254bd860935" sha1="96f7ef3278403068a880030045568ecb9f87551b"/>
+	</game>
 	<game name="Shaun White Skateboarding (UK)" id="74913">
 		<category>Games</category>
 		<serial>US-2095</serial>
@@ -17780,6 +17900,13 @@
 		<description>Shin Sangoku Musou 5: Empires (Japan)</description>
 		<rom name="Shin Sangoku Musou 5 - Empires (Japan).iso" size="7838695424" crc="a2aa2b70" md5="fc32dc0f4295a7b54095e387e8246b40" sha1="3309090b44509c1c3d1ff8f13c1026af28235322"/>
 	</game>
+	<game name="Shodai Xbox Game Gokansei Update Disc - 2007-nen 11-gatsuban (Japan)" id="139881">
+		<category>Applications</category>
+		<serial>XF-2001</serial>
+		<description>Shodai Xbox Game Gokansei Update Disc: 2007-nen 11-gatsuban (Japan)</description>
+		<rom name="Shodai Xbox Game Gokansei Update Disc - 2007-nen 11-gatsuban (Japan).cue" size="134" crc="2c86e0a7" md5="e45364e6412d40c056c0ba8781fb0153" sha1="1466bd2816eeffa12393a410ec77d862a65ea910"/>
+		<rom name="Shodai Xbox Game Gokansei Update Disc - 2007-nen 11-gatsuban (Japan).bin" size="15652560" crc="42ad76c6" md5="d3eb5dc16e6ab11a79766a0e742640ac" sha1="13dc25f7f96f0238a195b36612679d0bc31bcc81"/>
+	</game>
 	<game name="Shodai Xbox Game Gokansei Update Disc - 2007-nen 7-gatsuban (Japan) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko,Pl,Ru)" id="34143">
 		<category>Applications</category>
 		<serial>XF-2001</serial>
@@ -17893,6 +18020,12 @@
 		<serial>EA-2057</serial>
 		<description>Simpsons, Die: Das Spiel (Germany)</description>
 		<rom name="Simpsons, Die - Das Spiel (Germany).iso" size="7835492352" crc="2a5c75fc" md5="022a2e37d7828fbe4d43edddd3da7d83" sha1="9838409efea0c6cc8b97526722d4a39f323e3ca9"/>
+	</game>
+	<game name="Sims 3, The (Japan)" id="139824">
+		<category>Games</category>
+		<serial>EA-2274</serial>
+		<description>Sims 3, The (Japan)</description>
+		<rom name="Sims 3, The (Japan).iso" size="7838695424" crc="36677e4d" md5="f412f39ed0dae0e55ec63fbdd694170d" sha1="7db99ce68cbf0cf3a57d9e2092ee6c7e693a42db"/>
 	</game>
 	<game name="Sims 3, The (USA, Europe) (En,Fr,De,Es,It,Nl)" id="60653">
 		<category>Games</category>
@@ -18987,18 +19120,6 @@
 		<description>Tenpo-you Demo Disc for Xbox 360: February 2009 Issue (Japan)</description>
 		<rom name="Tenpo-you Demo Disc for Xbox 360 - February 2009 Issue (Japan).iso" size="7835492352" crc="8570dd3f" md5="949f971c98e6582522ac8f39ad2818d5" sha1="4b6ac2bb422a4cb116b255cfcd55db9680bd2929"/>
 	</game>
-	<game name="Tenpo-you Demo Disc for Xbox 360 - July 2006 Issue (Japan)" id="58022">
-		<category>Demos</category>
-		<serial>XK-2035</serial>
-		<description>Tenpo-you Demo Disc for Xbox 360: July 2006 Issue (Japan)</description>
-		<rom name="Tenpo-you Demo Disc for Xbox 360 - July 2006 Issue (Japan).iso" size="7834892288" crc="59c39c77" md5="63d1036557b181206bf8e7544cda2957" sha1="d27fd59dac98f9cc0bcdc317eb0c15e652e64a13"/>
-	</game>
-	<game name="Tenpo-you Demo Disc for Xbox 360 - May 2008 Issue (Japan)" id="57647">
-		<category>Demos</category>
-		<serial>XK-2082</serial>
-		<description>Tenpo-you Demo Disc for Xbox 360: May 2008 Issue (Japan)</description>
-		<rom name="Tenpo-you Demo Disc for Xbox 360 - May 2008 Issue (Japan).iso" size="7835492352" crc="33793027" md5="2a91c42d6cb88e4c63271343d452333e" sha1="af0ab4875a5ea47f4424fb96b03f09d0542f5a5a"/>
-	</game>
 	<game name="Tenpo-you Demo Disc for Xbox 360 - September 2008 Issue (Japan)" id="57631">
 		<category>Demos</category>
 		<serial>XK-2109</serial>
@@ -19382,17 +19503,17 @@
 		<description>Tom Clancy's H.A.W.X (USA, Europe) (En,Fr,De,Es,It)</description>
 		<rom name="Tom Clancy's H.A.W.X (USA, Europe) (En,Fr,De,Es,It).iso" size="7838695424" crc="fff4e830" md5="6eecc4402eed9a730349912581f26ed9" sha1="eccd81afb88b3f493dd53873725db926bc0f04ac"/>
 	</game>
-	<game name="Tom Clancy's H.A.W.X. 2 (Europe)" id="50654">
-		<category>Games</category>
-		<serial>US-2120</serial>
-		<description>Tom Clancy's H.A.W.X. 2 (Europe)</description>
-		<rom name="Tom Clancy's H.A.W.X. 2 (Europe).iso" size="7838695424" crc="1d493bd3" md5="d7e30988b506081b4c16a8af2abcbd66" sha1="0955e0c3336b8bd07b8c7f023769b20bd6c55c25"/>
-	</game>
 	<game name="Tom Clancy's H.A.W.X. 2 (Japan) (En,Ja)" id="92215">
 		<category>Games</category>
 		<serial>US-2120</serial>
 		<description>Tom Clancy's H.A.W.X. 2 (Japan) (En,Ja)</description>
 		<rom name="Tom Clancy's H.A.W.X. 2 (Japan) (En,Ja).iso" size="7838695424" crc="6e1cdadc" md5="9dee1d15997a05a1856b52846f2f9eee" sha1="6a44295f9b95c575d3e552c63692a341183fac53"/>
+	</game>
+	<game name="Tom Clancy's H.A.W.X. 2 (UK, Russia)" id="50654">
+		<category>Games</category>
+		<serial>US-2120</serial>
+		<description>Tom Clancy's H.A.W.X. 2 (UK, Russia)</description>
+		<rom name="Tom Clancy's H.A.W.X. 2 (UK, Russia).iso" size="7838695424" crc="1d493bd3" md5="d7e30988b506081b4c16a8af2abcbd66" sha1="0955e0c3336b8bd07b8c7f023769b20bd6c55c25"/>
 	</game>
 	<game name="Tom Clancy's H.A.W.X. 2 (USA, Europe) (En,Fr,De,Es,It,Pl)" id="103023">
 		<category>Games</category>
@@ -19448,17 +19569,17 @@
 		<description>Tom Clancy's Splinter Cell: Blacklist (Europe) (En,De,It,Pl) (Disc 2)</description>
 		<rom name="Tom Clancy's Splinter Cell - Blacklist (Europe) (En,De,It,Pl) (Disc 2).iso" size="8738846720" crc="fb8d4b6d" md5="1b3f23ea4fd0ebf898c5e9570e05e7ae" sha1="c85b99ac4835ef48aaeb264e4ca890cd07e727f5"/>
 	</game>
-	<game name="Tom Clancy's Splinter Cell - Blacklist (Europe) (En,Pt,Cs,Hu) (Disc 1)" id="88317">
+	<game name="Tom Clancy's Splinter Cell - Blacklist (Europe, Brazil) (En,Pt,Cs,Hu) (Disc 1)" id="88317">
 		<category>Games</category>
 		<serial>US-2230</serial>
-		<description>Tom Clancy's Splinter Cell: Blacklist (Europe) (En,Pt,Cs,Hu) (Disc 1)</description>
-		<rom name="Tom Clancy's Splinter Cell - Blacklist (Europe) (En,Pt,Cs,Hu) (Disc 1).iso" size="8738846720" crc="e45ec41f" md5="8a535e17e3cd238c8c0d7710acb11609" sha1="8ed0310799c5168c1b6d864ca5ebf0ff4556b5ca"/>
+		<description>Tom Clancy's Splinter Cell: Blacklist (Europe, Brazil) (En,Pt,Cs,Hu) (Disc 1)</description>
+		<rom name="Tom Clancy's Splinter Cell - Blacklist (Europe, Brazil) (En,Pt,Cs,Hu) (Disc 1).iso" size="8738846720" crc="e45ec41f" md5="8a535e17e3cd238c8c0d7710acb11609" sha1="8ed0310799c5168c1b6d864ca5ebf0ff4556b5ca"/>
 	</game>
-	<game name="Tom Clancy's Splinter Cell - Blacklist (Europe) (En,Pt,Cs,Hu) (Disc 2)" id="88318">
+	<game name="Tom Clancy's Splinter Cell - Blacklist (Europe, Brazil) (En,Pt,Cs,Hu) (Disc 2)" id="88318">
 		<category>Games</category>
 		<serial>US-2230</serial>
-		<description>Tom Clancy's Splinter Cell: Blacklist (Europe) (En,Pt,Cs,Hu) (Disc 2)</description>
-		<rom name="Tom Clancy's Splinter Cell - Blacklist (Europe) (En,Pt,Cs,Hu) (Disc 2).iso" size="8738846720" crc="2509a932" md5="850eae4e3b355a0d76d9835d2b4aa32f" sha1="2ba3097c1202b663a7b9bd7aa60269f2fcc48297"/>
+		<description>Tom Clancy's Splinter Cell: Blacklist (Europe, Brazil) (En,Pt,Cs,Hu) (Disc 2)</description>
+		<rom name="Tom Clancy's Splinter Cell - Blacklist (Europe, Brazil) (En,Pt,Cs,Hu) (Disc 2).iso" size="8738846720" crc="2509a932" md5="850eae4e3b355a0d76d9835d2b4aa32f" sha1="2ba3097c1202b663a7b9bd7aa60269f2fcc48297"/>
 	</game>
 	<game name="Tom Clancy's Splinter Cell - Blacklist (Japan) (En,Ja,Zh,Ko) (Disc 1)" id="96861">
 		<category>Games</category>
@@ -19730,11 +19851,11 @@
 		<description>Top Spin 3 (USA, Europe) (En,Fr,De,Es,It)</description>
 		<rom name="Top Spin 3 (USA, Europe) (En,Fr,De,Es,It).iso" size="7835492352" crc="5491e7ef" md5="38e2b609990fb9993e1899b2c825cbbb" sha1="2f095e3a6ee853bb6b5e49cb9a015e8a6acbee9f"/>
 	</game>
-	<game name="Top Spin 4 (USA, Europe) (En,Fr,De,Es,It)" id="57594">
+	<game name="Top Spin 4 (World) (En,Fr,De,Es,It)" id="57594">
 		<category>Games</category>
 		<serial>TT-2137</serial>
-		<description>Top Spin 4 (USA, Europe) (En,Fr,De,Es,It)</description>
-		<rom name="Top Spin 4 (USA, Europe) (En,Fr,De,Es,It).iso" size="7838695424" crc="c8d1418b" md5="9b9439dcb30604770afae2de1387b282" sha1="1b2694a0ee39be02a145afd426f082b7210d1278"/>
+		<description>Top Spin 4 (World) (En,Fr,De,Es,It)</description>
+		<rom name="Top Spin 4 (World) (En,Fr,De,Es,It).iso" size="7838695424" crc="c8d1418b" md5="9b9439dcb30604770afae2de1387b282" sha1="1b2694a0ee39be02a145afd426f082b7210d1278"/>
 	</game>
 	<game name="Tornado Outbreak (Europe)" id="57595">
 		<category>Games</category>
@@ -19974,6 +20095,12 @@
 		<serial>BV-2003</serial>
 		<description>Turok (Europe) (Fr,De)</description>
 		<rom name="Turok (Europe) (Fr,De).iso" size="7835492352" crc="78e77bd5" md5="044b772961292f7e42e979faa63063cd" sha1="6324988d6aa83189fd6139859ac6487366bfcb39"/>
+	</game>
+	<game name="Turok (Japan)" id="139825">
+		<category>Games</category>
+		<serial>BV-2003</serial>
+		<description>Turok (Japan)</description>
+		<rom name="Turok (Japan).iso" size="7835492352" crc="a42c53c9" md5="71ed570615f29be2e546b1cb50da1612" sha1="fa33a54094c018b46fcc415ed84d72532af9da45"/>
 	</game>
 	<game name="Turok (USA, Europe)" id="13439">
 		<category>Games</category>
@@ -20226,11 +20353,11 @@
 		<description>Vancouver 2010 (USA, Europe)</description>
 		<rom name="Vancouver 2010 (USA, Europe).iso" size="7838695424" crc="2d5b550b" md5="cc63c00d0e0a8f1205a71ccdd184a89e" sha1="bde8c63feba6990fd83f2a826752bc4b59312a63"/>
 	</game>
-	<game name="Vanquish (Europe) (Demo)" id="111838">
+	<game name="Vanquish (Japan, Europe) (Demo)" id="111838">
 		<category>Demos</category>
 		<serial>SE-2134</serial>
-		<description>Vanquish (Europe) (Demo)</description>
-		<rom name="Vanquish (Europe) (Demo).iso" size="7838695424" crc="800f3059" md5="b92a0af6d1e18d8815cc69802ae39cdc" sha1="e67d2d091c2bd81543a8c3ab73b66aacc00b70d4"/>
+		<description>Vanquish (Japan, Europe) (Demo)</description>
+		<rom name="Vanquish (Japan, Europe) (Demo).iso" size="7838695424" crc="800f3059" md5="b92a0af6d1e18d8815cc69802ae39cdc" sha1="e67d2d091c2bd81543a8c3ab73b66aacc00b70d4"/>
 	</game>
 	<game name="Vanquish (World) (En,Ja,Fr,De,Es,It)" id="50530">
 		<category>Games</category>
@@ -21138,6 +21265,12 @@
 		<description>WWE SmackDown vs. Raw 2010 (USA, Europe) (En,Fr,De,Es,It)</description>
 		<rom name="WWE SmackDown vs. Raw 2010 (USA, Europe) (En,Fr,De,Es,It).iso" size="7838695424" crc="01e199a9" md5="48aa7e46fb91f9516827df1ce4c67938" sha1="27a428fbc1c2ce3d8c3fa26d1fcbbd3fe68a34b9"/>
 	</game>
+	<game name="WWE SmackDown vs. Raw 2011 (Japan)" id="139826">
+		<category>Games</category>
+		<serial>TQ-2141</serial>
+		<description>WWE SmackDown vs. Raw 2011 (Japan)</description>
+		<rom name="WWE SmackDown vs. Raw 2011 (Japan).iso" size="7838695424" crc="dd6d3d6d" md5="efb53a1db5648640db9528ce65379189" sha1="a22f0f2e4d2806da0ec2a576eb3efaf448f869c2"/>
+	</game>
 	<game name="WWE SmackDown vs. Raw 2011 (USA, Europe) (En,Fr,De,Es,It)" id="23447">
 		<category>Games</category>
 		<serial>TQ-2141</serial>
@@ -22002,6 +22135,36 @@
 		<rom name="Xbox 360 HD DVD Player Installation Disc (USA, Japan) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko).cue" size="148" crc="54ac2225" md5="f97da8ce8d96e5960f5f42558afe3b4f" sha1="5c23af7166a2a6a46baf19bb9e24a0abdeedbc2a"/>
 		<rom name="Xbox 360 HD DVD Player Installation Disc (USA, Japan) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko).bin" size="15972432" crc="c0ad64ec" md5="e114c2e079647752091d99190e4682b8" sha1="54e501f9c07ae2e6b73f49e2a0f8e02d1daceb91"/>
 	</game>
+	<game name="Xbox 360 Tentou-you Demo Disc - 2005-nen 12-gatsugou (Japan)" id="139873">
+		<category>Demos</category>
+		<serial>XK-2019</serial>
+		<description>Xbox 360 Tentou-you Demo Disc: 2005-nen 12-gatsugou (Japan)</description>
+		<rom name="Xbox 360 Tentou-you Demo Disc - 2005-nen 12-gatsugou (Japan).iso" size="7834892288" crc="09fe6548" md5="17c44e45551f52891375dba7194051cc" sha1="7b0e9bd4fbc603e2922d505d84323feccfd1062f"/>
+	</game>
+	<game name="Xbox 360 Tentou-you Demo Disc - 2006-nen 11-gatsugou (Japan)" id="139880">
+		<category>Demos</category>
+		<serial>XK-2044</serial>
+		<description>Xbox 360 Tentou-you Demo Disc: 2006-nen 11-gatsugou (Japan)</description>
+		<rom name="Xbox 360 Tentou-you Demo Disc - 2006-nen 11-gatsugou (Japan).iso" size="7834892288" crc="67775321" md5="044f7d111ffb8f51905311c0c33a8707" sha1="4b83fe9283b5aca268f9093b6fa7e8d46ff7e782"/>
+	</game>
+	<game name="Xbox 360 Tentou-you Demo Disc - 2006-nen 7-gatsugou (Japan)" id="58022">
+		<category>Demos</category>
+		<serial>XK-2035</serial>
+		<description>Xbox 360 Tentou-you Demo Disc: 2006-nen 7-gatsugou (Japan)</description>
+		<rom name="Xbox 360 Tentou-you Demo Disc - 2006-nen 7-gatsugou (Japan).iso" size="7834892288" crc="59c39c77" md5="63d1036557b181206bf8e7544cda2957" sha1="d27fd59dac98f9cc0bcdc317eb0c15e652e64a13"/>
+	</game>
+	<game name="Xbox 360 Tentou-you Demo Disc - 2006-nen 9-gatsugou (Japan)" id="139877">
+		<category>Demos</category>
+		<serial>XK-2039</serial>
+		<description>Xbox 360 Tentou-you Demo Disc: 2006-nen 9-gatsugou (Japan)</description>
+		<rom name="Xbox 360 Tentou-you Demo Disc - 2006-nen 9-gatsugou (Japan).iso" size="7834892288" crc="f03a74b7" md5="3cdf80f5ca75ce0b0f88d42f6c494b03" sha1="ebed4ee5f63ac5e5cab5209afc6af54dd59e90e6"/>
+	</game>
+	<game name="Xbox 360 Tentou-you Demo Disc - 2008-nen 5-gatsugou (Japan)" id="57647">
+		<category>Demos</category>
+		<serial>XK-2082</serial>
+		<description>Xbox 360 Tentou-you Demo Disc: 2008-nen 5-gatsugou (Japan)</description>
+		<rom name="Xbox 360 Tentou-you Demo Disc - 2008-nen 5-gatsugou (Japan).iso" size="7835492352" crc="33793027" md5="2a91c42d6cb88e4c63271343d452333e" sha1="af0ab4875a5ea47f4424fb96b03f09d0542f5a5a"/>
+	</game>
 	<game name="Xbox 360 Trial Disk (USA) (En,Es)" id="58095">
 		<category>Demos</category>
 		<serial>XK-2026</serial>
@@ -22242,11 +22405,11 @@
 		<description>Zone of the Enders HD Collection (Europe, Australia)</description>
 		<rom name="Zone of the Enders HD Collection (Europe, Australia).iso" size="8738846720" crc="9caa9056" md5="d46a58b759498dfa76d411abd780805e" sha1="9e32cdeec4165e85353591f5b82306a4b5398fe8"/>
 	</game>
-	<game name="Zone of the Enders HD Collection (USA)" id="63129">
+	<game name="Zone of the Enders HD Collection (USA, Asia)" id="63129">
 		<category>Games</category>
 		<serial>KN-2114</serial>
-		<description>Zone of the Enders HD Collection (USA)</description>
-		<rom name="Zone of the Enders HD Collection (USA).iso" size="8738846720" crc="224cb44c" md5="f97f084fb504b2212cf0e01a90c36fd1" sha1="57e4de198ec92e754b2562521f8cecd4234e3a12"/>
+		<description>Zone of the Enders HD Collection (USA, Asia)</description>
+		<rom name="Zone of the Enders HD Collection (USA, Asia).iso" size="8738846720" crc="224cb44c" md5="f97f084fb504b2212cf0e01a90c36fd1" sha1="57e4de198ec92e754b2562521f8cecd4234e3a12"/>
 	</game>
 	<game name="Zoo Tycoon (USA, Europe) (En,Fr,De,Es,It,Nl,Pt,Sv,Da,Pl,Ru)" id="72085">
 		<category>Games</category>
