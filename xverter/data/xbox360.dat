@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3737) (2026-11-01 18-48-09)</description>
-		<version>2026-11-01 18-48-09</version>
-		<date>2026-11-01 18-48-09</date>
+		<description>Microsoft - Xbox 360 - Datfile (3740) (2026-11-09 15-10-10)</description>
+		<version>2026-11-09 15-10-10</version>
+		<date>2026-11-09 15-10-10</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -6208,6 +6208,12 @@
 		<serial>KO-2016</serial>
 		<description>Dynasty Warriors 6 (USA)</description>
 		<rom name="Dynasty Warriors 6 (USA).iso" size="7835492352" crc="39ea6f5f" md5="cfbcd3d6dd3172c2efd7c7c840e88d95" sha1="8a70fccb5fcf99f8e1ff9a79d78381d5df81ee08"/>
+	</game>
+	<game name="Dynasty Warriors 6 - Empires (Asia) (En,Fr)" id="140075">
+		<category>Games</category>
+		<serial>KO-2023</serial>
+		<description>Dynasty Warriors 6: Empires (Asia) (En,Fr)</description>
+		<rom name="Dynasty Warriors 6 - Empires (Asia) (En,Fr).iso" size="7838695424" crc="424e65e1" md5="72d2125ca0ecbd917316fe46b6950004" sha1="db8b47678aff09f7f5028b2e665d8bd9e0b5753f"/>
 	</game>
 	<game name="Dynasty Warriors 6 - Empires (USA, Europe) (En,Fr,De)" id="65370">
 		<category>Games</category>
@@ -18531,6 +18537,12 @@
 		<description>Spec Ops: The Line (Europe) (En,De,It)</description>
 		<rom name="Spec Ops - The Line (Europe) (En,De,It).iso" size="8738846720" crc="6aea9186" md5="84c37b65c33d139248a4eba9637397f9" sha1="711766cc2d8205293681d3e2846974fbe99aadcd"/>
 	</game>
+	<game name="Spec Ops - The Line (Japan)" id="140069">
+		<category>Games</category>
+		<serial>TT-2115</serial>
+		<description>Spec Ops: The Line (Japan)</description>
+		<rom name="Spec Ops - The Line (Japan).iso" size="8738846720" crc="1c24697e" md5="45e4f4fd0f40191f82c33676ef9251b5" sha1="1bdbefb6142f15216822508e5e20af31cdfd4370"/>
+	</game>
 	<game name="Spec Ops - The Line (World) (En,Fr,Es)" id="86927">
 		<category>Games</category>
 		<serial>TT-2115</serial>
@@ -22164,6 +22176,12 @@
 		<serial>XK-2082</serial>
 		<description>Xbox 360 Tentou-you Demo Disc: 2008-nen 5-gatsugou (Japan)</description>
 		<rom name="Xbox 360 Tentou-you Demo Disc - 2008-nen 5-gatsugou (Japan).iso" size="7835492352" crc="33793027" md5="2a91c42d6cb88e4c63271343d452333e" sha1="af0ab4875a5ea47f4424fb96b03f09d0542f5a5a"/>
+	</game>
+	<game name="Xbox 360 Tentou-you Demo Disc - 2012-nen 4-gatsugou (Japan)" id="139978">
+		<category>Demos</category>
+		<serial>XK-2104</serial>
+		<description>Xbox 360 Tentou-you Demo Disc: 2012-nen 4-gatsugou (Japan)</description>
+		<rom name="Xbox 360 Tentou-you Demo Disc - 2012-nen 4-gatsugou (Japan).iso" size="7838695424" crc="4a7822ba" md5="90aabb5e59fbee3d34bfc0d3bbb945ed" sha1="c8a19c4802f860b352eb6c60467babc88c237fb0"/>
 	</game>
 	<game name="Xbox 360 Trial Disk (USA) (En,Es)" id="58095">
 		<category>Demos</category>
