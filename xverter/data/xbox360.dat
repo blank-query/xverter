@@ -3,9 +3,9 @@
 <datafile>
 	<header>
 		<name>Microsoft - Xbox 360</name>
-		<description>Microsoft - Xbox 360 - Datfile (3740) (2026-11-09 15-10-10)</description>
-		<version>2026-11-09 15-10-10</version>
-		<date>2026-11-09 15-10-10</date>
+		<description>Microsoft - Xbox 360 - Datfile (3742) (2026-11-16 13-21-51)</description>
+		<version>2026-11-16 13-21-51</version>
+		<date>2026-11-16 13-21-51</date>
 		<author>redump.info</author>
 		<homepage>redump.info</homepage>
 		<url>https://redump.info/</url>
@@ -1989,23 +1989,23 @@
 		<description>Bloodbath (Europe)</description>
 		<rom name="Bloodbath (Europe).iso" size="7838695424" crc="f484ea43" md5="a35a11d2f09e64d635e73a3c8df92a07" sha1="2681a922fb547f6afa3076a12e7d200f6d71812c"/>
 	</game>
-	<game name="Blue Dragon (Asia) (En,Zh,Ko) (Disc 1)" id="131734">
+	<game name="Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 1)" id="131734">
 		<category>Games</category>
 		<serial>MS-2015</serial>
-		<description>Blue Dragon (Asia) (En,Zh,Ko) (Disc 1)</description>
-		<rom name="Blue Dragon (Asia) (En,Zh,Ko) (Disc 1).iso" size="7835492352" crc="271d4030" md5="0d709af3f3155266bcf68ec5319adf5b" sha1="3b886ca29aad36f5e82b0cdc760ff7c1f00b7b2c"/>
+		<description>Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 1)</description>
+		<rom name="Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 1).iso" size="7835492352" crc="271d4030" md5="0d709af3f3155266bcf68ec5319adf5b" sha1="3b886ca29aad36f5e82b0cdc760ff7c1f00b7b2c"/>
 	</game>
-	<game name="Blue Dragon (Asia) (En,Zh,Ko) (Disc 2)" id="131735">
+	<game name="Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 2)" id="131735">
 		<category>Games</category>
 		<serial>MS-2015</serial>
-		<description>Blue Dragon (Asia) (En,Zh,Ko) (Disc 2)</description>
-		<rom name="Blue Dragon (Asia) (En,Zh,Ko) (Disc 2).iso" size="7835492352" crc="bddf4d68" md5="7ef2d25cbb5f386580cd8774f59c3baa" sha1="ee757c0834bf6610c5875cd2e4d5bd030072807f"/>
+		<description>Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 2)</description>
+		<rom name="Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 2).iso" size="7835492352" crc="bddf4d68" md5="7ef2d25cbb5f386580cd8774f59c3baa" sha1="ee757c0834bf6610c5875cd2e4d5bd030072807f"/>
 	</game>
-	<game name="Blue Dragon (Asia) (En,Zh,Ko) (Disc 3)" id="131736">
+	<game name="Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 3)" id="131736">
 		<category>Games</category>
 		<serial>MS-2015</serial>
-		<description>Blue Dragon (Asia) (En,Zh,Ko) (Disc 3)</description>
-		<rom name="Blue Dragon (Asia) (En,Zh,Ko) (Disc 3).iso" size="7835492352" crc="e280c620" md5="d0a35a4fc0ae20349282a29f8ec53477" sha1="979ea4501d6762ab59861e42d28ba3d7b372f3ce"/>
+		<description>Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 3)</description>
+		<rom name="Blue Dragon (Asia, Korea) (En,Zh,Ko) (Disc 3).iso" size="7835492352" crc="e280c620" md5="d0a35a4fc0ae20349282a29f8ec53477" sha1="979ea4501d6762ab59861e42d28ba3d7b372f3ce"/>
 	</game>
 	<game name="Blue Dragon (Europe) (En,De,Es) (Disc 1)" id="15984">
 		<category>Games</category>
@@ -6594,11 +6594,11 @@
 		<description>Enemy Front (USA, Europe) (En,Fr,De,Es,It,Pt,Pl,Ru)</description>
 		<rom name="Enemy Front (USA, Europe) (En,Fr,De,Es,It,Pt,Pl,Ru).iso" size="7838695424" crc="9e3cf5ad" md5="830c4f11e24182545ad532ce2a8ddb5d" sha1="0241f46ba0003c7fcb30f15c90e2af701a007803"/>
 	</game>
-	<game name="Enemy Territory - Quake Wars (USA, Europe) (En,Fr,De,Es,It)" id="38932">
+	<game name="Enemy Territory - Quake Wars (World) (En,Fr,De,Es,It)" id="38932">
 		<category>Games</category>
 		<serial>AV-2015</serial>
-		<description>Enemy Territory: Quake Wars (USA, Europe) (En,Fr,De,Es,It)</description>
-		<rom name="Enemy Territory - Quake Wars (USA, Europe) (En,Fr,De,Es,It).iso" size="7835492352" crc="c29a611e" md5="6c1231b2ad2829a73c6cc880f393749a" sha1="93769759c8650f2dcf794870eb506f220f8784cc"/>
+		<description>Enemy Territory: Quake Wars (World) (En,Fr,De,Es,It)</description>
+		<rom name="Enemy Territory - Quake Wars (World) (En,Fr,De,Es,It).iso" size="7835492352" crc="c29a611e" md5="6c1231b2ad2829a73c6cc880f393749a" sha1="93769759c8650f2dcf794870eb506f220f8784cc"/>
 	</game>
 	<game name="Enslaved - Odyssey to the West (USA, Europe) (En,Ja,Fr,De,Es,It)" id="16210">
 		<category>Games</category>
@@ -8198,11 +8198,11 @@
 		<description>FIFA 17 (Europe) (En,Es,Pt,Sv,No,Da)</description>
 		<rom name="FIFA 17 (Europe) (En,Es,Pt,Sv,No,Da).iso" size="8738846720" crc="900a6286" md5="810b2d47ed98f22e766104d860e2cae3" sha1="2a67b82f35fa47eac2036f8f09e7a5c71458bdc5"/>
 	</game>
-	<game name="FIFA 17 (Europe) (En,Fr,Nl)" id="131511">
+	<game name="FIFA 17 (Europe, Australia) (En,Fr,Nl)" id="131511">
 		<category>Games</category>
 		<serial>EA-2548</serial>
-		<description>FIFA 17 (Europe) (En,Fr,Nl)</description>
-		<rom name="FIFA 17 (Europe) (En,Fr,Nl).iso" size="8738846720" crc="4b91fbe0" md5="c43914959d19fe7a8e35dc494c1331c1" sha1="19f9fdc4a44f188f496c2b33fd9fccbcad42358a"/>
+		<description>FIFA 17 (Europe, Australia) (En,Fr,Nl)</description>
+		<rom name="FIFA 17 (Europe, Australia) (En,Fr,Nl).iso" size="8738846720" crc="4b91fbe0" md5="c43914959d19fe7a8e35dc494c1331c1" sha1="19f9fdc4a44f188f496c2b33fd9fccbcad42358a"/>
 	</game>
 	<game name="FIFA 17 (Russia) (En,Pl,Ru)" id="124324">
 		<category>Games</category>
@@ -8869,11 +8869,11 @@
 		<description>Forza Motorsport 4: Essentials Edition (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru)</description>
 		<rom name="Forza Motorsport 4 - Essentials Edition (World) (En,Ja,Fr,De,Es,It,Zh,Ko,Pl,Ru).iso" size="8738846720" crc="681610dd" md5="a66f14c13790aaff9deee087d8afa8cd" sha1="72d576a044afebac0b48d5f1578c672260fa3e11"/>
 	</game>
-	<game name="Fracture (USA, Europe) (En,Ja,Fr,De,Es,It,Ko)" id="11835">
+	<game name="Fracture (World) (En,Ja,Fr,De,Es,It,Ko)" id="11835">
 		<category>Games</category>
 		<serial>LA-2004</serial>
-		<description>Fracture (USA, Europe) (En,Ja,Fr,De,Es,It,Ko)</description>
-		<rom name="Fracture (USA, Europe) (En,Ja,Fr,De,Es,It,Ko).iso" size="7835492352" crc="e9a15586" md5="c49ef4445d6814d109b0c36bee116847" sha1="e83476112d1035e94ff48fb17635a6221bc465ef"/>
+		<description>Fracture (World) (En,Ja,Fr,De,Es,It,Ko)</description>
+		<rom name="Fracture (World) (En,Ja,Fr,De,Es,It,Ko).iso" size="7835492352" crc="e9a15586" md5="c49ef4445d6814d109b0c36bee116847" sha1="e83476112d1035e94ff48fb17635a6221bc465ef"/>
 	</game>
 	<game name="Front Mission Evolved (Japan)" id="76450">
 		<category>Games</category>
@@ -13403,6 +13403,12 @@
 		<serial>TQ-2171</serial>
 		<description>MX vs. ATV Alive (USA, Europe)</description>
 		<rom name="MX vs. ATV Alive (USA, Europe).iso" size="7838695424" crc="5cc41b13" md5="57b90512ba3b5f18c9994dc85a4efba6" sha1="11e8b7d5550f4f81c8c660a6db109b2005d3c76c"/>
+	</game>
+	<game name="MX vs. ATV Extreme Limite (France)" id="140330">
+		<category>Games</category>
+		<serial>TQ-2014</serial>
+		<description>MX vs. ATV Extrême Limite (France)</description>
+		<rom name="MX vs. ATV Extreme Limite (France).iso" size="7835492352" crc="fcff14bc" md5="9adb2e3bde5ad121ca4842d0dfb19ff9" sha1="f864f2d0fc9cce4e519632f9ed879306e7297f07"/>
 	</game>
 	<game name="MX vs. ATV Reflex (Europe) (En,Fr,De,Es,It)" id="64489">
 		<category>Games</category>
@@ -18488,12 +18494,18 @@
 		<description>Soulcalibur V (World)</description>
 		<rom name="Soulcalibur V (World).iso" size="8738846720" crc="1ffcf984" md5="1da9c2de8acb32d2bc84fb543aa545c3" sha1="43dbb40b9ef4e5a651623ada40ed4eb2066017d5"/>
 	</game>
-	<game name="South Park - Der Stab der Wahrheit (Germany)" id="58144">
+	<game name="South Park - Der Stab der Wahrheit (Germany) (En,De)" id="140187">
+		<category>Games</category>
+		<serial>US-2245</serial>
+		<description>South Park: Der Stab der Wahrheit (Germany) (En,De)</description>
+		<rom name="South Park - Der Stab der Wahrheit (Germany) (En,De).iso" size="7838695424" crc="a972dc77" md5="52f6b0234cc4ace0be14a6c07cc8cec2" sha1="d98fa3a3e77abfc65ed518118c85f068ed331848"/>
+	</game>
+	<game name="South Park - Der Stab der Wahrheit (Germany) (En,De) (Rev 1)" id="58144">
 		<category>Games</category>
 		<serial>US-2245</serial>
 		<version>Rev 1</version>
-		<description>South Park: Der Stab der Wahrheit (Germany)</description>
-		<rom name="South Park - Der Stab der Wahrheit (Germany).iso" size="7838695424" crc="f76eb2ed" md5="da871583317e673301f3a409098a1a1a" sha1="6b5776919fffb010ef9c22920f45c008543357df"/>
+		<description>South Park: Der Stab der Wahrheit (Germany) (En,De) (Rev 1)</description>
+		<rom name="South Park - Der Stab der Wahrheit (Germany) (En,De) (Rev 1).iso" size="7838695424" crc="f76eb2ed" md5="da871583317e673301f3a409098a1a1a" sha1="6b5776919fffb010ef9c22920f45c008543357df"/>
 	</game>
 	<game name="South Park - The Stick of Truth (Australia)" id="68714">
 		<category>Games</category>
